@@ -52,15 +52,15 @@ functions** (our core rule), same as the rest of `stockskill`.
 - [x] OHLCV fetcher in the data layer (`data.ohlcv`) to feed the indicators
 - Note: 1Y change needs >252 bars; fetch >1y of history in Phase 3 so it fills.
 
-## Phase 2 — Trading strategies, trend & signal confidence
+## Phase 2 — Trading strategies, trend & signal confidence  ✅ DONE (`signals/`, 13 tests)
 `src/stockskill/signals/` — deterministic signal states, configurable.
-- [ ] Per-strategy signals (BUY/SELL/SHORT/HOLD): BB, RSI, MACD, Ichimoku
-- [ ] Combined strategy: weighted voting + conflict resolution
-- [ ] BB+Ichimoku modes: CONFIRM / AND / OR
-- [ ] Multi-factor Trend Score + arrows (↑ ↗ → ↘ ↓)
-- [ ] Signal confidence via inter-strategy agreement (STRONG/MODERATE/WEAK)
-- [ ] Env-var config for all thresholds & weights (BB_*, RSI_*, MACD_PERIOD,
-      WEIGHT_*, TRADING_STRATEGY, …)
+- [x] Per-strategy signals (BUY/SELL/SHORT/HOLD): BB, RSI, MACD, Ichimoku
+- [x] Combined strategy: weighted voting + conflict resolution
+- [x] BB+Ichimoku modes: CONFIRM / AND / OR
+- [x] Multi-factor Trend Score + arrows (↑ ↗ → ↘ ↓)
+- [x] Signal confidence via inter-strategy agreement (STRONG/MODERATE/WEAK)
+- [x] Env-var config for thresholds & weights (SignalConfig.from_env)
+- [x] IndicatorSnapshot built from OHLCV (bridges technicals -> signals)
 
 ## Phase 3 — Multi-ticker watchlist dashboard  (the big UI lift)
 Extend `dashboard/` + `server/` from single-stock to a watchlist grid.
