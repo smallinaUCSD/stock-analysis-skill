@@ -466,12 +466,25 @@ def cmd_serve(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_watchlist(args: argparse.Namespace) -> int:
-    import os
+def _refresh_seconds_for(status, base_interval: float | None) -> int:
+    """Page auto-refresh cadence: fast when the market is open, slow when closed."""
+    if base_interval:
+        return max(15, int(base_interval * 60))
+    if status.is_open:
+        return 60           # ~realtime during regular hours
+    if status.label in ("pre-market", "after-hours"):
+        return 300
+    return 1800             # closed / weekend
+
+
+def _generate_watchlist(args) -> str:
     from datetime import datetime
     from .marketclock import market_status, ET
     from .signals import SignalConfig
     from .watchlist import parse_tickers, fetch_all, build_row, render_watchlist
+    from .alerts import all_alerts, load_custom_alerts
+    from .pulse import SECTOR_ETFS, sector_table
+    from .data.prices import price_map
 
     parsed = parse_tickers(args.tickers)
     tickers = parsed["all"]
@@ -480,26 +493,108 @@ def cmd_watchlist(args: argparse.Namespace) -> int:
         for t in tks:
             tag_map.setdefault(t, set()).add(sec)
 
-    print(f"Fetching {len(tickers)} tickers ({args.workers} workers) ...")
-    data = fetch_all(tickers, period=args.period, workers=args.workers,
-                     cache_dir=args.cache_dir)
+    data = fetch_all(tickers, period=args.period, workers=args.workers, cache_dir=args.cache_dir)
     cfg = SignalConfig.from_env()
     rows = [build_row(data[t], cfg, tag_map.get(t)) for t in tickers if t in data]
-
-    from .alerts import all_alerts, load_custom_alerts
     alerts = all_alerts(rows, load_custom_alerts(args.alerts))
 
+    # sector performance strip
+    sec_pm = price_map(list(SECTOR_ETFS), period="3mo")
+    sectors = [(r.name, r.ticker, r.returns.get("1m")) for r in sector_table(sec_pm, "1m")]
+
     status = market_status()
+    refresh = _refresh_seconds_for(status, getattr(args, "interval", None))
     now = datetime.now(ET)
     html_out = render_watchlist(
         rows, title="Watchlist", updated=now.strftime("%a %b %d, %I:%M %p") + " ET",
-        status_badge=status.badge, status_label=status.label, alerts=alerts)
+        status_badge=status.badge, status_label=status.label, alerts=alerts,
+        sectors=sectors, refresh_seconds=refresh)
     with open(args.out, "w") as f:
         f.write(html_out)
     ok = sum(1 for r in rows if r.price is not None)
-    print(f"[{status.badge}] wrote {args.out} ({ok}/{len(rows)} tickers)")
+    return f"[{status.badge}] {args.out} ({ok}/{len(rows)} tickers), reload {refresh}s"
+
+
+def cmd_watchlist(args: argparse.Namespace) -> int:
+    import os
+    import time
+
+    print("Fetching watchlist ...")
+    print(_generate_watchlist(args))
     if args.open:
         os.system(f"open {args.out!r}" if sys.platform == "darwin" else f"xdg-open {args.out!r}")
+
+    if not args.watch:
+        return 0
+
+    from .marketclock import market_status
+    print("Watching: regenerating live (fast when market is open). Ctrl-C to stop.")
+    try:
+        while True:
+            sleep = _refresh_seconds_for(market_status(), getattr(args, "interval", None))
+            time.sleep(sleep)
+            try:
+                print(_generate_watchlist(args) + f"  @ {time.strftime('%H:%M:%S')}")
+            except Exception as e:  # noqa: BLE001
+                print(f"  update failed: {e}", file=sys.stderr)
+    except KeyboardInterrupt:
+        print("\nstopped.")
+    return 0
+
+
+def cmd_holdings(args: argparse.Namespace) -> int:
+    import os
+    from .portfolio.manage import read_rows, write_rows, apply_trade, reprice
+    from .data.prices import closing_prices
+
+    if not os.path.exists(args.file):
+        print(f"{args.file} not found", file=sys.stderr)
+        return 1
+    rows = read_rows(args.file)
+
+    if args.action == "list":
+        print(f"{'ticker':<8}{'account':<12}{'shares':>12}{'value':>14}")
+        for r in sorted(rows, key=lambda x: (x.account, x.ticker)):
+            sh = "" if r.shares is None else f"{r.shares:,.2f}"
+            mv = "" if r.market_value is None else f"${r.market_value:,.2f}"
+            print(f"{r.ticker:<8}{r.account:<12}{sh:>12}{mv:>14}")
+        return 0
+
+    _price_cache: dict = {}
+    def latest(tk):
+        if tk not in _price_cache:
+            c = closing_prices(tk, "5d")
+            _price_cache[tk] = c[-1] if c else None
+        return _price_cache[tk]
+
+    if args.action == "reprice":
+        n = reprice(rows, latest)
+        write_rows(args.file, rows)
+        print(f"Repriced {n} share-based position(s) at latest prices.")
+        return 0
+
+    # buy / sell
+    if not args.ticker or args.shares is None:
+        print("buy/sell need a TICKER and SHARES, e.g. holdings buy AAPU 10 --price 45",
+              file=sys.stderr)
+        return 2
+    price = args.price if args.price is not None else latest(args.ticker)
+    if price is None:
+        print(f"couldn't fetch a price for {args.ticker}; pass --price", file=sys.stderr)
+        return 1
+    delta = args.shares if args.action == "buy" else -args.shares
+    try:
+        r = apply_trade(rows, args.ticker, args.account, delta, price)
+    except ValueError as e:
+        print(str(e), file=sys.stderr)
+        return 1
+    write_rows(args.file, rows)
+    verb = "Bought" if args.action == "buy" else "Sold"
+    if r:
+        print(f"{verb} {args.shares:g} {args.ticker.upper()} @ ${price:,.2f} "
+              f"-> {r.shares:g} sh, ${r.market_value:,.2f} in {args.account}")
+    else:
+        print(f"Closed {args.ticker.upper()} in {args.account}")
     return 0
 
 
@@ -578,8 +673,21 @@ def build_parser() -> argparse.ArgumentParser:
     wl.add_argument("--workers", type=int, default=5)
     wl.add_argument("--cache-dir", help="per-ticker cache dir (e.g. .cache/stock_cache)")
     wl.add_argument("--alerts", default="data/alerts.json", help="custom alerts JSON")
+    wl.add_argument("--watch", action="store_true",
+                    help="keep regenerating live (fast during market hours)")
+    wl.add_argument("--interval", type=float,
+                    help="minutes between updates (default: auto — 1m open, 5m ext, 30m closed)")
     wl.add_argument("--open", action="store_true", help="open the file after writing")
     wl.set_defaults(func=cmd_watchlist)
+
+    h = sub.add_parser("holdings", help="update holdings.csv from trades")
+    h.add_argument("action", choices=["list", "buy", "sell", "reprice"])
+    h.add_argument("ticker", nargs="?")
+    h.add_argument("shares", nargs="?", type=float)
+    h.add_argument("--price", type=float, help="trade price (default: fetch latest)")
+    h.add_argument("--account", default="brokerage")
+    h.add_argument("--file", default="holdings.csv")
+    h.set_defaults(func=cmd_holdings)
     return p
 
 

@@ -84,7 +84,44 @@ table.wl tr.item:hover td{background:var(--surface-2)}
 .ts-h{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
 .ts-row{display:flex;justify-content:space-between;font-size:12px}
 .ts-row b{font-variant-numeric:tabular-nums}
-.opts{margin-top:6px;font-size:11px}
+.opts{margin-top:2px;font-size:11px}
+.card-item{cursor:pointer;position:relative;transition:border-color .12s}
+.card-item:hover{border-color:var(--accent)}
+.trendline{font-size:12.5px;font-weight:650;margin:1px 0 6px}
+.details-cta{margin-top:8px;padding-top:8px;border-top:1px solid var(--border);
+  text-align:center;font-size:11.5px;font-weight:650;color:var(--accent)}
+.card-detail{display:none;margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);cursor:default}
+/* modal mini-window */
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100;
+  justify-content:center;padding:32px 16px;overflow:auto}
+.modal.show{display:flex}
+.modal-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;
+  padding:18px 20px;max-width:460px;width:100%;height:max-content;position:relative;
+  box-shadow:0 20px 60px rgba(0,0,0,.45)}
+.modal-x{position:absolute;top:10px;right:12px;border:none;background:none;color:var(--muted);
+  font-size:19px;cursor:pointer;line-height:1}
+#modal-body .card-detail{display:block}
+#modal-body .details-cta{display:none}
+#modal-body .card-item{cursor:default;border:none;padding:0}
+/* sector performance */
+details.sectors{background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  padding:10px 14px;margin-bottom:14px}
+details.sectors summary{cursor:pointer;font-size:12.5px;font-weight:650;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.04em;list-style:none}
+details.sectors summary::-webkit-details-marker{display:none}
+.secrow{display:grid;grid-template-columns:120px 1fr 54px;align-items:center;gap:8px;padding:2px 0;font-size:12px}
+.secname{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted)}
+.secbar{display:flex;align-items:center;height:12px}
+.sechalf{flex:1;display:flex;height:9px}.sechalf.neg{justify-content:flex-end}
+.secaxis{width:1px;height:12px;background:var(--axis)}
+.fill-up{height:9px;border-radius:3px;background:var(--up)}
+.fill-down{height:9px;border-radius:3px;background:var(--down)}
+.secval{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.det-sec{margin-top:8px}
+.det-h{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
+.det-row{display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:1px 0}
+.det-row b{font-variant-numeric:tabular-nums;text-align:right}
+.det-note{font-size:11px;color:var(--muted);margin-top:4px;line-height:1.4}
 /* heatmap */
 .heat{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
 .tile-item{border:1px solid var(--border);border-radius:10px;padding:10px 12px;text-align:center}
@@ -209,43 +246,82 @@ def _row_html(r):
     )
 
 
-def _trade_box(r):
-    parts = []
-    if r.signal in ("BUY", "SHORT") and r.atr and r.price:
-        direction = "LONG" if r.signal == "BUY" else "SHORT"
-        s = atr_trade_setup(r.price, r.atr, direction)
-        if s:
-            size_line = ""
-            acct = os.environ.get("ACCOUNT_SIZE")
-            if acct:
-                try:
-                    ps = position_size(float(acct), s.entry, s.stop)
-                    if ps:
-                        cap = " (cap)" if ps.capped else ""
-                        size_line = (f'<div class="ts-row"><span>Size</span>'
-                                     f'<b>{ps.shares:.0f} sh · ${ps.dollars:,.0f} '
-                                     f'({ps.pct_of_account:.0%}){cap}</b></div>')
-                except ValueError:
-                    pass
-            cls = "buy" if r.signal == "BUY" else "short"
-            parts.append(
-                f'<div class="tsetup {cls}"><div class="ts-h">Trade setup · {direction} '
-                f'({s.rr_ratio:.0f}:1 R:R)</div>'
-                f'<div class="ts-row"><span>Entry</span><b>${s.entry:,.2f}</b></div>'
-                f'<div class="ts-row"><span>Stop</span><b class="down">${s.stop:,.2f} '
-                f'(-{s.risk_pct*100:.1f}%)</b></div>'
-                f'<div class="ts-row"><span>Target</span><b class="up">${s.target:,.2f} '
-                f'(+{s.reward_pct*100:.1f}%)</b></div>{size_line}</div>')
+def _trade_setup_html(r):
+    if r.signal not in ("BUY", "SHORT") or not r.atr or not r.price:
+        return ""
+    direction = "LONG" if r.signal == "BUY" else "SHORT"
+    s = atr_trade_setup(r.price, r.atr, direction)
+    if not s:
+        return ""
+    size_line = ""
+    acct = os.environ.get("ACCOUNT_SIZE")
+    if acct:
+        try:
+            ps = position_size(float(acct), s.entry, s.stop)
+            if ps:
+                cap = " (cap)" if ps.capped else ""
+                size_line = (f'<div class="ts-row"><span>Size</span><b>{ps.shares:.0f} sh · '
+                             f'${ps.dollars:,.0f} ({ps.pct_of_account:.0%}){cap}</b></div>')
+        except ValueError:
+            pass
+    cls = "buy" if r.signal == "BUY" else "short"
+    return (
+        f'<div class="tsetup {cls}"><div class="ts-h">Trade setup · {direction} '
+        f'({s.rr_ratio:.0f}:1 R:R)</div>'
+        f'<div class="ts-row"><span>Entry</span><b>${s.entry:,.2f}</b></div>'
+        f'<div class="ts-row"><span>Stop</span><b class="down">${s.stop:,.2f} (-{s.risk_pct*100:.1f}%)</b></div>'
+        f'<div class="ts-row"><span>Target</span><b class="up">${s.target:,.2f} (+{s.reward_pct*100:.1f}%)</b></div>'
+        f'{size_line}</div>')
+
+
+def _options_html(r):
     day = r.changes.get("1d")
     ideas = suggest_options(trend_score=r.trend_score, rsi=r.rsi,
                             change_pct=(day * 100 if day is not None else None),
                             golden_death=r.golden_death)
-    if ideas:
-        chips = "".join(
-            f'<span class="chip {"g" if i.direction=="bullish" else "r" if i.direction=="bearish" else ""}" '
-            f'title="{html.escape(i.rationale)}">{html.escape(i.label)}</span>' for i in ideas)
-        parts.append(f'<div class="opts">📈 {chips}</div>')
-    return "".join(parts)
+    if not ideas:
+        return ""
+    chips = "".join(
+        f'<span class="chip {"g" if i.direction=="bullish" else "r" if i.direction=="bearish" else ""}" '
+        f'title="{html.escape(i.rationale)}">{html.escape(i.label)}</span>' for i in ideas)
+    return f'<div class="det-sec"><div class="det-h">Options ideas</div><div class="opts">📈 {chips}</div></div>'
+
+
+def _valuation_html(r):
+    d = r.valuation or {}
+    v = d.get("valuation") or {}
+    c = d.get("consensus") or {}
+    if not v:
+        return '<div class="det-sec"><div class="det-h">Stock analyzer</div><div class="muted">valuation n/a (ETF or no fundamentals)</div></div>'
+    rows = [f'<div class="det-row"><span>Valuation signal</span><b>{html.escape(v.get("signal") or "n/a")}</b></div>']
+    base, bear, bull = v.get("base"), v.get("bear"), v.get("bull")
+    if base is not None and bear is not None and bull is not None:
+        rows.append(f'<div class="det-row"><span>Fair value bear/base/bull</span>'
+                    f'<b>${bear:,.0f} / ${base:,.0f} / ${bull:,.0f}</b></div>')
+        mos = v.get("margin_of_safety")
+        if mos is not None:
+            rows.append(f'<div class="det-row"><span>Price vs fair value</span>'
+                        f'<b class="{"up" if mos>=0 else "down"}">{mos*100:+.0f}%</b></div>')
+    ig = v.get("implied_market_growth")
+    if ig is not None:
+        rows.append(f'<div class="det-row"><span>Reverse-DCF implied growth</span><b>{ig*100:.0f}%</b></div>')
+    reco = c.get("reco")
+    if reco and reco != "n/a":
+        tvp = c.get("target_vs_price")
+        thtml = ""
+        if tvp is not None:
+            thtml = f' · target <span class="{"up" if tvp>=0 else "down"}">{tvp*100:+.0f}%</span>'
+        rows.append(f'<div class="det-row"><span>Analyst consensus</span><b>{html.escape(reco)}{thtml}</b></div>')
+    note = v.get("note")
+    note_html = f'<div class="det-note">{html.escape(note)}</div>' if note else ""
+    return f'<div class="det-sec"><div class="det-h">Stock analyzer — valuation</div>{"".join(rows)}{note_html}</div>'
+
+
+def _card_detail(r):
+    ts = _trade_setup_html(r)
+    ts_sec = f'<div class="det-sec">{ts}</div>' if ts else ""
+    return (f'<div class="card-detail" onclick="event.stopPropagation()">'
+            f'{ts_sec}{_options_html(r)}{_valuation_html(r)}</div>')
 
 
 def _card_html(r):
@@ -255,27 +331,30 @@ def _card_html(r):
                 f'<span class="muted">no data</span></div></div>')
     dcls, dtxt = _pct(r.changes.get("1d"))
     sig_cls = _SIG_CLASS.get(r.signal, "hold")
+    tcls = "up" if r.trend_score > 1 else ("down" if r.trend_score < -1 else "muted")
+    trend_word = (r.trend_label or "neutral").capitalize()
     links = " ".join(f'<a href="{u.format(t=r.ticker)}" target="_blank" rel="noopener">{n}</a>'
                      for n, u in _EXT_LINKS)
 
     def mrow(label, x):
         c, t = _pct(x)
         return f'<div class="card-row"><span>{label}</span><b class="{c}">{t}</b></div>'
-    return (
-        f'<div class="card-item item" {_data_attrs(r)}>'
+    summary = (
         f'<div class="card-top"><div><span class="tk">{html.escape(r.ticker)}</span> '
-        f'<span class="badge {sig_cls}">{r.signal}</span> '
-        f'<span class="arrow">{r.trend_arrow}</span></div>'
+        f'<span class="badge {sig_cls}">{r.signal}</span></div>'
         f'<span class="card-price">${r.price:,.2f} <span class="{dcls}" style="font-size:13px">{dtxt}</span></span></div>'
         f'<div class="nm">{html.escape((r.name or "")[:34])}</div>'
+        f'<div class="trendline {tcls}">{html.escape(trend_word)} <span class="muted">· trend {r.trend_score:+.0f}</span></div>'
         f'<div class="card-spark">{_spark(r.sparkline, w=222, h=34)}</div>'
         f'<div style="margin:4px 0">{_indicator_chips(r)}</div>'
         + mrow("1M", r.changes.get("1m")) + mrow("1Y", r.changes.get("1y"))
         + f'<div class="card-row"><span>RSI</span><b>{_num(r.rsi,0)}</b></div>'
         f'<div class="card-row"><span>P/E · Mkt Cap</span><b>{_num(r.pe,1)} · {_mktcap(r.market_cap)}</b></div>'
-        + _trade_box(r)
-        + f'<div class="links" style="margin-top:8px">{links}</div></div>'
+        f'<div class="links" onclick="event.stopPropagation()" style="margin-top:8px">{links}</div>'
+        f'<div class="details-cta">🔎 Click for full analysis</div>'
     )
+    return (f'<div class="card-item item" {_data_attrs(r)} onclick="openCard(this)">'
+            f'{summary}{_card_detail(r)}</div>')
 
 
 def _tile_html(r):
@@ -332,9 +411,30 @@ def _banner(alerts, cap=14):
     return banner, sig
 
 
+def _sector_html(sectors):
+    present = [(n, t, r) for (n, t, r) in (sectors or []) if r is not None]
+    if not present:
+        return ""
+    mx = max(abs(r) for _, _, r in present) or 0.01
+    rows = []
+    for name, tk, r in sorted(present, key=lambda x: x[2], reverse=True):
+        w = min(100.0, abs(r) / mx * 100.0)
+        cls = "up" if r >= 0 else "down"
+        neg = f'<div class="fill-down" style="width:{w:.0f}%"></div>' if r < 0 else ""
+        pos = f'<div class="fill-up" style="width:{w:.0f}%"></div>' if r >= 0 else ""
+        rows.append(
+            f'<div class="secrow"><div class="secname">{html.escape(name)}</div>'
+            f'<div class="secbar"><div class="sechalf neg">{neg}</div>'
+            f'<div class="secaxis"></div><div class="sechalf pos">{pos}</div></div>'
+            f'<div class="secval {cls}">{r*100:+.1f}%</div></div>')
+    return ('<details class="sectors"><summary>Sector performance (1m) ▾</summary>'
+            '<div style="margin-top:8px">' + "".join(rows) + '</div></details>')
+
+
 def render_watchlist(rows, title="Watchlist", updated="", status_badge="", status_label="",
-                     alerts=None):
+                     alerts=None, sectors=None, refresh_seconds=1800):
     banner, _sig = _banner(alerts or [])
+    sector_html = _sector_html(sectors)
     table = "".join(_row_html(r) for r in rows)
     cards = "".join(_card_html(r) for r in rows)
     tiles = "".join(_tile_html(r) for r in rows)
@@ -345,7 +445,7 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
              if status_badge else "")
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="refresh" content="1800">
+<meta http-equiv="refresh" content="{int(refresh_seconds)}">
 <title>{html.escape(title)}</title><style>{_CSS}{_CSS_EXTRA}</style></head>
 <body><div class="wrap">
 <header><h1>{html.escape(title)}</h1>{badge}
@@ -362,11 +462,18 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
   <button class="tbtn" onclick="toggleTheme()" style="margin-left:auto">◐ Theme</button>
 </div>
 <div class="chips">{chips}<button class="chip-f" onclick="clearChips()">Clear</button></div>
-
+{sector_html}
 <div id="view-table" class="view active"><div class="tablewrap"><table class="wl" id="wl">
 <thead><tr>{heads}</tr></thead><tbody>{table}</tbody></table></div></div>
 <div id="view-card" class="view"><div class="cards">{cards}</div></div>
 <div id="view-heatmap" class="view"><div class="heat">{tiles}</div></div>
+
+<div id="modal" class="modal" onclick="closeModal(event)">
+  <div class="modal-card" onclick="event.stopPropagation()">
+    <button class="modal-x" onclick="closeModal()">✕</button>
+    <div id="modal-body"></div>
+  </div>
+</div>
 
 <p class="muted" style="font-size:11.5px;margin-top:14px">
 Signals are rule-based indicator states, not investment advice. Free data (yfinance)
@@ -422,6 +529,16 @@ function setView(v){{
   document.querySelectorAll('.seg button').forEach(b=>b.classList.toggle('on', b.dataset.view===v));
   applyFilter();
 }}
+function openCard(card){{
+  document.getElementById('modal-body').innerHTML =
+    '<div class="card-item">'+card.innerHTML+'</div>';
+  document.getElementById('modal').classList.add('show');
+}}
+function closeModal(e){{
+  if(e && e.target && e.target.id!=='modal' && e.type==='click') return;
+  document.getElementById('modal').classList.remove('show');
+}}
+document.addEventListener('keydown', e=>{{ if(e.key==='Escape') closeModal(); }});
 function dismissBanner(){{
   const b=document.getElementById('banner'); if(!b) return;
   b.style.display='none'; localStorage.setItem('wl_banner', b.dataset.sig);

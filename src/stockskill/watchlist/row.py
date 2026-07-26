@@ -51,6 +51,8 @@ class TickerRow:
     flags: set = field(default_factory=set)
     categories: set = field(default_factory=set)
     sections: set = field(default_factory=set)
+    # embedded stock-analyzer detail (valuation + consensus), for card expansion
+    valuation: dict = field(default_factory=dict)
     error: str | None = None
 
 
@@ -109,6 +111,12 @@ def build_row(td: TickerData, cfg: SignalConfig | None = None,
                 row.week52_position = (row.price - snap.fifty_two_week_low) / rng
         row.categories = detect_categories(td.ticker, snap.name, snap.sector,
                                             snap.quote_type, snap.dividend_annual)
+        # Embed the analyzer valuation (reuses the fetched snapshot -- no network).
+        try:
+            from ..analyze import analyze_ticker
+            row.valuation = analyze_ticker(td.ticker, snapshot=snap, with_options=False)
+        except Exception:
+            row.valuation = {}
 
     row.flags = _flags(row, cfg)
     return row

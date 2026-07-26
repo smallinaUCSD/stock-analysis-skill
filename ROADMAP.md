@@ -77,6 +77,18 @@ functions** (our core rule), same as the rest of `stockskill`.
 - [x] Filter chips: faceted (signal / condition / category / section), OR-within +
       AND-between groups, live count; + live search + sortable table
 - [x] View toggle (table/card/heatmap) + theme toggle + persistence (localStorage)
+- [x] **Combined dashboard**: watchlist cards expand on click to reveal the stock
+      analyzer (valuation bear/base/bull, signal, reverse-DCF, consensus) + trade
+      setup (BUY/SHORT only) + options ideas; collapsed card is clean; trend shown
+      as a meaningful descriptor ("Strong uptrend · trend +7") instead of an arrow.
+      Valuation embedded per card from the fetched snapshot (no extra network).
+- [x] Card detail opens as a **modal mini-window** (no adjacent-card reflow) with
+      an obvious "🔎 Click for full analysis" affordance + hover highlight.
+- [x] **Sector performance** strip on the watchlist (collapsible diverging bars).
+- [x] **Realtime**: `watchlist --watch` regenerates on a market-aware cadence
+      (~60s open / 5m extended / 30m closed) and the page auto-refresh matches.
+- [x] **Holdings from trades**: `stockskill holdings buy/sell/list/reprice`
+      (shares-based, infers shares from legacy dollar rows, reprices at latest).
 - [ ] Corporate events: next-earnings date + earnings-week badge, dividend ex-date
 - [ ] Polish: external links also on heatmap tiles; multi-page swipeable cards
 
