@@ -80,12 +80,14 @@ functions** (our core rule), same as the rest of `stockskill`.
 - [ ] Corporate events: next-earnings date + earnings-week badge, dividend ex-date
 - [ ] Polish: external links also on heatmap tiles; multi-page swipeable cards
 
-## Phase 4 — Market-indicators bar & rotation  (extends `pulse/`)
-- [ ] Indices strip: Dow / S&P 500 / Nasdaq with live change
-- [ ] Commodities (gold/silver/copper), crypto (BTC)  *(gold/dollar already in pulse)*
-- [ ] Fear & Greed index (CNN), AAII bull/bear sentiment, CVR3 market signal
-- [ ] TTL caching (~30 min) for VIX / sentiment / F&G
-- [ ] Early rotation detection: 3d/5d momentum inflection → leading index/sector
+## Phase 4 — Market-indicators bar & rotation  ✅ DONE (extends `pulse/`, 5 tests)
+- [x] Indices strip: Dow / S&P 500 / Nasdaq with live change
+- [x] Commodities (gold/silver/copper), crypto (BTC)
+- [x] Fear & Greed index (CNN, Referer header clears the 418), CVR3 (computed from VIX)
+- [x] Early rotation detection: 3d/5d momentum inflection → leading index (RSP/QQQ/…)
+- [x] Wired into both `stockskill pulse` and the HTML dashboard (market bar strip)
+- [ ] AAII bull/bear sentiment (stubbed — no stable free API; degrades to None)
+- [ ] TTL caching (~30 min) for sentiment / F&G — pending (fetch is fast enough for now)
 
 ## Phase 5 — Alerts
 `src/stockskill/alerts/`
