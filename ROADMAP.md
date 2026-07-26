@@ -97,11 +97,14 @@ functions** (our core rule), same as the rest of `stockskill`.
 - [x] Alert banner in the watchlist dashboard + click-to-dismiss (localStorage,
       re-shows when the alert set changes)
 
-## Phase 6 — Trade setup & risk (informational framing)  &  options strategy
-- [ ] ATR-based trade setup: entry / stop (2×ATR) / target (4×ATR, 2:1 R:R)
-- [ ] Position sizing: risk 2%/trade, 25% max position (env-configurable)
-- [ ] Rule-based options-strategy suggestions (calls/puts/straddle/strangle
-      from technicals + implied move + earnings timing) — extend `data/options.py`
+## Phase 6 — Trade setup & risk (informational framing)  &  options strategy  ✅ DONE (`trade/`, 6 tests)
+- [x] ATR-based trade setup: entry / stop (2×ATR) / target (2:1 R:R)
+- [x] Position sizing: risk 2%/trade, 25% max position (ACCOUNT_SIZE env)
+- [x] Rule-based options suggestions (calls/puts + earnings straddle/strangle
+      from trend/RSI/momentum/golden-death + implied move + earnings timing)
+- [x] Trade-setup box + options ideas in the watchlist card view (for BUY/SHORT)
+- Note: earnings straddle/pre-earnings ideas need per-ticker options data +
+  earnings date — surface in the analyzer (which fetches options) as a follow-on.
 
 ## Phase 7 — ML breakout/crash predictor
 `src/stockskill/ml/` (+ `ML_GUIDE.md`)

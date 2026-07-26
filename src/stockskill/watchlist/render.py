@@ -9,8 +9,10 @@ categories, sections) so one filter engine works across all three views.
 from __future__ import annotations
 
 import html
+import os
 
 from ..dashboard.render import _CSS
+from ..trade import atr_trade_setup, position_size, suggest_options
 
 _SIG_CLASS = {"BUY": "buy", "SELL": "sell", "SHORT": "short", "HOLD": "hold"}
 _SIG_EMOJI = {"BUY": "🟢", "SELL": "🟠", "SHORT": "🔴", "HOLD": "⏸️"}
@@ -77,6 +79,12 @@ table.wl tr.item:hover td{background:var(--surface-2)}
 .card-row b{color:var(--ink);font-variant-numeric:tabular-nums}
 .card-spark{margin:8px 0}
 .links a{font-size:10.5px;color:var(--accent);text-decoration:none;margin-right:8px}
+.tsetup{margin-top:8px;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface-2)}
+.tsetup.buy{border-color:var(--up)} .tsetup.short{border-color:var(--down)}
+.ts-h{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
+.ts-row{display:flex;justify-content:space-between;font-size:12px}
+.ts-row b{font-variant-numeric:tabular-nums}
+.opts{margin-top:6px;font-size:11px}
 /* heatmap */
 .heat{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
 .tile-item{border:1px solid var(--border);border-radius:10px;padding:10px 12px;text-align:center}
@@ -201,6 +209,45 @@ def _row_html(r):
     )
 
 
+def _trade_box(r):
+    parts = []
+    if r.signal in ("BUY", "SHORT") and r.atr and r.price:
+        direction = "LONG" if r.signal == "BUY" else "SHORT"
+        s = atr_trade_setup(r.price, r.atr, direction)
+        if s:
+            size_line = ""
+            acct = os.environ.get("ACCOUNT_SIZE")
+            if acct:
+                try:
+                    ps = position_size(float(acct), s.entry, s.stop)
+                    if ps:
+                        cap = " (cap)" if ps.capped else ""
+                        size_line = (f'<div class="ts-row"><span>Size</span>'
+                                     f'<b>{ps.shares:.0f} sh · ${ps.dollars:,.0f} '
+                                     f'({ps.pct_of_account:.0%}){cap}</b></div>')
+                except ValueError:
+                    pass
+            cls = "buy" if r.signal == "BUY" else "short"
+            parts.append(
+                f'<div class="tsetup {cls}"><div class="ts-h">Trade setup · {direction} '
+                f'({s.rr_ratio:.0f}:1 R:R)</div>'
+                f'<div class="ts-row"><span>Entry</span><b>${s.entry:,.2f}</b></div>'
+                f'<div class="ts-row"><span>Stop</span><b class="down">${s.stop:,.2f} '
+                f'(-{s.risk_pct*100:.1f}%)</b></div>'
+                f'<div class="ts-row"><span>Target</span><b class="up">${s.target:,.2f} '
+                f'(+{s.reward_pct*100:.1f}%)</b></div>{size_line}</div>')
+    day = r.changes.get("1d")
+    ideas = suggest_options(trend_score=r.trend_score, rsi=r.rsi,
+                            change_pct=(day * 100 if day is not None else None),
+                            golden_death=r.golden_death)
+    if ideas:
+        chips = "".join(
+            f'<span class="chip {"g" if i.direction=="bullish" else "r" if i.direction=="bearish" else ""}" '
+            f'title="{html.escape(i.rationale)}">{html.escape(i.label)}</span>' for i in ideas)
+        parts.append(f'<div class="opts">📈 {chips}</div>')
+    return "".join(parts)
+
+
 def _card_html(r):
     if r.error or r.price is None:
         return (f'<div class="card-item item" {_data_attrs(r)}>'
@@ -226,7 +273,8 @@ def _card_html(r):
         + mrow("1M", r.changes.get("1m")) + mrow("1Y", r.changes.get("1y"))
         + f'<div class="card-row"><span>RSI</span><b>{_num(r.rsi,0)}</b></div>'
         f'<div class="card-row"><span>P/E · Mkt Cap</span><b>{_num(r.pe,1)} · {_mktcap(r.market_cap)}</b></div>'
-        f'<div class="links" style="margin-top:8px">{links}</div></div>'
+        + _trade_box(r)
+        + f'<div class="links" style="margin-top:8px">{links}</div></div>'
     )
 
 
