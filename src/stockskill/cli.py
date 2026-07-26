@@ -693,8 +693,9 @@ def cmd_smart_watchlist(args: argparse.Namespace) -> int:
     write_sectioned(args.out, universe)
     s = universe["sections"]
     print(f"Wrote {args.out}: {len(universe['all'])} tickers "
-          f"(pinned {len(s['PINNED'])} + leveraged {len(s['LEVERAGED'])}, "
-          f"growth {len(s['GROWTH'])}, value {len(s['VALUE'])}, sector {len(s['SECTOR'])})")
+          f"(pinned {len(s['PINNED'])} + funds {len(s.get('FUNDS', []))} + "
+          f"leveraged {len(s['LEVERAGED'])}, growth {len(s['GROWTH'])}, "
+          f"value {len(s['VALUE'])}, sector {len(s['SECTOR'])})")
     for name in ("GROWTH", "VALUE", "SECTOR"):
         print(f"  {name:<7}: {', '.join(s[name]) or '(none)'}")
     print(f"\nRender it:  uv run stockskill watchlist --tickers {args.out} --open")

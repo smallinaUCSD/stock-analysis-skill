@@ -7,7 +7,7 @@ from .pipeline import TickerData, fetch_one, fetch_all
 from .row import TickerRow, build_row
 from .render import render_watchlist
 from .dynamic import (
-    Candidate, build_smart_universe, write_sectioned, PINNED, CANDIDATES,
+    Candidate, build_smart_universe, write_sectioned, PINNED, PINNED_FUNDS, CANDIDATES,
 )
 
 __all__ = [
@@ -15,5 +15,6 @@ __all__ = [
     "TickerData", "fetch_one", "fetch_all",
     "TickerRow", "build_row",
     "render_watchlist",
-    "Candidate", "build_smart_universe", "write_sectioned", "PINNED", "CANDIDATES",
+    "Candidate", "build_smart_universe", "write_sectioned",
+    "PINNED", "PINNED_FUNDS", "CANDIDATES",
 ]
