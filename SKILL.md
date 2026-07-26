@@ -47,7 +47,7 @@ The project is a uv package. Run everything through uv:
 
 ```bash
 uv run stockskill --help
-uv run pytest -q          # 42 tests; run after any change to the math
+uv run pytest -q          # 45 tests; run after any change to the math
 ```
 
 ## Commands (this is where the math lives)
@@ -142,10 +142,14 @@ cadence and let them run the installer; don't modify crontab silently. See
 `references/dashboard-and-scheduling.md`.
 
 ### Serve — interactive analyzer (search any ticker)
-A local Flask app: search a ticker → live price, valuation signal, bear/base/
-bull fair value, reverse-DCF implied growth, reported analyst consensus, and an
-options snapshot. All math from the tested engine; base growth is data-driven
-(reported revenue growth, clamped, overridable).
+A local Flask app: search by company name or ticker (live dropdown resolves
+"oracle" → ORCL) → live price, valuation signal, bear/base/bull fair value,
+reverse-DCF implied growth, reported analyst consensus, and an options
+snapshot. All math from the tested engine; base growth is data-driven
+(reported revenue growth, clamped, overridable). FCF negative but earnings
+positive (capex-heavy name like ORCL) → an earnings-based DCF proxy, flagged;
+only a genuinely unprofitable name shows "no reliable fair-value basis" —
+never invent a valuation.
 
 ```bash
 uv run stockskill serve --open        # http://127.0.0.1:8787

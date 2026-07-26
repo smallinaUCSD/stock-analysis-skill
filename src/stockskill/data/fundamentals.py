@@ -95,6 +95,18 @@ def fetch_snapshot(ticker: str) -> FundamentalSnapshot:
         capex = info.get("capitalExpenditures")
         if ocf is not None and capex is not None:
             fcf = ocf + capex  # capex is reported negative
+    if fcf is None:
+        # Fall back to the annual cash-flow statement.
+        try:
+            cf = t.cashflow
+            if cf is not None and not cf.empty:
+                col = cf.columns[0]
+                if "Free Cash Flow" in cf.index:
+                    fcf = float(cf.loc["Free Cash Flow", col])
+                elif "Operating Cash Flow" in cf.index and "Capital Expenditure" in cf.index:
+                    fcf = float(cf.loc["Operating Cash Flow", col]) + float(cf.loc["Capital Expenditure", col])
+        except Exception:
+            pass
 
     dividend = _first(info.get("dividendRate"), info.get("trailingAnnualDividendRate"))
 

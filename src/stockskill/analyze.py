@@ -64,16 +64,52 @@ def analyze_ticker(ticker: str, growth: float | None = None,
 
     price = snap.price
     target = snap.target_mean
-    valuation = {
-        "price": price,
-        "fair_value_base": rep.weighted_base(),
-        "fair_value_low": rng[0] if rng else None,
-        "fair_value_high": rng[2] if rng else None,
-        "bear": fv["bear"], "base": fv["base"], "bull": fv["bull"],
-        "margin_of_safety": rep.margin_of_safety(),
-        "signal": rep.verdict(),
+    div_yield = (snap.dividend_annual / price) if (snap.dividend_annual and price) else None
+
+    # Is the fair-value estimate trustworthy? A cash-flow (DCF) or multiples
+    # basis is; a dividend model alone is only meaningful for a real income
+    # stock. Otherwise we refuse to show a fake fair value.
+    methods = [e.method for e in rep.estimates]
+    has_cashflow = any(m.startswith("DCF") for m in methods) or "Multiples" in methods
+    earnings_basis = "DCF (earnings)" in methods
+    reliable = has_cashflow or ("DDM" in methods and (div_yield or 0) >= 0.03)
+
+    note = ""
+    if not reliable and snap.fcf is not None and snap.fcf <= 0:
+        note = ("No positive free cash flow and no positive earnings — nothing "
+                "reliable to value on. Lean on the analyst view rather than a "
+                "single fair value.")
+    elif not reliable:
+        note = ("Only a dividend model was available; that's not a meaningful "
+                "fair value for a low-yield or growth name.")
+    elif earnings_basis:
+        note = ("Valued on net income — free cash flow is negative (heavy capex "
+                "or one-off), so treat this fair value as a rougher, "
+                "earnings-based proxy.")
+
+    if reliable:
+        valuation = {
+            "reliable": True, "note": note, "price": price,
+            "fair_value_base": rep.weighted_base(),
+            "fair_value_low": rng[0] if rng else None,
+            "fair_value_high": rng[2] if rng else None,
+            "bear": fv["bear"], "base": fv["base"], "bull": fv["bull"],
+            "margin_of_safety": rep.margin_of_safety(),
+            "signal": rep.verdict(),
+            "implied_market_growth": base_out.implied_market_growth,
+        }
+    else:
+        # Withhold fair-value numbers; show only what's honest.
+        valuation = {
+            "reliable": False, "note": note, "price": price,
+            "fair_value_base": None, "fair_value_low": None, "fair_value_high": None,
+            "bear": None, "base": None, "bull": None,
+            "margin_of_safety": None,
+            "signal": "no reliable fair-value basis",
+            "implied_market_growth": None,
+        }
+    valuation.update({
         "discount_rate": base_out.discount_rate,
-        "implied_market_growth": base_out.implied_market_growth,
         "methods": [
             {"method": e.method, "fair_value": e.fair_value, "note": e.note}
             for e in rep.estimates
@@ -85,7 +121,7 @@ def analyze_ticker(ticker: str, growth: float | None = None,
             "terminal_growth": a.terminal_growth,
             "growth_source": growth_source,
         },
-    }
+    })
 
     consensus = {
         "reco": _reco_label(snap.analyst_mean, snap.analyst_reco),

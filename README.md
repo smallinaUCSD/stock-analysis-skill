@@ -10,7 +10,7 @@ methodology.
 ## Quickstart
 
 ```bash
-uv run pytest -q                       # 42 tests over the math
+uv run pytest -q                       # 45 tests over the math
 uv run stockskill value AAPL --growth 0.08 --peer-pe 28 --peer-ev-ebitda 20
 uv run stockskill portfolio --holdings holdings.csv
 uv run stockskill lookthrough --holdings holdings.csv

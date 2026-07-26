@@ -7,7 +7,9 @@ exposes the tested analysis engine over HTTP — it computes no numbers itself.
 uv run stockskill serve --open          # http://127.0.0.1:8787
 ```
 
-- **Search** any ticker (optional growth override, blank = data-driven).
+- **Search** by company name *or* ticker — a live dropdown (via Yahoo symbol
+  search, `data/search.py`) resolves "oracle" → ORCL; if an exact ticker
+  lookup fails, it falls back to the best name match. Optional growth override.
 - **Stock detail** (from `/api/stock/<ticker>`):
   - price, beta, dividend yield;
   - **valuation signal** — price vs. the tool's DCF-based fair value
@@ -25,6 +27,21 @@ This tool produces **analysis, not a personalized buy/sell/hold instruction.**
 - The two often disagree (e.g. DCF "expensive" vs. Street "Strong Buy"); showing
   both, with the decision left to the user, is deliberate.
 Do not add a synthesized "recommended action: BUY/SELL/HOLD" field.
+
+## Valuation basis, and when it withholds
+FCF is sourced from the summary and, failing that, the annual cash-flow
+statement.
+- **Positive FCF** → normal FCF-DCF.
+- **FCF negative but earnings positive** (a profitable company in a heavy-capex
+  phase, e.g. ORCL mid-AI-buildout) → an **earnings-based DCF** runs on net
+  income as a cash-flow *proxy*, clearly flagged ("rougher, earnings-based").
+- **Neither FCF nor earnings positive** (genuinely unprofitable) → it shows
+  **"no reliable fair-value basis"** with the reason and withholds
+  bear/base/bull rather than inventing a number; the analyst view and options
+  are still shown.
+
+A dividend model contributes only as a minor cross-check and is excluded for
+sub-1% yielders (it understates buyback-heavy / growth names).
 
 ## Data-driven base growth
 Base-case stage-1 growth defaults to the company's reported revenue growth

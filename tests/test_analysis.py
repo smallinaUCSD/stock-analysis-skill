@@ -48,6 +48,37 @@ def test_analyze_ticker_payload_shape():
     assert not any(w in v["signal"].lower() for w in ["you should", "buy now", "sell now"])
 
 
+def test_analyze_unprofitable_withholds_fair_value():
+    # Negative FCF AND negative earnings -> nothing to value on -> withhold.
+    d = analyze_ticker("BURN", snapshot=_snap(fcf=-5000.0, eps=-2.0,
+                                              dividend_annual=None), with_options=False)
+    v = d["valuation"]
+    assert v["reliable"] is False
+    assert v["base"] is None and v["bear"] is None and v["bull"] is None
+    assert v["margin_of_safety"] is None
+    assert v["signal"] == "no reliable fair-value basis"
+
+
+def test_analyze_earnings_basis_when_fcf_negative():
+    # Negative FCF but positive earnings -> earnings-based DCF, flagged as proxy.
+    d = analyze_ticker("ORCLish", snapshot=_snap(fcf=-5000.0, eps=5.0),
+                       with_options=False)
+    v = d["valuation"]
+    assert v["reliable"] is True
+    assert v["base"] is not None and v["bear"] < v["base"] < v["bull"]
+    assert "DCF (earnings)" in [m["method"] for m in v["methods"]]
+    assert "net income" in v["note"].lower()
+
+
+def test_analyze_low_yield_ddm_only_is_unreliable():
+    # Low-yield dividend, no FCF, no earnings -> DDM is the only method -> unreliable.
+    d = analyze_ticker("DIVX", snapshot=_snap(fcf=None, eps=None, dividend_annual=1.5),
+                       with_options=False)
+    val = d["valuation"]
+    assert val["reliable"] is False
+    assert [m["method"] for m in val["methods"]] == ["DDM"]  # DDM ran, but isn't enough
+
+
 def test_analyze_ticker_consensus_reported():
     d = analyze_ticker("TST", snapshot=_snap(analyst_mean=2.0, analyst_count=30,
                                              target_mean=120.0), with_options=False)

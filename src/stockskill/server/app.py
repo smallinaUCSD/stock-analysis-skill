@@ -33,6 +33,11 @@ def create_app() -> Flask:
     def healthz():
         return {"ok": True}
 
+    @app.get("/api/search")
+    def search():
+        from ..data.search import search_symbols
+        return jsonify({"results": search_symbols(request.args.get("q", ""))})
+
     @app.get("/api/stock/<ticker>")
     def stock(ticker: str):
         if not _TICKER_RE.match(ticker):
