@@ -1,0 +1,314 @@
+"""Command-line entry points. Every command prints numbers computed by the
+tested library functions -- the CLI only formats, it never does math.
+
+    stockskill value TICKER [--growth 0.08] [--snapshot file.json] [--save f.json]
+    stockskill portfolio [--holdings holdings.csv]
+    stockskill lookthrough [--holdings holdings.csv]
+    stockskill decay --multiplier 3 [--vol 0.45] [--drift 0.12] [--days 252]
+                     [--ticker FNGU]   # replay a real 1y path instead
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+
+from .config import FACTOR_GROUPS
+
+
+def _fmt_money(x: float) -> str:
+    return f"${x:,.0f}"
+
+
+def _fmt_pct(x: float) -> str:
+    return "n/a" if x != x else f"{x:+.1%}"
+
+
+# --------------------------------------------------------------------------- #
+# value
+# --------------------------------------------------------------------------- #
+def cmd_value(args: argparse.Namespace) -> int:
+    from .data.fundamentals import FundamentalSnapshot, fetch_snapshot
+    from .valuation.service import Assumptions, value_snapshot
+
+    if args.snapshot:
+        snap = FundamentalSnapshot.from_json(args.snapshot)
+        print(f"Loaded snapshot {snap.ticker} as of {snap.as_of} (source: {snap.source})")
+    else:
+        print(f"Fetching {args.ticker} ...")
+        snap = fetch_snapshot(args.ticker)
+        if args.save:
+            snap.to_json(args.save)
+            print(f"Saved snapshot -> {args.save}")
+
+    a = Assumptions()
+    if args.growth is not None:
+        a.stage1_growth = args.growth
+    if args.terminal is not None:
+        a.terminal_growth = args.terminal
+    if args.peer_pe is not None:
+        a.peer_pe = args.peer_pe
+    if args.peer_ps is not None:
+        a.peer_ps = args.peer_ps
+    if args.peer_ev_ebitda is not None:
+        a.peer_ev_ebitda = args.peer_ev_ebitda
+
+    out = value_snapshot(snap, a)
+    rep = out.report
+
+    print(f"\n=== Valuation: {rep.ticker} ===")
+    print(f"Price:          {snap.price if snap.price is None else _fmt_money(snap.price)}")
+    print(f"Discount rate:  {out.discount_rate:.2%}  (CAPM, beta="
+          f"{snap.beta if snap.beta is not None else a.default_beta})")
+    print("\nMethod estimates (fair value / share):")
+    for e in rep.estimates:
+        print(f"  {e.method:<10} {_fmt_money(e.fair_value):>12}   [{e.note}]")
+
+    rng = rep.range()
+    if rng:
+        lo, base, hi = rng
+        print(f"\nFair-value range:  {_fmt_money(lo)}  ..  {_fmt_money(hi)}")
+        print(f"Blended base:      {_fmt_money(base)}")
+        print(f"Margin of safety:  {_fmt_pct(rep.margin_of_safety())}  ->  {rep.verdict()}")
+    if out.implied_market_growth is not None:
+        print(f"\nReverse DCF: market price implies ~{out.implied_market_growth:.1%} "
+              f"FCF growth for {a.stage1_years}y.")
+
+    # DCF sensitivity: fair value across discount rate x terminal growth.
+    if out.dcf_inputs is not None and not args.no_sensitivity:
+        from .valuation.dcf import sensitivity_grid
+        base_r = out.discount_rate
+        rates = [round(base_r - 0.02, 4), round(base_r - 0.01, 4), round(base_r, 4),
+                 round(base_r + 0.01, 4), round(base_r + 0.02, 4)]
+        terms = [0.015, 0.02, 0.025, 0.03, 0.035]
+        grid = sensitivity_grid(out.dcf_inputs, rates, terms)
+        print("\nDCF sensitivity -- fair value / share (rows=discount rate, cols=terminal g):")
+        print("  disc\\term  " + "".join(f"{t:>9.1%}" for t in terms))
+        for r, row in zip(rates, grid):
+            cells = "".join(("     n/a " if v != v else f"{v:>9,.0f}") for v in row)
+            print(f"  {r:>7.2%}   {cells}")
+
+    if out.warnings:
+        print("\nNotes:")
+        for w in out.warnings:
+            print(f"  - {w}")
+    return 0
+
+
+# --------------------------------------------------------------------------- #
+# lookthrough / portfolio
+# --------------------------------------------------------------------------- #
+def _load(args) -> list:
+    from .portfolio.io import load_holdings_csv
+    return load_holdings_csv(args.holdings)
+
+
+def cmd_lookthrough(args: argparse.Namespace) -> int:
+    from .portfolio.lookthrough import expand
+    from .leverage import registry
+
+    holdings = _load(args)
+    lt = expand(holdings)
+
+    print(f"Equity (sum of positions): {_fmt_money(lt.total_equity)}")
+    print(f"Economic exposure (notional): {_fmt_money(lt.total_notional)}")
+    print(f"Effective leverage: {lt.effective_leverage:.2f}x\n")
+    print("Top underlying exposures (look-through):")
+    weights = lt.exposure_weights()
+    for ul, amt in lt.top(15):
+        print(f"  {ul:<6} {_fmt_money(amt):>12}   {weights[ul]:6.1%}")
+
+    verify = [p.ticker for p in registry.all_products().values() if p.verify]
+    if verify:
+        print(f"\n[!] Basket/multiplier snapshots to VERIFY vs issuer data: {', '.join(verify)}")
+    return 0
+
+
+def cmd_portfolio(args: argparse.Namespace) -> int:
+    from .portfolio.lookthrough import expand
+    from .portfolio import risk
+
+    holdings = _load(args)
+    lt = expand(holdings)
+    weights = lt.exposure_weights()
+
+    print("=== Portfolio review (look-through) ===")
+    print(f"Equity: {_fmt_money(lt.total_equity)}   "
+          f"Economic exposure: {_fmt_money(lt.total_notional)}   "
+          f"Effective leverage: {lt.effective_leverage:.2f}x\n")
+
+    hhi = risk.herfindahl(lt.notional_by_underlying)
+    print(f"Concentration (HHI): {hhi:.3f}   "
+          f"Effective # of bets: {risk.effective_number_of_bets(lt.notional_by_underlying):.1f}")
+    print(f"Top-5 exposure share: {risk.top_n_concentration(lt.notional_by_underlying, 5):.1%}\n")
+
+    print("Exposure by factor group:")
+    for ge in risk.group_exposure(lt.notional_by_underlying, FACTOR_GROUPS):
+        print(f"  {ge.group:<22} {_fmt_money(ge.dollars):>12}   {ge.share:6.1%}")
+
+    print("\nBy account (equity):")
+    by_acct: dict[str, float] = {}
+    for h in holdings:
+        by_acct[h.account or "(unlabeled)"] = by_acct.get(h.account or "(unlabeled)", 0.0) + h.market_value
+    for acct, amt in sorted(by_acct.items(), key=lambda kv: kv[1], reverse=True):
+        print(f"  {acct:<22} {_fmt_money(amt):>12}   {amt / lt.total_equity:6.1%}")
+    return 0
+
+
+# --------------------------------------------------------------------------- #
+# decay
+# --------------------------------------------------------------------------- #
+def cmd_decay(args: argparse.Namespace) -> int:
+    from .portfolio.decay import monte_carlo_decay, path_leveraged_return
+
+    daily_fee = (args.expense or 0.0) / 252.0
+
+    if args.ticker:
+        from .data.prices import daily_returns
+        rets = daily_returns(args.ticker, period=args.period)
+        if not rets:
+            print(f"Could not fetch returns for {args.ticker}.", file=sys.stderr)
+            return 1
+        res = path_leveraged_return(rets, args.multiplier, daily_fee)
+        print(f"=== Real-path decay: {args.ticker} x{args.multiplier:g} "
+              f"over {args.period} ({len(rets)} days) ===")
+        print(f"Underlying total return:   {_fmt_pct(res.underlying_total_return)}")
+        print(f"Naive {args.multiplier:g}x expectation:      {_fmt_pct(res.naive_expectation)}")
+        print(f"Actual leveraged return:   {_fmt_pct(res.leveraged_actual)}")
+        print(f"Volatility decay drag:     {_fmt_pct(-res.decay_drag)}")
+        return 0
+
+    mc = monte_carlo_decay(
+        annual_drift=args.drift, annual_vol=args.vol, multiplier=args.multiplier,
+        days=args.days, daily_fee=daily_fee, seed=args.seed,
+    )
+    print(f"=== Monte Carlo decay: x{args.multiplier:g}, drift={args.drift:.0%}, "
+          f"vol={args.vol:.0%}, {args.days}d, seed={args.seed} ===")
+    print(f"Median underlying return:   {_fmt_pct(mc.median_underlying)}")
+    print(f"Median naive {args.multiplier:g}x:            {_fmt_pct(mc.median_naive)}")
+    print(f"Median leveraged (actual):  {_fmt_pct(mc.median_leveraged)}")
+    print(f"P(leveraged beats naive):   {mc.prob_leveraged_beats_naive:.1%}")
+    print(f"P(leveraged loses money):   {mc.prob_leveraged_loss:.1%}")
+    print("Leveraged return percentiles:")
+    for k, v in mc.pctiles_leveraged.items():
+        print(f"  {k:>4}: {_fmt_pct(v)}")
+    return 0
+
+
+def _load_universe(path: str) -> list[str]:
+    tickers: list[str] = []
+    with open(path) as f:
+        for line in f:
+            tok = line.strip().split(",")[0].strip()
+            if not tok or tok.startswith("#") or tok.lower() == "ticker":
+                continue
+            tickers.append(tok.upper())
+    return tickers
+
+
+def cmd_screen(args: argparse.Namespace) -> int:
+    import os
+    from .data.fundamentals import FundamentalSnapshot, fetch_snapshot
+    from .screener.screen import run_screen, LANES
+
+    tickers = _load_universe(args.universe)
+    print(f"Screening {len(tickers)} names, lane='{args.lane}' ...")
+
+    snapshots = []
+    momentum: dict[str, float] = {}
+    for tk in tickers:
+        snap = None
+        cache = os.path.join(args.cache_dir, f"{tk}.json") if args.cache_dir else None
+        if cache and os.path.exists(cache) and not args.refresh:
+            snap = FundamentalSnapshot.from_json(cache)
+        else:
+            try:
+                snap = fetch_snapshot(tk)
+                if cache:
+                    os.makedirs(args.cache_dir, exist_ok=True)
+                    snap.to_json(cache)
+            except Exception as e:  # noqa: BLE001
+                print(f"  [skip] {tk}: {e}", file=sys.stderr)
+                continue
+        snapshots.append(snap)
+        if args.momentum and args.lane == "aggressive":
+            from .data.prices import daily_returns
+            import numpy as np
+            rets = daily_returns(tk, period=args.momentum)
+            if rets:
+                momentum[tk] = float(np.prod([1 + r for r in rets]) - 1.0)
+
+    ranked = run_screen(snapshots, lane=args.lane, momentum=momentum)
+    specs = [s.name for s in LANES[args.lane]]
+
+    print(f"\n=== Screen: {args.lane} lane, top {args.top} of {len(ranked)} ===")
+    print(f"{'rank':>4}  {'ticker':<7}{'score':>7}{'cov':>6}   components (best->worst normalized)")
+    for i, s in enumerate(ranked[:args.top], 1):
+        top_comp = sorted(
+            ((k, v) for k, v in s.components.items() if v is not None),
+            key=lambda kv: kv[1], reverse=True,
+        )[:3]
+        comp_str = ", ".join(f"{k}:{v:.2f}" for k, v in top_comp)
+        print(f"{i:>4}  {s.ticker:<7}{s.score:>7.3f}{s.coverage:>6.0%}   {comp_str}")
+    print(f"\nMetrics used: {', '.join(specs)}")
+    print("Scores are cross-sectional percentiles within THIS universe, not "
+          "absolute buy signals. Run `value TICKER` on the shortlist for depth.")
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(prog="stockskill", description="Reproducible stock analysis.")
+    sub = p.add_subparsers(dest="command", required=True)
+
+    v = sub.add_parser("value", help="fair-value estimate for a ticker")
+    v.add_argument("ticker", nargs="?")
+    v.add_argument("--growth", type=float, help="stage-1 FCF growth (decimal)")
+    v.add_argument("--terminal", type=float, help="terminal growth (decimal)")
+    v.add_argument("--peer-pe", type=float)
+    v.add_argument("--peer-ps", type=float)
+    v.add_argument("--peer-ev-ebitda", type=float)
+    v.add_argument("--snapshot", help="load a saved snapshot JSON instead of fetching")
+    v.add_argument("--save", help="save fetched snapshot to this JSON path")
+    v.add_argument("--no-sensitivity", action="store_true", help="hide the DCF sensitivity grid")
+    v.set_defaults(func=cmd_value)
+
+    lt = sub.add_parser("lookthrough", help="true underlying exposure of holdings")
+    lt.add_argument("--holdings", default="holdings.csv")
+    lt.set_defaults(func=cmd_lookthrough)
+
+    pf = sub.add_parser("portfolio", help="full look-through portfolio review")
+    pf.add_argument("--holdings", default="holdings.csv")
+    pf.set_defaults(func=cmd_portfolio)
+
+    d = sub.add_parser("decay", help="leveraged-ETF volatility decay")
+    d.add_argument("--multiplier", type=float, required=True)
+    d.add_argument("--vol", type=float, default=0.45, help="annualized vol (decimal)")
+    d.add_argument("--drift", type=float, default=0.10, help="annualized drift (decimal)")
+    d.add_argument("--days", type=int, default=252)
+    d.add_argument("--expense", type=float, default=0.0, help="annual expense+financing (decimal)")
+    d.add_argument("--seed", type=int, default=12345)
+    d.add_argument("--ticker", help="replay this underlying's real path instead of MC")
+    d.add_argument("--period", default="1y")
+    d.set_defaults(func=cmd_decay)
+
+    sc = sub.add_parser("screen", help="rank a universe into a shortlist")
+    sc.add_argument("--universe", default="universe.csv")
+    sc.add_argument("--lane", choices=["core", "aggressive"], default="core")
+    sc.add_argument("--top", type=int, default=15)
+    sc.add_argument("--cache-dir", help="dir to save/load snapshot JSONs (reproducibility)")
+    sc.add_argument("--refresh", action="store_true", help="re-fetch even if cached")
+    sc.add_argument("--momentum", help="period for aggressive-lane momentum, e.g. 1y")
+    sc.set_defaults(func=cmd_screen)
+    return p
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    if getattr(args, "command", None) == "value" and not args.ticker and not args.snapshot:
+        print("value: provide a TICKER or --snapshot", file=sys.stderr)
+        return 2
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

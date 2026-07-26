@@ -1,0 +1,28 @@
+[project]
+name = "stockskill"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Seshu Mallina", email = "80934775+smallinaUCSD@users.noreply.github.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "lxml>=6.1.1",
+    "numpy>=2.5.1",
+    "pandas>=3.0.5",
+    "requests>=2.34.2",
+    "yfinance>=1.5.2",
+]
+
+[project.scripts]
+stockskill = "stockskill.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.9.27,<0.10.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]

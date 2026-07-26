@@ -1,0 +1,12 @@
+# Python / uv
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Local data & snapshots (personal financial data)
+*.snapshot.json
+snapshots/
+
+# Keep the template holdings out of accidental commits if you add real $:
+# holdings.csv   # uncomment if you fill in real dollar amounts you don't want tracked
