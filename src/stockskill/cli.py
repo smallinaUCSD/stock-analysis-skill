@@ -427,6 +427,40 @@ def cmd_serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_watchlist(args: argparse.Namespace) -> int:
+    import os
+    from datetime import datetime
+    from .marketclock import market_status, ET
+    from .signals import SignalConfig
+    from .watchlist import parse_tickers, fetch_all, build_row, render_watchlist
+
+    parsed = parse_tickers(args.tickers)
+    tickers = parsed["all"]
+    tag_map: dict[str, set] = {}
+    for sec, tks in parsed["sections"].items():
+        for t in tks:
+            tag_map.setdefault(t, set()).add(sec)
+
+    print(f"Fetching {len(tickers)} tickers ({args.workers} workers) ...")
+    data = fetch_all(tickers, period=args.period, workers=args.workers,
+                     cache_dir=args.cache_dir)
+    cfg = SignalConfig.from_env()
+    rows = [build_row(data[t], cfg, tag_map.get(t)) for t in tickers if t in data]
+
+    status = market_status()
+    now = datetime.now(ET)
+    html_out = render_watchlist(
+        rows, title="Watchlist", updated=now.strftime("%a %b %d, %I:%M %p") + " ET",
+        status_badge=status.badge, status_label=status.label)
+    with open(args.out, "w") as f:
+        f.write(html_out)
+    ok = sum(1 for r in rows if r.price is not None)
+    print(f"[{status.badge}] wrote {args.out} ({ok}/{len(rows)} tickers)")
+    if args.open:
+        os.system(f"open {args.out!r}" if sys.platform == "darwin" else f"xdg-open {args.out!r}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="stockskill", description="Reproducible stock analysis.")
     sub = p.add_subparsers(dest="command", required=True)
@@ -494,6 +528,15 @@ def build_parser() -> argparse.ArgumentParser:
     sv.add_argument("--port", type=int, default=8787)
     sv.add_argument("--open", action="store_true", help="open the browser after starting")
     sv.set_defaults(func=cmd_serve)
+
+    wl = sub.add_parser("watchlist", help="multi-ticker technical dashboard (table view)")
+    wl.add_argument("--tickers", default="data/tickers.csv")
+    wl.add_argument("--out", default="watchlist.html")
+    wl.add_argument("--period", default="2y", help="history to fetch (>1y so 1Y change fills)")
+    wl.add_argument("--workers", type=int, default=5)
+    wl.add_argument("--cache-dir", help="per-ticker cache dir (e.g. .cache/stock_cache)")
+    wl.add_argument("--open", action="store_true", help="open the file after writing")
+    wl.set_defaults(func=cmd_watchlist)
     return p
 
 

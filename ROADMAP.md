@@ -62,19 +62,20 @@ functions** (our core rule), same as the rest of `stockskill`.
 - [x] Env-var config for thresholds & weights (SignalConfig.from_env)
 - [x] IndicatorSnapshot built from OHLCV (bridges technicals -> signals)
 
-## Phase 3 — Multi-ticker watchlist dashboard  (the big UI lift)
-Extend `dashboard/` + `server/` from single-stock to a watchlist grid.
-- [ ] Sectioned `tickers.csv` parser: `[MEME]` / `[M7]` / `[TICKERS]`, dedup
-- [ ] Category auto-detect: tech / leveraged / ETF / emerging-tech / speculative / dividend
-- [ ] Multi-ticker pipeline: parallel fetch (ThreadPoolExecutor ~5 workers),
-      per-ticker on-disk cache (`data/stock_cache/*.pkl`), rate limiting
-- [ ] **Table view**: sortable columns, sparklines, live ticker search,
-      consolidated INDICATORS column (signals, golden/death, ML scores)
+## Phase 3 — Multi-ticker watchlist dashboard  (the big UI lift) — IN PROGRESS
+`src/stockskill/watchlist/` (+ `stockskill watchlist` command). 5 tests.
+- [x] Sectioned `tickers.csv` parser: `[MEME]` / `[M7]` / `[TICKERS]`, dedup
+- [x] Category auto-detect: tech / leveraged / ETF / dividend (via leverage registry + fundamentals)
+- [x] Multi-ticker pipeline: parallel fetch (ThreadPoolExecutor ~5 workers),
+      per-ticker on-disk cache (`.cache/stock_cache/*.pkl`, TTL)
+- [x] TickerRow: stitches technicals + signals + fundamentals + flags per ticker
+- [x] **Table view**: sortable columns, sparklines, live ticker search,
+      consolidated INDICATORS column (MACD, cloud, golden/death, squeeze, 52wH/L)
 - [ ] **Card view**: 3 swipeable pages (price/technicals · fundamentals/earnings/trade-setup · range charts)
 - [ ] **Heatmap view**: color-intensity tiles + external links (Barchart/Yahoo/Finviz/Zacks/StockAnalysis)
 - [ ] Filter chips: signals, oversold/overbought, surge/crash, volume, squeeze,
-      earnings-week, dividend, category filters
-- [ ] Theme toggle + view persistence (localStorage)
+      earnings-week, dividend, category filters (data already on TickerRow.flags/categories/sections)
+- [ ] View toggle (table/card/heatmap) + theme toggle + view persistence (localStorage)
 - [ ] Corporate events: next-earnings date + earnings-week badge, dividend ex-date
 
 ## Phase 4 — Market-indicators bar & rotation  (extends `pulse/`)

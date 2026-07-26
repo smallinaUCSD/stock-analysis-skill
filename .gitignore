@@ -10,6 +10,7 @@ snapshots/
 
 # Generated dashboard output, caches, logs
 dashboard.html
+watchlist.html
 .cache/
 *.log
 

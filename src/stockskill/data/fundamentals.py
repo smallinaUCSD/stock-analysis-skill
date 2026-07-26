@@ -46,6 +46,12 @@ class FundamentalSnapshot:
     analyst_count: int | None = None
     target_mean: float | None = None
     name: str | None = None
+    sector: str | None = None
+    quote_type: str | None = None       # EQUITY | ETF | ...
+    fifty_two_week_high: float | None = None
+    fifty_two_week_low: float | None = None
+    avg_volume: float | None = None
+    next_earnings: str | None = None     # ISO date if known
 
     def to_json(self, path: str | Path) -> None:
         Path(path).write_text(json.dumps(asdict(self), indent=2))
@@ -134,4 +140,9 @@ def fetch_snapshot(ticker: str) -> FundamentalSnapshot:
         analyst_count=info.get("numberOfAnalystOpinions"),
         target_mean=info.get("targetMeanPrice"),
         name=info.get("longName") or info.get("shortName"),
+        sector=info.get("sector"),
+        quote_type=info.get("quoteType"),
+        fifty_two_week_high=info.get("fiftyTwoWeekHigh"),
+        fifty_two_week_low=info.get("fiftyTwoWeekLow"),
+        avg_volume=info.get("averageVolume"),
     )
