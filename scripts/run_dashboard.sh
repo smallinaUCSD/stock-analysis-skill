@@ -9,6 +9,7 @@ UV="/Users/smallina/.local/bin/uv"
 cd "$PROJECT" || exit 1
 mkdir -p "$PROJECT/.cache"
 
+# Market pulse + portfolio dashboard.
 "$UV" run stockskill dashboard \
     --out "$PROJECT/dashboard.html" \
     --holdings "$PROJECT/holdings.csv" \
@@ -16,3 +17,10 @@ mkdir -p "$PROJECT/.cache"
     --refresh \
     --interval 30 \
     >> "$PROJECT/.cache/dashboard.log" 2>&1
+
+# Multi-ticker watchlist dashboard (shares the stock cache).
+"$UV" run stockskill watchlist \
+    --out "$PROJECT/watchlist.html" \
+    --tickers "$PROJECT/data/tickers.csv" \
+    --cache-dir "$PROJECT/.cache/stock_cache" \
+    >> "$PROJECT/.cache/watchlist.log" 2>&1
