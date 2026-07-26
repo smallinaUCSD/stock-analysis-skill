@@ -74,10 +74,20 @@ def value_snapshot(snap: FundamentalSnapshot, a: Assumptions | None = None) -> V
     implied_growth = None
     dcf_inputs_used: DCFInputs | None = None
 
-    # --- DCF + reverse DCF (needs FCF, shares) ---
-    if snap.fcf and snap.shares and snap.fcf > 0:
+    # --- DCF + reverse DCF ---
+    # Prefer free cash flow. If FCF is missing/negative (e.g. a profitable
+    # company in a heavy-capex phase), fall back to net income as a cash-flow
+    # PROXY so we can still value it -- labeled distinctly and flagged as rougher.
+    flow0 = None
+    flow_label = None
+    if snap.fcf and snap.fcf > 0:
+        flow0, flow_label = snap.fcf, "DCF"
+    elif snap.eps and snap.shares and snap.eps > 0:
+        flow0, flow_label = snap.eps * snap.shares, "DCF (earnings)"
+
+    if flow0 and snap.shares:
         dcf_inp = DCFInputs(
-            fcf0=snap.fcf,
+            fcf0=flow0,
             shares=snap.shares,
             net_debt=snap.net_debt or 0.0,
             discount_rate=discount_rate,
@@ -88,15 +98,18 @@ def value_snapshot(snap: FundamentalSnapshot, a: Assumptions | None = None) -> V
         try:
             dcf = two_stage_dcf(dcf_inp)
             dcf_inputs_used = dcf_inp
-            report.add("DCF", dcf.fair_value_per_share, a.weight_dcf,
-                       note=f"g1={a.stage1_growth:.0%}, r={discount_rate:.1%}, "
-                            f"terminal={dcf.terminal_value_pct:.0%} of EV")
+            note = (f"g1={a.stage1_growth:.0%}, r={discount_rate:.1%}, "
+                    f"terminal={dcf.terminal_value_pct:.0%} of EV")
+            if flow_label == "DCF (earnings)":
+                note += "; net income used (FCF negative/NA)"
+                warnings.append("FCF negative/unavailable; DCF run on net income as a proxy")
+            report.add(flow_label, dcf.fair_value_per_share, a.weight_dcf, note=note)
             if snap.price:
                 implied_growth = implied_stage1_growth(snap.price, dcf_inp)
         except ValueError as e:
             warnings.append(f"DCF skipped: {e}")
     else:
-        warnings.append("DCF skipped: missing/negative FCF or shares")
+        warnings.append("DCF skipped: no positive FCF or EPS")
 
     # --- Relative multiples (needs peer multiples + matching metrics) ---
     if snap.shares and any([a.peer_pe, a.peer_ev_ebitda, a.peer_ps]):

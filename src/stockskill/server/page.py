@@ -16,6 +16,15 @@ _EXTRA_CSS = """
   border:1px solid var(--border);background:var(--surface);color:var(--ink)}
 .search button{font-size:14px;padding:10px 16px;border-radius:10px;border:none;
   background:var(--accent);color:#fff;font-weight:650;cursor:pointer}
+.searchwrap{position:relative}
+.sug{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:20;
+  background:var(--surface);border:1px solid var(--border);border-radius:10px;
+  overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.18);display:none}
+.sug-item{display:flex;gap:8px;align-items:baseline;padding:9px 12px;cursor:pointer}
+.sug-item:hover,.sug-item.active{background:var(--surface-2)}
+.sug-item b{font-variant-numeric:tabular-nums}
+.sug-item .nm{flex:1;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sug-item .ex{color:var(--muted);font-size:11px}
 .quick{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
 .quick button{font-size:12px;padding:4px 10px;border-radius:999px;cursor:pointer;
   background:var(--surface-2);border:1px solid var(--border);color:var(--ink)}
@@ -36,6 +45,8 @@ _EXTRA_CSS = """
 .muted{color:var(--muted)} .up{color:var(--up)} .down{color:var(--down)}
 .hidden{display:none}
 .loader{color:var(--muted);font-size:13px;padding:14px 0}
+.vnote{font-size:12.5px;color:var(--ink);background:var(--surface-2);
+  border:1px solid var(--warn);border-radius:8px;padding:8px 10px;margin-bottom:10px}
 .disclaimer{font-size:11.5px;color:var(--muted);margin-top:14px;line-height:1.5;
   border-top:1px solid var(--border);padding-top:10px}
 table.methods{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}
@@ -48,13 +59,16 @@ PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 <title>Stock Analyzer</title><style>__CSS____EXTRA__</style></head>
 <body><div class="wrap">
 <header><h1>Stock Analyzer</h1><span class="muted">search any ticker</span></header>
-<div class="search">
-  <input id="q" placeholder="Ticker, e.g. NVDA, AAPL, COST" autofocus
-         onkeydown="if(event.key==='Enter')go()">
-  <input id="g" style="max-width:150px;flex:0 0 auto" placeholder="growth % (auto)"
-         title="Override base-case growth; blank = data-driven"
-         onkeydown="if(event.key==='Enter')go()">
-  <button onclick="go()">Analyze</button>
+<div class="searchwrap">
+  <div class="search">
+    <input id="q" placeholder="Company or ticker, e.g. oracle, NVDA, costco" autofocus
+           autocomplete="off">
+    <input id="g" style="max-width:150px;flex:0 0 auto" placeholder="growth % (auto)"
+           title="Override base-case growth; blank = data-driven"
+           onkeydown="if(event.key==='Enter')go()">
+    <button onclick="go()">Analyze</button>
+  </div>
+  <div id="sug" class="sug"></div>
 </div>
 <div class="quick" id="quick"></div>
 <div id="out"></div>
@@ -84,21 +98,86 @@ function signalClass(sig){
   return 'mid';
 }
 
-async function go(){
-  const t = document.getElementById('q').value.trim().toUpperCase();
-  if(!t) return;
-  const g = document.getElementById('g').value.trim();
-  let url = '/api/stock/'+encodeURIComponent(t);
-  if(g) url += '?growth='+(parseFloat(g)/100);
+function esc(s){return (s==null?'':String(s)).replace(/[&<>"']/g,c=>(
+  {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+// Analyze one exact symbol. Returns {ok:true} or {ok:false, code}.
+async function analyze(sym, g){
   const out = document.getElementById('out');
-  out.innerHTML = '<div class="loader">Analyzing '+t+' …</div>';
+  out.innerHTML = '<div class="loader">Analyzing '+esc(sym)+' …</div>';
+  let url = '/api/stock/'+encodeURIComponent(sym);
+  if(g) url += '?growth='+(parseFloat(g)/100);
   try{
     const r = await fetch(url);
     const d = await r.json();
-    if(d.error){ out.innerHTML = '<div class="card">Could not analyze '+t+': '+d.error+'</div>'; return; }
+    if(!r.ok || d.error) return {ok:false};
     out.innerHTML = render(d);
-  }catch(e){ out.innerHTML = '<div class="card">Request failed: '+e+'</div>'; }
+    return {ok:true};
+  }catch(e){ out.innerHTML='<div class="card">Request failed: '+esc(e)+'</div>'; return {ok:true}; }
 }
+
+async function go(){
+  hideSug();
+  const raw = document.getElementById('q').value.trim();
+  if(!raw) return;
+  const g = document.getElementById('g').value.trim();
+  const out = document.getElementById('out');
+  // 1) try as an exact ticker
+  const res = await analyze(raw.toUpperCase(), g);
+  if(res.ok) return;
+  // 2) fall back to name search and use the best match
+  out.innerHTML = '<div class="loader">Searching for “'+esc(raw)+'” …</div>';
+  try{
+    const s = await (await fetch('/api/search?q='+encodeURIComponent(raw))).json();
+    const list = s.results||[];
+    if(list.length){
+      const top = list[0];
+      document.getElementById('q').value = top.symbol;
+      const r2 = await analyze(top.symbol, g);
+      if(r2.ok){
+        const note = document.createElement('div');
+        note.className='muted'; note.style='font-size:12px;margin:6px 2px';
+        note.textContent = 'Showing '+top.symbol+' ('+top.name+') for “'+raw+'”.';
+        out.prepend(note);
+      }
+      return;
+    }
+    out.innerHTML = '<div class="card">No match for “'+esc(raw)+'”. Try a company name (e.g. “oracle”) or a ticker.</div>';
+  }catch(e){ out.innerHTML = '<div class="card">Search failed: '+esc(e)+'</div>'; }
+}
+
+// ---- live suggestions ----
+let sugTimer;
+function hideSug(){ const s=document.getElementById('sug'); s.style.display='none'; s.innerHTML=''; }
+function pick(sym){ document.getElementById('q').value=sym; hideSug(); go(); }
+function renderSug(list, q){
+  const s=document.getElementById('sug');
+  if(!list.length){
+    s.innerHTML = '<div class="sug-item" style="cursor:default"><span class="nm ex">'
+      + 'No matches for “'+esc(q||'')+'”. Press Analyze to try it as a ticker.</span></div>';
+    s.style.display='block';
+    return;
+  }
+  s.innerHTML = list.map(x=>
+    '<div class="sug-item" data-sym="'+esc(x.symbol)+'"><b>'+esc(x.symbol)+'</b>'
+    + '<span class="nm">'+esc(x.name)+'</span><span class="ex">'+esc(x.exchange||'')+'</span></div>'
+  ).join('');
+  s.querySelectorAll('.sug-item').forEach(el=>el.onclick=()=>pick(el.dataset.sym));
+  s.style.display='block';
+}
+const qEl = document.getElementById('q');
+qEl.addEventListener('input', e=>{
+  clearTimeout(sugTimer);
+  const v = e.target.value.trim();
+  if(v.length<2){ hideSug(); return; }
+  sugTimer = setTimeout(async ()=>{
+    try{ const d=await (await fetch('/api/search?q='+encodeURIComponent(v))).json();
+      renderSug(d.results||[], v); }catch(_){ renderSug([], v); }
+  }, 220);
+});
+qEl.addEventListener('keydown', e=>{ if(e.key==='Enter'){ hideSug(); go(); }
+  else if(e.key==='Escape'){ hideSug(); } });
+document.addEventListener('click', e=>{ if(!e.target.closest('.searchwrap')) hideSug(); });
 
 function render(d){
   const v = d.valuation, c = d.consensus, o = d.options;
@@ -121,6 +200,7 @@ function render(d){
      + '<div class="muted" style="font-size:12px">as of '+d.as_of+' · beta '+num(d.beta)+' · div yield '+pct(d.dividend_yield)+'</div>'
    + '</div>'
    + '<div class="card"><h2>Valuation — bear / base / bull fair value</h2>'
+     + (v.note ? '<div class="vnote">'+esc(v.note)+'</div>' : '')
      + '<div class="scenario">'
      + '<div class="scn bear"><div class="lab">Bear</div><div class="val">'+money(v.bear)+'</div></div>'
      + '<div class="scn"><div class="lab">Base</div><div class="val">'+money(v.base)+'</div></div>'
