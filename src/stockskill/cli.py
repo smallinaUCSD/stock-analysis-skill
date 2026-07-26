@@ -486,11 +486,14 @@ def cmd_watchlist(args: argparse.Namespace) -> int:
     cfg = SignalConfig.from_env()
     rows = [build_row(data[t], cfg, tag_map.get(t)) for t in tickers if t in data]
 
+    from .alerts import all_alerts, load_custom_alerts
+    alerts = all_alerts(rows, load_custom_alerts(args.alerts))
+
     status = market_status()
     now = datetime.now(ET)
     html_out = render_watchlist(
         rows, title="Watchlist", updated=now.strftime("%a %b %d, %I:%M %p") + " ET",
-        status_badge=status.badge, status_label=status.label)
+        status_badge=status.badge, status_label=status.label, alerts=alerts)
     with open(args.out, "w") as f:
         f.write(html_out)
     ok = sum(1 for r in rows if r.price is not None)
@@ -574,6 +577,7 @@ def build_parser() -> argparse.ArgumentParser:
     wl.add_argument("--period", default="2y", help="history to fetch (>1y so 1Y change fills)")
     wl.add_argument("--workers", type=int, default=5)
     wl.add_argument("--cache-dir", help="per-ticker cache dir (e.g. .cache/stock_cache)")
+    wl.add_argument("--alerts", default="data/alerts.json", help="custom alerts JSON")
     wl.add_argument("--open", action="store_true", help="open the file after writing")
     wl.set_defaults(func=cmd_watchlist)
     return p

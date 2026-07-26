@@ -84,6 +84,10 @@ table.wl tr.item:hover td{background:var(--surface-2)}
 .tile-item .c{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
 .tile-item .s{font-size:10px;color:var(--muted)}
 .view{display:none}.view.active{display:block}
+.banner{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding:9px 14px;
+  margin:10px 0;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;font-size:12.5px}
+.banner .a{white-space:nowrap}
+.banner .x{margin-left:auto;cursor:pointer;color:var(--muted);border:none;background:none;font-size:15px}
 """
 
 
@@ -265,7 +269,24 @@ def _chip_bar(rows):
     return "".join(out)
 
 
-def render_watchlist(rows, title="Watchlist", updated="", status_badge="", status_label=""):
+def _banner(alerts, cap=14):
+    if not alerts:
+        return "", ""
+    shown = alerts[:cap]
+    extra = len(alerts) - len(shown)
+    items = "".join(f'<span class="a">{html.escape(a.emoji)} {html.escape(a.message)}</span>'
+                    for a in shown)
+    if extra > 0:
+        items += f'<span class="a muted">+{extra} more</span>'
+    sig = f"{len(alerts)}:" + ",".join(a.kind for a in shown[:5])
+    banner = (f'<div class="banner" id="banner" data-sig="{html.escape(sig)}">{items}'
+              f'<button class="x" onclick="dismissBanner()" title="Dismiss">✕</button></div>')
+    return banner, sig
+
+
+def render_watchlist(rows, title="Watchlist", updated="", status_badge="", status_label="",
+                     alerts=None):
+    banner, _sig = _banner(alerts or [])
     table = "".join(_row_html(r) for r in rows)
     cards = "".join(_card_html(r) for r in rows)
     tiles = "".join(_tile_html(r) for r in rows)
@@ -281,6 +302,7 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
 <body><div class="wrap">
 <header><h1>{html.escape(title)}</h1>{badge}
   <span class="sub" style="margin:0">Updated {html.escape(updated)}</span></header>
+{banner}
 <div class="bar">
   <div class="seg">
     <button data-view="table" class="on" onclick="setView('table')">Table</button>
@@ -352,6 +374,10 @@ function setView(v){{
   document.querySelectorAll('.seg button').forEach(b=>b.classList.toggle('on', b.dataset.view===v));
   applyFilter();
 }}
+function dismissBanner(){{
+  const b=document.getElementById('banner'); if(!b) return;
+  b.style.display='none'; localStorage.setItem('wl_banner', b.dataset.sig);
+}}
 function toggleTheme(){{
   const cur=document.documentElement.getAttribute('data-theme');
   const dark=window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -373,6 +399,8 @@ function sortBy(col){{
 }}
 (function init(){{
   const t=localStorage.getItem('wl_theme'); if(t) document.documentElement.setAttribute('data-theme', t);
+  const b=document.getElementById('banner');
+  if(b && localStorage.getItem('wl_banner')===b.dataset.sig) b.style.display='none';
   setView(view);
 }})();
 </script>

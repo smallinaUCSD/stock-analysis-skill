@@ -1,0 +1,7 @@
+[
+  {"ticker": "NVDA", "condition": "price_below", "value": 180},
+  {"ticker": "AAPL", "condition": "price_above", "value": 350},
+  {"ticker": "TSLA", "condition": "day_change_below", "value": -5},
+  {"ticker": "COIN", "condition": "rsi_overbought"},
+  {"ticker": "SOXL", "condition": "day_change_above", "value": 8}
+]

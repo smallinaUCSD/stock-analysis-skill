@@ -89,12 +89,13 @@ functions** (our core rule), same as the rest of `stockskill`.
 - [ ] AAII bull/bear sentiment (stubbed — no stable free API; degrades to None)
 - [ ] TTL caching (~30 min) for sentiment / F&G — pending (fetch is fast enough for now)
 
-## Phase 5 — Alerts
+## Phase 5 — Alerts  ✅ DONE (`alerts/`, 5 tests)
 `src/stockskill/alerts/`
-- [ ] Alert engine: 52w high/low, surge/crash (>10%), volume spike, BB squeeze,
-      active signals, ML breakout (≥70%) / crash-risk (≥50%)
-- [ ] Custom alerts via `data/alerts.json` (price/%-change/RSI/volume/signal conditions)
-- [ ] Alert banner in dashboard + click-to-dismiss (localStorage)
+- [x] Alert engine: 52w high/low, surge/crash (>10%), volume spike, BB squeeze,
+      active BUY/SELL/SHORT signals (ML breakout/crash alerts deferred to Phase 7)
+- [x] Custom alerts via `data/alerts.json` (price/%-change/RSI/volume/signal conditions)
+- [x] Alert banner in the watchlist dashboard + click-to-dismiss (localStorage,
+      re-shows when the alert set changes)
 
 ## Phase 6 — Trade setup & risk (informational framing)  &  options strategy
 - [ ] ATR-based trade setup: entry / stop (2×ATR) / target (4×ATR, 2:1 R:R)
