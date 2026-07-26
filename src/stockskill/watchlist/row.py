@@ -43,6 +43,7 @@ class TickerRow:
     eps: float | None = None
     dividend_yield: float | None = None
     beta: float | None = None
+    sector: str | None = None
     # range
     week52_high: float | None = None
     week52_low: float | None = None
@@ -95,6 +96,7 @@ def build_row(td: TickerData, cfg: SignalConfig | None = None,
 
     if snap:
         row.name = snap.name or td.ticker
+        row.sector = snap.sector
         row.price = row.price if row.price is not None else snap.price
         row.market_cap = snap.market_cap
         row.eps = snap.eps

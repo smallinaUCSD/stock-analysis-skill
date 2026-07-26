@@ -192,3 +192,34 @@ def _quote(q) -> dict | None:
     if q is None:
         return None
     return {"strike": q.strike, "last_price": q.last_price, "implied_vol": q.implied_vol}
+
+
+def evaluate_ticker(ticker: str, action: str, price: float | None = None,
+                    stop: float | None = None, target: float | None = None):
+    """Fetch a ticker's data and score a proposed trade. Returns a TradeEval.
+    Shared by the `evaluate` CLI command and the server's /api/evaluate."""
+    from .data.prices import ohlcv
+    from .signals import SignalConfig, build_snapshot, active_signal, trend
+    from .trade import evaluate_trade
+
+    snap = fetch_snapshot(ticker)
+    price = price if price is not None else snap.price
+    d = analyze_ticker(ticker, snapshot=snap, with_options=False)
+    val, cons = d.get("valuation", {}), d.get("consensus", {})
+
+    tsig = tscore = rsi = None
+    o = ohlcv(ticker, "1y")
+    if o["close"]:
+        s = build_snapshot(o["high"], o["low"], o["close"], o["volume"])
+        cfg = SignalConfig.from_env()
+        tsig = active_signal(s, cfg)
+        tscore = trend(s, tsig, cfg).score
+        rsi = s.rsi
+
+    return evaluate_trade(
+        ticker, action, price,
+        valuation_mos=(val.get("margin_of_safety") if val.get("reliable") else None),
+        valuation_signal=val.get("signal"),
+        tech_signal=tsig, trend_score=tscore, rsi=rsi,
+        consensus_reco=cons.get("reco"), consensus_target_vs_price=cons.get("target_vs_price"),
+        stop=stop, target=target)

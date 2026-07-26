@@ -89,6 +89,10 @@ functions** (our core rule), same as the rest of `stockskill`.
       (~60s open / 5m extended / 30m closed) and the page auto-refresh matches.
 - [x] **Holdings from trades**: `stockskill holdings buy/sell/list/reprice`
       (shares-based, infers shares from legacy dollar rows, reprices at latest).
+- [x] **Dynamic (smart) watchlist** (`watchlist/dynamic.py` + `smart-watchlist`):
+      pinned staples (never rotated out) + ~25 rotating picks by growth /
+      undervaluation (DCF margin of safety) / leading sectors, each with its
+      2x/3x leveraged ETF. Writes a sectioned `data/smart_tickers.csv`.
 - [ ] Corporate events: next-earnings date + earnings-week badge, dividend ex-date
 - [ ] Polish: external links also on heatmap tiles; multi-page swipeable cards
 
@@ -118,21 +122,28 @@ functions** (our core rule), same as the rest of `stockskill`.
 - Note: earnings straddle/pre-earnings ideas need per-ticker options data +
   earnings date — surface in the analyzer (which fetches options) as a follow-on.
 
-## Phase 7 — ML breakout/crash predictor
-`src/stockskill/ml/` (+ `ML_GUIDE.md`)
-- [ ] Feature engineering: 28–30 technical + fundamental features (incl. denoised P/E)
-- [ ] Gradient Boosting classifier, StandardScaler, model persistence (`data/ml_models/`)
-- [ ] Training pipeline: stratified sampling, 2y history, per-ticker cache, verbose/quiet
-- [ ] Predict: breakout score, crash risk, class (BREAKOUT/CRASH/NEUTRAL), confidence
-- [ ] Crash filter: only flag CRASH when technicals **and** high/volatile P/E agree
-- [ ] Performance tracking: record predictions, rolling win-rate / expected-return / sample-size
-- [ ] Surface in dashboard INDICATORS (color-coded) + alerts
+## Phase 7 — Monte Carlo simulation (the "ML" step)  ← IN PROGRESS (`montecarlo/`, 7 tests)
+The modeling step is **Monte Carlo simulation** (not a classifier).
+- [x] Price-path simulation: **GBM** (fit drift & vol) + **bootstrap** (resample
+      historical daily returns) over an N-day horizon. `stockskill montecarlo TICKER`.
+- [x] Outcome distribution: P(gain ≥ X) / P(loss ≥ Y), expected & median return,
+      percentile bands (p5/p25/p50/p75/p95), VaR(95%).
+- [x] "Training" = param estimation from 2y history; `--climate` nudges drift by
+      the commodity climate score (known macro trends baked in).
+- [ ] Surface in the analyzer / watchlist card (probability cone + up/down odds).
+- [ ] Optional portfolio-level MC (correlated paths) for drawdown odds.
+- Honesty: outputs are probabilities from an explicit model, never predictions.
 
-## Phase 8 — Automation (decision: local vs cloud)
-- [ ] GitHub Actions `build.yml`: rebuild dashboard every ~30 min during market hours
-- [ ] GitHub Actions `mlbuild.yml`: retrain ML daily Mon–Fri, commit model+cache
-- [ ] Decide: keep our **local cron** (private, no cloud) vs Dad's **GitHub Actions**
-      (always-on, but pushes data to a repo). Could do both.
+## Phase 8 — Automation (Dad's GitHub Actions)  ✅ DONE (`.github/workflows/`)
+- [x] `ci.yml`: `uv run pytest` on push / PR.
+- [x] `dashboard.yml`: render the watchlist and publish to **GitHub Pages**
+      every 30 min during market hours (weekdays). Public tickers only —
+      the portfolio dashboard is never published.
+- [x] `refresh-watchlist.yml`: daily rebuild of the dynamic `smart_tickers.csv`,
+      committed so the dashboard renders a fresh list (Dad's mlbuild analogue).
+- Setup + privacy notes: `references/github-actions.md`. Takes effect after
+      merge to main + enabling Pages (Settings → Pages → Source: GitHub Actions).
+- Local cron (`scripts/install_schedule.sh`) remains as the private alternative.
 
 ---
 

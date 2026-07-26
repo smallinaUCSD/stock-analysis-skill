@@ -261,7 +261,7 @@ def cmd_pulse(args: argparse.Namespace) -> int:
     from .data.prices import price_map, save_price_map, load_price_map
     from .pulse import (all_tickers, sector_table, factor_table, breadth, regime,
                         all_market_tickers, market_quotes, detect_rotation,
-                        cvr3_signal, fetch_fear_greed)
+                        cvr3_signal, fetch_fear_greed, market_climate)
 
     fetch_list = list(dict.fromkeys([*all_tickers(), *all_market_tickers()]))
     if args.price_map and os.path.exists(args.price_map) and not args.refresh:
@@ -332,6 +332,9 @@ def cmd_pulse(args: argparse.Namespace) -> int:
     fg = fetch_fear_greed()
     if fg:
         print(f"  Fear & Greed: {fg.score:.0f}/100 ({fg.rating})")
+    clim = market_climate(pm)
+    print(f"  Market climate: {clim.label}"
+          + (f"  [{'; '.join(clim.notes)}]" if clim.notes else ""))
     leader = detect_rotation(pm)
     if leader:
         print(f"  Rotation leader: {leader.label} ({leader.ticker}) "
@@ -350,7 +353,7 @@ def _compute_dashboard_data(price_map_path: str | None, period: str, refresh: bo
     from .data.prices import price_map, save_price_map, load_price_map
     from .pulse import (all_tickers, sector_table, factor_table, breadth, regime,
                         all_market_tickers, market_quotes, detect_rotation,
-                        cvr3_signal, fetch_fear_greed)
+                        cvr3_signal, fetch_fear_greed, market_climate)
 
     fetch_list = list(dict.fromkeys([*all_tickers(), *all_market_tickers()]))
     if price_map_path and os.path.exists(price_map_path) and not refresh:
@@ -373,6 +376,7 @@ def _compute_dashboard_data(price_map_path: str | None, period: str, refresh: bo
         "cvr3": cvr3_signal(pm.get("^VIX", [])),
         "fear_greed": (fg.score, fg.rating) if fg else None,
         "rotation": (leader.label, leader.ret_3d) if leader else None,
+        "climate": market_climate(pm).label,
     }
     return sectors, factors, (b.pct_positive_1m, b.pct_above_50d, b.n_sectors), rg, market
 
@@ -598,6 +602,105 @@ def cmd_holdings(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_montecarlo(args: argparse.Namespace) -> int:
+    from .data.prices import closing_prices
+    from .montecarlo import montecarlo
+
+    tk = args.ticker.upper()
+    closes = closing_prices(tk, "2y")
+    if not closes:
+        print(f"no data for {tk}", file=sys.stderr)
+        return 1
+
+    drift_adj, clim_note = 0.0, ""
+    if args.climate:
+        from .pulse import market_climate
+        pm = {"HG=F": closing_prices("HG=F", "3mo"), "GC=F": closing_prices("GC=F", "3mo")}
+        c = market_climate(pm)
+        drift_adj = 0.03 * c.score          # +/-3%/yr drift per climate point
+        clim_note = f"  [climate: {c.label}, drift {drift_adj:+.1%}]"
+
+    r = montecarlo(closes, days=args.days, n_paths=args.paths, method=args.method,
+                   gain=args.gain, loss=args.loss, seed=args.seed, drift_adj=drift_adj)
+    print(f"=== Monte Carlo: {tk} — {args.days}d horizon, {args.paths:,} paths "
+          f"({args.method}){clim_note} ===")
+    print(f"  Spot ${r.spot:,.2f}   drift {r.drift_annual:+.1%}/yr   vol {r.vol_annual:.1%}/yr")
+    print(f"  Expected return {r.expected_return:+.1%}   median {r.median_return:+.1%}")
+    print(f"  P(up) {r.prob_up:.0%}   P(gain ≥ {args.gain:.0%}) {r.prob_gain:.0%}   "
+          f"P(loss ≥ {args.loss:.0%}) {r.prob_loss:.0%}")
+    p = r.pctiles
+    print(f"  Percentiles  p5 {p['p5']:+.1%}  p25 {p['p25']:+.1%}  p50 {p['p50']:+.1%}  "
+          f"p75 {p['p75']:+.1%}  p95 {p['p95']:+.1%}")
+    print(f"  VaR (95%) {r.var_95:+.1%}  (≈ ${r.spot*(1+r.var_95):,.2f})")
+    print("\n  Probabilities from an explicit model, not a prediction.")
+    return 0
+
+
+def cmd_evaluate(args: argparse.Namespace) -> int:
+    from .analyze import evaluate_ticker
+
+    ev = evaluate_ticker(args.ticker.upper(), args.action, args.price, args.stop, args.target)
+    if ev.price is None:
+        print(f"no price for {args.ticker.upper()}; pass --price", file=sys.stderr)
+        return 1
+
+    print(f"=== Evaluate: {ev.action} {ev.ticker} @ ${ev.price:,.2f} ===")
+    for fac in ev.factors:
+        mark = "✓" if fac.stance == "support" else ("✗" if fac.stance == "against" else "·")
+        print(f"  {mark} {fac.name}: {fac.detail}")
+    tail = f"   R:R {ev.rr:.1f}:1" if ev.rr else ""
+    print(f"\n  Support {ev.n_support} · Against {ev.n_against}{tail}")
+    print(f"  → {ev.alignment}")
+    print("\n  Analysis, not advice — the decision is yours.")
+    return 0
+
+
+def cmd_smart_watchlist(args: argparse.Namespace) -> int:
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from .data.fundamentals import fetch_snapshot
+    from .analyze import analyze_ticker
+    from .watchlist.dynamic import CANDIDATES, Candidate, build_smart_universe, write_sectioned
+    from .pulse import SECTOR_ETFS, sector_table
+    from .data.prices import price_map
+
+    def score(tk: str) -> Candidate:
+        try:
+            snap = fetch_snapshot(tk)
+        except Exception:  # noqa: BLE001
+            return Candidate(tk)
+        growth = snap.revenue_growth if snap.revenue_growth is not None else snap.earnings_growth
+        mos = None
+        try:
+            v = analyze_ticker(tk, snapshot=snap, with_options=False)["valuation"]
+            if v.get("reliable") and not v.get("low_confidence"):
+                mos = v.get("margin_of_safety")
+        except Exception:  # noqa: BLE001
+            pass
+        return Candidate(tk, growth, mos, snap.sector)
+
+    print(f"Scoring {len(CANDIDATES)} candidates (growth + undervaluation) ...")
+    candidates = []
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        for fut in as_completed([ex.submit(score, tk) for tk in CANDIDATES]):
+            candidates.append(fut.result())
+
+    sec_pm = price_map(list(SECTOR_ETFS), period="3mo")
+    sector_leaders = [r.ticker for r in sector_table(sec_pm, "1m")
+                      if r.returns.get("1m") is not None]
+
+    universe = build_smart_universe(candidates, sector_leaders, n_growth=args.growth,
+                                    n_value=args.value, n_sectors=args.sectors)
+    write_sectioned(args.out, universe)
+    s = universe["sections"]
+    print(f"Wrote {args.out}: {len(universe['all'])} tickers "
+          f"(pinned {len(s['PINNED'])} + leveraged {len(s['LEVERAGED'])}, "
+          f"growth {len(s['GROWTH'])}, value {len(s['VALUE'])}, sector {len(s['SECTOR'])})")
+    for name in ("GROWTH", "VALUE", "SECTOR"):
+        print(f"  {name:<7}: {', '.join(s[name]) or '(none)'}")
+    print(f"\nRender it:  uv run stockskill watchlist --tickers {args.out} --open")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="stockskill", description="Reproducible stock analysis.")
     sub = p.add_subparsers(dest="command", required=True)
@@ -688,6 +791,33 @@ def build_parser() -> argparse.ArgumentParser:
     h.add_argument("--account", default="brokerage")
     h.add_argument("--file", default="holdings.csv")
     h.set_defaults(func=cmd_holdings)
+
+    sw = sub.add_parser("smart-watchlist",
+                        help="build a dynamic tickers.csv (pinned core + growth/value/sector)")
+    sw.add_argument("--out", default="data/smart_tickers.csv")
+    sw.add_argument("--growth", type=int, default=10, help="# growth picks")
+    sw.add_argument("--value", type=int, default=10, help="# undervalued picks")
+    sw.add_argument("--sectors", type=int, default=3, help="# leading sectors")
+    sw.set_defaults(func=cmd_smart_watchlist)
+
+    ev = sub.add_parser("evaluate", help="score a proposed trade against the analysis")
+    ev.add_argument("ticker")
+    ev.add_argument("action", choices=["buy", "sell", "short"])
+    ev.add_argument("--price", type=float, help="entry price (default: latest)")
+    ev.add_argument("--stop", type=float)
+    ev.add_argument("--target", type=float)
+    ev.set_defaults(func=cmd_evaluate)
+
+    mc = sub.add_parser("montecarlo", help="Monte Carlo outcome distribution for a ticker")
+    mc.add_argument("ticker")
+    mc.add_argument("--days", type=int, default=63, help="horizon in trading days (~63 = 3mo)")
+    mc.add_argument("--paths", type=int, default=20000)
+    mc.add_argument("--method", choices=["gbm", "bootstrap"], default="gbm")
+    mc.add_argument("--gain", type=float, default=0.10, help="gain threshold for P(gain)")
+    mc.add_argument("--loss", type=float, default=0.10, help="loss threshold for P(loss)")
+    mc.add_argument("--climate", action="store_true", help="nudge drift by market climate")
+    mc.add_argument("--seed", type=int, default=12345)
+    mc.set_defaults(func=cmd_montecarlo)
     return p
 
 

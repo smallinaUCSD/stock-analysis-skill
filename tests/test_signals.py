@@ -113,7 +113,10 @@ def test_confidence():
     weak = {"BB": BUY, "RSI": HOLD, "MACD": HOLD, "Ichimoku": HOLD}
     assert signal_confidence(weak, BUY).level == "WEAK"        # 1/4
 
-    assert signal_confidence(strong, HOLD) is None             # HOLD isn't scored
+    # HOLD is now scored too: strong agreement to hold vs contested
+    all_hold = {"BB": HOLD, "RSI": HOLD, "MACD": HOLD, "Ichimoku": HOLD}
+    assert signal_confidence(all_hold, HOLD).level == "STRONG"  # consensus wait
+    assert signal_confidence(strong, HOLD).level == "WEAK"      # nobody agrees w/ HOLD
 
 
 def test_config_from_env(monkeypatch):
