@@ -71,12 +71,14 @@ functions** (our core rule), same as the rest of `stockskill`.
 - [x] TickerRow: stitches technicals + signals + fundamentals + flags per ticker
 - [x] **Table view**: sortable columns, sparklines, live ticker search,
       consolidated INDICATORS column (MACD, cloud, golden/death, squeeze, 52wH/L)
-- [ ] **Card view**: 3 swipeable pages (price/technicals · fundamentals/earnings/trade-setup · range charts)
-- [ ] **Heatmap view**: color-intensity tiles + external links (Barchart/Yahoo/Finviz/Zacks/StockAnalysis)
-- [ ] Filter chips: signals, oversold/overbought, surge/crash, volume, squeeze,
-      earnings-week, dividend, category filters (data already on TickerRow.flags/categories/sections)
-- [ ] View toggle (table/card/heatmap) + theme toggle + view persistence (localStorage)
+- [x] **Card view**: rich per-ticker cards (price/change, signal+trend, sparkline,
+      indicators, 1M/1Y/RSI/PE, external links). [swipeable multi-page: later polish]
+- [x] **Heatmap view**: color-intensity tiles (by day change) + signal/trend
+- [x] Filter chips: faceted (signal / condition / category / section), OR-within +
+      AND-between groups, live count; + live search + sortable table
+- [x] View toggle (table/card/heatmap) + theme toggle + persistence (localStorage)
 - [ ] Corporate events: next-earnings date + earnings-week badge, dividend ex-date
+- [ ] Polish: external links also on heatmap tiles; multi-page swipeable cards
 
 ## Phase 4 — Market-indicators bar & rotation  (extends `pulse/`)
 - [ ] Indices strip: Dow / S&P 500 / Nasdaq with live change
