@@ -1,7 +1,7 @@
 import pytest
 
 from stockskill.data.fundamentals import FundamentalSnapshot
-from stockskill.valuation.service import Assumptions
+from stockskill.valuation.service import Assumptions, value_snapshot
 from stockskill.valuation.scenarios import three_scenarios
 from stockskill.analyze import analyze_ticker, _reco_label
 
@@ -25,6 +25,19 @@ def test_scenarios_respect_base_assumptions():
     scen = three_scenarios(_snap(), a)
     # base uses 10% growth; bull uses 14%, bear 6% -> base between them
     assert scen.bear.report.weighted_base() < scen.base.report.weighted_base()
+
+
+def test_discount_rate_floor():
+    # Low beta -> CAPM below the 8% floor -> floored, and flagged.
+    out = value_snapshot(_snap(beta=0.3))
+    assert out.discount_rate == pytest.approx(0.08)
+    assert any("floor" in w.lower() for w in out.warnings)
+
+
+def test_terminal_value_pct_captured():
+    out = value_snapshot(_snap())  # positive FCF -> DCF runs
+    assert out.terminal_value_pct is not None
+    assert 0.0 < out.terminal_value_pct < 1.0
 
 
 def test_reco_label():
@@ -77,6 +90,16 @@ def test_analyze_low_yield_ddm_only_is_unreliable():
     val = d["valuation"]
     assert val["reliable"] is False
     assert [m["method"] for m in val["methods"]] == ["DDM"]  # DDM ran, but isn't enough
+
+
+def test_analyze_clamped_growth_is_low_confidence():
+    # Reported growth 56% -> clamped -> the model shouldn't make a bold call.
+    d = analyze_ticker("HYPER", snapshot=_snap(revenue_growth=0.56, fcf=8000.0),
+                       with_options=False)
+    v = d["valuation"]
+    assert v["low_confidence"] is True
+    assert "assumption-sensitive" in v["signal"]
+    assert v["bear"] is not None  # range still shown, just not a verdict
 
 
 def test_analyze_ticker_consensus_reported():

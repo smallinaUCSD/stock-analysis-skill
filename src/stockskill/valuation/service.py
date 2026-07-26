@@ -31,9 +31,16 @@ class Assumptions:
     risk_free: float = 0.043
     equity_premium: float = 0.05
     default_beta: float = 1.1              # used only if snapshot has no beta
-    stage1_growth: float = 0.08            # base-case FCF growth
+    min_discount_rate: float = 0.08        # floor: a low beta can't imply a sub-8% equity rate
+    stage1_growth: float = 0.08            # base-case FCF growth (year 1 if fading)
     stage1_years: int = 10
     terminal_growth: float = 0.025
+    # Fade is available but OFF by default: with the discount-rate floor and the
+    # data-driven growth, a plain two-stage DCF tracks analyst targets well;
+    # fading on top pushes fair values systematically ~50% too low. Opt in per
+    # name when you want an explicitly conservative, decelerating-growth view.
+    fade_growth: bool = False              # taper growth toward a mature rate over the window
+    fade_floor: float = 0.045              # "mature" growth the fade lands on at year N
     # method weights in the blended base case
     weight_dcf: float = 0.45
     weight_multiples: float = 0.35
@@ -56,6 +63,7 @@ class ValuationOutput:
     assumptions_used: Assumptions = field(default_factory=Assumptions)
     warnings: list[str] = field(default_factory=list)
     dcf_inputs: DCFInputs | None = None      # for sensitivity analysis in the CLI
+    terminal_value_pct: float | None = None  # share of EV from the terminal value
 
 
 def value_snapshot(snap: FundamentalSnapshot, a: Assumptions | None = None) -> ValuationOutput:
@@ -69,10 +77,14 @@ def value_snapshot(snap: FundamentalSnapshot, a: Assumptions | None = None) -> V
     beta = snap.beta if snap.beta is not None else a.default_beta
     if snap.beta is None:
         warnings.append(f"no beta in snapshot; used default {a.default_beta}")
-    discount_rate = capm_cost_of_equity(a.risk_free, beta, a.equity_premium)
+    capm = capm_cost_of_equity(a.risk_free, beta, a.equity_premium)
+    discount_rate = max(capm, a.min_discount_rate)
+    if capm < a.min_discount_rate:
+        warnings.append(f"CAPM rate {capm:.1%} (beta {beta:.2f}) floored to {a.min_discount_rate:.1%}")
 
     implied_growth = None
     dcf_inputs_used: DCFInputs | None = None
+    terminal_pct: float | None = None
 
     # --- DCF + reverse DCF ---
     # Prefer free cash flow. If FCF is missing/negative (e.g. a profitable
@@ -94,11 +106,15 @@ def value_snapshot(snap: FundamentalSnapshot, a: Assumptions | None = None) -> V
             stage1_growth=a.stage1_growth,
             stage1_years=a.stage1_years,
             terminal_growth=a.terminal_growth,
+            fade=a.fade_growth,
+            fade_to=a.fade_floor,
         )
         try:
             dcf = two_stage_dcf(dcf_inp)
             dcf_inputs_used = dcf_inp
-            note = (f"g1={a.stage1_growth:.0%}, r={discount_rate:.1%}, "
+            terminal_pct = dcf.terminal_value_pct
+            fade_txt = "faded" if a.fade_growth else "flat"
+            note = (f"g1={a.stage1_growth:.0%} ({fade_txt}), r={discount_rate:.1%}, "
                     f"terminal={dcf.terminal_value_pct:.0%} of EV")
             if flow_label == "DCF (earnings)":
                 note += "; net income used (FCF negative/NA)"
@@ -152,4 +168,5 @@ def value_snapshot(snap: FundamentalSnapshot, a: Assumptions | None = None) -> V
         assumptions_used=a,
         warnings=warnings,
         dcf_inputs=dcf_inputs_used,
+        terminal_value_pct=terminal_pct,
     )

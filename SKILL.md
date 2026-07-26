@@ -47,7 +47,7 @@ The project is a uv package. Run everything through uv:
 
 ```bash
 uv run stockskill --help
-uv run pytest -q          # 45 tests; run after any change to the math
+uv run pytest -q          # 50 tests; run after any change to the math
 ```
 
 ## Commands (this is where the math lives)

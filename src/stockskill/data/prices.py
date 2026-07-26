@@ -24,6 +24,32 @@ def price_map(tickers: list[str], period: str = "1y") -> dict[str, list[float]]:
     return {tk: closing_prices(tk, period) for tk in tickers}
 
 
+def ohlcv(ticker: str, period: str = "1y") -> dict[str, list]:
+    """OHLCV history for ``ticker`` as parallel lists (oldest -> newest).
+
+    Keys: dates, open, high, low, close, volume. Empty lists on failure. This
+    feeds the technical-indicator library.
+    """
+    import yfinance as yf
+
+    empty = {k: [] for k in ("dates", "open", "high", "low", "close", "volume")}
+    try:
+        h = yf.Ticker(ticker).history(period=period, auto_adjust=True)
+    except Exception:
+        return empty
+    if h is None or h.empty:
+        return empty
+    h = h.dropna(subset=["Close"])
+    return {
+        "dates": [d.date() for d in h.index],
+        "open": h["Open"].tolist(),
+        "high": h["High"].tolist(),
+        "low": h["Low"].tolist(),
+        "close": h["Close"].tolist(),
+        "volume": h["Volume"].tolist(),
+    }
+
+
 def save_price_map(pm: dict[str, list[float]], path: str | Path) -> None:
     Path(path).write_text(json.dumps(pm))
 

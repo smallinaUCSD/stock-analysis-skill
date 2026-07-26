@@ -38,6 +38,8 @@ def implied_stage1_growth(
             stage1_growth=g,
             stage1_years=inp.stage1_years,
             terminal_growth=inp.terminal_growth,
+            fade=inp.fade,
+            fade_to=inp.fade_to,
         )
         return two_stage_dcf(trial).fair_value_per_share
 

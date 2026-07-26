@@ -35,8 +35,11 @@ Installs one idempotent cron entry:
 
 That's **pre-open (9:00) + every 30 min intraday + close (16:00/16:30)**, on
 weekdays only. The wrapper (`scripts/run_dashboard.sh`) re-fetches fresh data
-each run and logs to `.cache/dashboard.log`. Open `dashboard.html` once and
-leave the tab open; it refreshes itself.
+each run and regenerates **both** dashboards:
+- `dashboard.html` — market pulse + your portfolio (logs to `.cache/dashboard.log`)
+- `watchlist.html` — the multi-ticker technical dashboard (logs to `.cache/watchlist.log`)
+
+Open either once and leave the tab open; each refreshes itself via a meta tag.
 
 Remove it with `./scripts/uninstall_schedule.sh`.
 

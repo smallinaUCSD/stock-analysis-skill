@@ -259,17 +259,29 @@ def cmd_screen(args: argparse.Namespace) -> int:
 def cmd_pulse(args: argparse.Namespace) -> int:
     import os
     from .data.prices import price_map, save_price_map, load_price_map
-    from .pulse import all_tickers, sector_table, factor_table, breadth, regime
+    from .pulse import (all_tickers, sector_table, factor_table, breadth, regime,
+                        all_market_tickers, market_quotes, detect_rotation,
+                        cvr3_signal, fetch_fear_greed)
 
+    fetch_list = list(dict.fromkeys([*all_tickers(), *all_market_tickers()]))
     if args.price_map and os.path.exists(args.price_map) and not args.refresh:
         pm = load_price_map(args.price_map)
         print(f"Loaded cached price map: {args.price_map}")
     else:
-        print(f"Fetching {len(all_tickers())} tickers ({args.period}) ...")
-        pm = price_map(all_tickers(), period=args.period)
+        print(f"Fetching {len(fetch_list)} tickers ({args.period}) ...")
+        pm = price_map(fetch_list, period=args.period)
         if args.price_map:
             save_price_map(pm, args.price_map)
             print(f"Saved price map -> {args.price_map}")
+
+    # --- market bar ---
+    print("=== Market ===")
+    cells = []
+    for q in market_quotes(pm):
+        val = "n/a" if q.last is None else (f"{q.last:,.0f}")
+        chg = "" if q.change is None else f" ({q.change:+.1%})"
+        cells.append(f"{q.name} {val}{chg}")
+    print("  " + "   ".join(cells))
 
     wins = ["1d", "1w", "1m", "3m"]
     print("\n=== Sector rotation (sorted by 1m) ===")
@@ -313,6 +325,20 @@ def cmd_pulse(args: argparse.Namespace) -> int:
         on = [k for k, val in rg.flags.items() if val]
         print("  flags: " + (", ".join(on) if on else "none tripped"))
 
+    # --- sentiment + rotation ---
+    print("\n=== Sentiment & rotation ===")
+    vix_series = pm.get("^VIX", [])
+    print(f"  CVR3 (VIX reversal): {cvr3_signal(vix_series)}")
+    fg = fetch_fear_greed()
+    if fg:
+        print(f"  Fear & Greed: {fg.score:.0f}/100 ({fg.rating})")
+    leader = detect_rotation(pm)
+    if leader:
+        print(f"  Rotation leader: {leader.label} ({leader.ticker}) "
+              f"3d {leader.ret_3d:+.1%}, 5d {leader.ret_5d:+.1%} (accelerating)")
+    else:
+        print("  Rotation leader: none (no clear momentum inflection)")
+
     print("\nInterpretation is yours: these are computed facts, not signals. "
           "Rising VIX + inverted curve + narrow leadership + credit risk-off "
           "together lean defensive; see references/regime-playbook.md.")
@@ -322,12 +348,15 @@ def cmd_pulse(args: argparse.Namespace) -> int:
 def _compute_dashboard_data(price_map_path: str | None, period: str, refresh: bool):
     import os
     from .data.prices import price_map, save_price_map, load_price_map
-    from .pulse import all_tickers, sector_table, factor_table, breadth, regime
+    from .pulse import (all_tickers, sector_table, factor_table, breadth, regime,
+                        all_market_tickers, market_quotes, detect_rotation,
+                        cvr3_signal, fetch_fear_greed)
 
+    fetch_list = list(dict.fromkeys([*all_tickers(), *all_market_tickers()]))
     if price_map_path and os.path.exists(price_map_path) and not refresh:
         pm = load_price_map(price_map_path)
     else:
-        pm = price_map(all_tickers(), period=period)
+        pm = price_map(fetch_list, period=period)
         if price_map_path:
             save_price_map(pm, price_map_path)
 
@@ -336,7 +365,16 @@ def _compute_dashboard_data(price_map_path: str | None, period: str, refresh: bo
     factors = [(r.label, r.num, r.den, r.rs["1m"]) for r in factor_table(pm)]
     b = breadth(pm)
     rg = regime(pm)
-    return sectors, factors, (b.pct_positive_1m, b.pct_above_50d, b.n_sectors), rg
+
+    fg = fetch_fear_greed()
+    leader = detect_rotation(pm)
+    market = {
+        "quotes": [(q.name, q.last, q.change) for q in market_quotes(pm)],
+        "cvr3": cvr3_signal(pm.get("^VIX", [])),
+        "fear_greed": (fg.score, fg.rating) if fg else None,
+        "rotation": (leader.label, leader.ret_3d) if leader else None,
+    }
+    return sectors, factors, (b.pct_positive_1m, b.pct_above_50d, b.n_sectors), rg, market
 
 
 def _compute_portfolio_data(holdings_path: str):
@@ -368,7 +406,7 @@ def _write_dashboard(args, refresh_seconds: int) -> str:
     from .dashboard import render_dashboard
 
     status = market_status()
-    sectors, factors, breadth_t, rg = _compute_dashboard_data(
+    sectors, factors, breadth_t, rg, market = _compute_dashboard_data(
         args.price_map, args.period, args.refresh)
     portfolio = _compute_portfolio_data(args.holdings)
 
@@ -380,6 +418,7 @@ def _write_dashboard(args, refresh_seconds: int) -> str:
         refresh_seconds=refresh_seconds,
         regime_values=rg.values, regime_flags=rg.flags,
         sectors=sectors, factors=factors, breadth=breadth_t, portfolio=portfolio,
+        market=market,
     )
     with open(args.out, "w") as f:
         f.write(html_out)
@@ -424,6 +463,43 @@ def cmd_serve(args: argparse.Namespace) -> int:
     if args.open:
         os.system(f"open {url!r}" if sys.platform == "darwin" else f"xdg-open {url!r}")
     app.run(host=args.host, port=args.port, debug=False)
+    return 0
+
+
+def cmd_watchlist(args: argparse.Namespace) -> int:
+    import os
+    from datetime import datetime
+    from .marketclock import market_status, ET
+    from .signals import SignalConfig
+    from .watchlist import parse_tickers, fetch_all, build_row, render_watchlist
+
+    parsed = parse_tickers(args.tickers)
+    tickers = parsed["all"]
+    tag_map: dict[str, set] = {}
+    for sec, tks in parsed["sections"].items():
+        for t in tks:
+            tag_map.setdefault(t, set()).add(sec)
+
+    print(f"Fetching {len(tickers)} tickers ({args.workers} workers) ...")
+    data = fetch_all(tickers, period=args.period, workers=args.workers,
+                     cache_dir=args.cache_dir)
+    cfg = SignalConfig.from_env()
+    rows = [build_row(data[t], cfg, tag_map.get(t)) for t in tickers if t in data]
+
+    from .alerts import all_alerts, load_custom_alerts
+    alerts = all_alerts(rows, load_custom_alerts(args.alerts))
+
+    status = market_status()
+    now = datetime.now(ET)
+    html_out = render_watchlist(
+        rows, title="Watchlist", updated=now.strftime("%a %b %d, %I:%M %p") + " ET",
+        status_badge=status.badge, status_label=status.label, alerts=alerts)
+    with open(args.out, "w") as f:
+        f.write(html_out)
+    ok = sum(1 for r in rows if r.price is not None)
+    print(f"[{status.badge}] wrote {args.out} ({ok}/{len(rows)} tickers)")
+    if args.open:
+        os.system(f"open {args.out!r}" if sys.platform == "darwin" else f"xdg-open {args.out!r}")
     return 0
 
 
@@ -494,6 +570,16 @@ def build_parser() -> argparse.ArgumentParser:
     sv.add_argument("--port", type=int, default=8787)
     sv.add_argument("--open", action="store_true", help="open the browser after starting")
     sv.set_defaults(func=cmd_serve)
+
+    wl = sub.add_parser("watchlist", help="multi-ticker technical dashboard (table view)")
+    wl.add_argument("--tickers", default="data/tickers.csv")
+    wl.add_argument("--out", default="watchlist.html")
+    wl.add_argument("--period", default="2y", help="history to fetch (>1y so 1Y change fills)")
+    wl.add_argument("--workers", type=int, default=5)
+    wl.add_argument("--cache-dir", help="per-ticker cache dir (e.g. .cache/stock_cache)")
+    wl.add_argument("--alerts", default="data/alerts.json", help="custom alerts JSON")
+    wl.add_argument("--open", action="store_true", help="open the file after writing")
+    wl.set_defaults(func=cmd_watchlist)
     return p
 
 

@@ -134,13 +134,40 @@ h1{font-size:20px;margin:0;font-weight:650}
   background:var(--surface-2);border:1px solid var(--border)}
 .flag.on{color:#fff;background:var(--crit);border-color:transparent}
 .foot{color:var(--muted);font-size:11.5px;margin-top:16px;line-height:1.5}
+.marketbar{display:flex;flex-wrap:wrap;gap:8px 16px;padding:10px 14px;margin-bottom:16px;
+  background:var(--surface);border:1px solid var(--border);border-radius:10px;
+  font-size:12.5px;font-variant-numeric:tabular-nums}
+.marketbar .mq b{color:var(--muted);font-weight:600;font-size:11px;margin-right:3px}
 """
 
 
 def render_dashboard(*, status, updated_et: str, updated_local: str,
                      refresh_seconds: int, regime_values: dict,
                      regime_flags: dict, sectors: list, factors: list,
-                     breadth: tuple, portfolio: dict | None) -> str:
+                     breadth: tuple, portfolio: dict | None,
+                     market: dict | None = None) -> str:
+    # ---- market bar (indices / commodities / crypto + sentiment) ----
+    market_bar = ""
+    if market:
+        items = []
+        for name, last, chg in market.get("quotes", []):
+            if last is None:
+                continue
+            cls = "up" if (chg or 0) >= 0 else "down"
+            ctxt = "" if chg is None else f' <span class="{cls}">{chg:+.1%}</span>'
+            items.append(f'<span class="mq"><b>{html.escape(name)}</b> '
+                         f'{last:,.0f}{ctxt}</span>')
+        fg = market.get("fear_greed")
+        if fg:
+            items.append(f'<span class="mq"><b>Fear &amp; Greed</b> {fg[0]:.0f} '
+                         f'({html.escape(str(fg[1]))})</span>')
+        items.append(f'<span class="mq"><b>CVR3</b> {html.escape(market.get("cvr3","n/a"))}</span>')
+        rot = market.get("rotation")
+        if rot:
+            items.append(f'<span class="mq"><b>Rotation</b> {html.escape(rot[0])} '
+                         f'<span class="up">{rot[1]:+.1%}</span></span>')
+        market_bar = '<div class="marketbar">' + "".join(items) + '</div>'
+
     # ---- regime tiles ----
     vix = regime_values.get("vix")
     vix_tone = "crit" if (vix and vix > 30) else "warn" if (vix and vix > 20) else "good"
@@ -230,7 +257,7 @@ def render_dashboard(*, status, updated_et: str, updated_local: str,
 </header>
 <div class="sub">Updated {html.escape(updated_et)} ET &nbsp;·&nbsp; {html.escape(updated_local)} local
   &nbsp;·&nbsp; auto-refresh {int(refresh_seconds // 60)} min</div>
-
+{market_bar}
 <div class="grid">
   <div class="card"><h2>Regime snapshot</h2>
     <div class="tiles">{''.join(tiles)}</div>

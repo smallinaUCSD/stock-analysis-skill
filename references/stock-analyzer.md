@@ -43,6 +43,13 @@ statement.
 A dividend model contributes only as a minor cross-check and is excluded for
 sub-1% yielders (it understates buyback-heavy / growth names).
 
+**Low-confidence signal.** For a hyper-grower whose growth had to be clamped
+(e.g. LLY, NVDA — 30% cap) or a value that's >80% terminal, the signal is
+softened to **"assumption-sensitive — read the range, not a single call"** with
+the reason, and the bear/base/bull range + reverse-DCF + analyst view are shown
+instead of a confident cheap/expensive verdict. The discount rate is floored at
+8% so a low beta can't inflate the DCF. See `valuation-methodology.md`.
+
 ## Data-driven base growth
 Base-case stage-1 growth defaults to the company's reported revenue growth
 (else earnings growth), clamped to 3–30%, so a hyper-grower like NVDA isn't

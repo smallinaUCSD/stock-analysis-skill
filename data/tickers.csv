@@ -1,0 +1,14 @@
+# Watchlist for the multi-ticker dashboard. Sections drive the filter chips.
+# Edit freely; tickers are deduped across sections in first-seen order.
+
+[M7]
+AAPL, MSFT, GOOGL, AMZN, NVDA, META, TSLA
+
+[HOLDINGS-UNDERLYING]
+COIN, PLTR
+
+[LEVERAGED]
+FNGU, BULZ, TSLL, AAPU, SOXL
+
+[TICKERS]
+AVGO, AMD, NFLX, CRM, ORCL, ADBE, COST, PEP, KO, JPM, V, UNH, LLY, WMT

@@ -24,9 +24,11 @@ class DCFInputs:
     shares: float                  # diluted shares outstanding
     net_debt: float = 0.0          # total debt minus cash & equivalents
     discount_rate: float = 0.09    # WACC
-    stage1_growth: float = 0.10    # annual FCF growth during the explicit window
+    stage1_growth: float = 0.10    # annual FCF growth (year 1 if fading)
     stage1_years: int = 10         # length of the explicit forecast window
     terminal_growth: float = 0.025 # perpetual growth after the window
+    fade: bool = False             # taper growth over the window
+    fade_to: float | None = None   # fade target at year N (defaults to terminal_growth)
 
     def validate(self) -> None:
         if self.shares <= 0:
@@ -68,8 +70,18 @@ def two_stage_dcf(inp: DCFInputs) -> DCFResult:
     projected: list[float] = []
     fcf = inp.fcf0
     last_fcf = inp.fcf0
-    for year in range(1, inp.stage1_years + 1):
-        fcf = fcf * (1.0 + g1)
+    n = inp.stage1_years
+    target = inp.fade_to if inp.fade_to is not None else gt
+    for year in range(1, n + 1):
+        # With fade, growth glides linearly from stage1_growth (year 1) down to
+        # the fade target (a "mature" rate) at year N -- no company holds a peak
+        # rate flat for a decade, nor collapses straight to the perpetual rate.
+        # Without fade, it stays constant at stage1_growth.
+        if inp.fade and n > 1:
+            g_year = g1 + (target - g1) * (year - 1) / (n - 1)
+        else:
+            g_year = g1
+        fcf = fcf * (1.0 + g_year)
         projected.append(fcf)
         pv_explicit += fcf / (1.0 + r) ** year
         last_fcf = fcf
@@ -116,6 +128,8 @@ def sensitivity_grid(
                     stage1_growth=inp.stage1_growth,
                     stage1_years=inp.stage1_years,
                     terminal_growth=gt,
+                    fade=inp.fade,
+                    fade_to=inp.fade_to,
                 )
                 row.append(two_stage_dcf(trial).fair_value_per_share)
             except ValueError:
