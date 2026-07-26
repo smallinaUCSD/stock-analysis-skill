@@ -12,13 +12,12 @@ feature reachable as a pop-up. The static HTML generators stay for cron/offline.
       DDOG, INTC, CRWD, QCOM, HD, LOW, MRVL, AMAT, AVGO, CVX, BAC).
 
 ## 2. Card view — expanded detail (static-render, applies everywhere)
-- [ ] Always show a **trade setup** when expanded (reasonable default even on HOLD
-      — direction from the trend; label it "if you were to trade this").
-- [ ] Color the valuation: **green undervalued / red overvalued / neutral fair**.
-- [ ] Render **fair value as a table** (bear/base/bull rows).
+- [x] Always show a **trade setup** when expanded (direction from trend on HOLD).
+- [x] Color the valuation: **green undervalued / red overvalued / neutral fair**.
+- [x] Render **fair value as a table** (bear/base/bull rows, each vs price).
 - [ ] **Interactive price chart** with timeframe toggle (1/3/6mo, 1/2/5/10y) and a
       hover tooltip showing price at the hovered point. (Embed a downsampled series.)
-- [ ] Make the **close (✕) button bigger / easier to hit**.
+- [x] Make the **close (✕) button bigger / easier to hit**.
 
 ## 3. Layout (all views)
 - [ ] **Left panel**: condensed sector performance — always visible.
