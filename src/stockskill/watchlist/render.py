@@ -210,37 +210,43 @@ def _indicator_chips(r):
 
 
 # ---------- per-view renderers ---------- #
-_HEADERS = ["Ticker", "Price", "Day", "5D", "1M", "1Y", "30d", "Signal",
-            "Trend", "RSI", "Indicators", "Conf", "P/E", "Mkt Cap"]
+_HEADERS = ["Ticker", "Price", "Day", "5D", "1M", "1Y", "52wL", "52wH", "Sector",
+            "30d", "Signal", "Trend", "RSI", "Conf", "Indicators", "P/E", "Mkt Cap"]
 
 
 def _row_html(r):
     if r.error or r.price is None:
         return (f'<tr class="item" {_data_attrs(r)}><td class="tk">{html.escape(r.ticker)}</td>'
-                f'<td colspan="13" class="muted">no data</td></tr>')
+                f'<td colspan="16" class="muted">no data</td></tr>')
 
     def cell(x):
         cls, txt = _pct(x)
         return f'<td class="{cls}" data-sort="{x if x is not None else -999}">{txt}</td>'
+
+    def money_cell(x):
+        return (f'<td data-sort="{x if x is not None else -1}">'
+                f'{("$"+format(x, ",.0f")) if x is not None else "n/a"}</td>')
 
     sig_cls = _SIG_CLASS.get(r.signal, "hold")
     arrow_cls = "up" if r.trend_score > 1 else ("down" if r.trend_score < -1 else "flat")
     rsi_cls = "up" if (r.rsi or 50) >= 70 else ("down" if (r.rsi or 50) <= 30 else "")
     conf = (f'<span class="conf-{r.confidence}">{r.confidence}</span>'
             if r.confidence else '<span class="muted">—</span>')
+    sector = html.escape((r.sector or "—")[:16])
     return (
         f'<tr class="item" {_data_attrs(r)}>'
-        f'<td><span class="tk">{html.escape(r.ticker)}</span> '
-        f'<span class="nm">{html.escape((r.name or "")[:22])}</span></td>'
+        f'<td><span class="tk">{html.escape(r.ticker)}</span></td>'
         f'<td data-sort="{r.price}">${r.price:,.2f}</td>'
         + cell(r.changes.get("1d")) + cell(r.changes.get("5d")) + cell(r.changes.get("1m"))
         + cell(r.changes.get("1y"))
+        + money_cell(r.week52_low) + money_cell(r.week52_high)
+        + f'<td style="text-align:left" class="muted">{sector}</td>'
         + f'<td>{_spark(r.sparkline)}</td>'
         f'<td data-sort="{r.trend_score}"><span class="badge {sig_cls}">{r.signal}</span></td>'
         f'<td class="arrow {arrow_cls}" data-sort="{r.trend_score}">{r.trend_arrow}</td>'
         f'<td class="{rsi_cls}" data-sort="{r.rsi if r.rsi is not None else -1}">{_num(r.rsi,0)}</td>'
-        f'<td style="text-align:left">{_indicator_chips(r)}</td>'
         f'<td>{conf}</td>'
+        f'<td style="text-align:left">{_indicator_chips(r)}</td>'
         f'<td data-sort="{r.pe if r.pe is not None else -1}">{_num(r.pe,1)}</td>'
         f'<td data-sort="{r.market_cap or 0}">{_mktcap(r.market_cap)}</td></tr>'
     )

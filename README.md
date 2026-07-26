@@ -21,6 +21,7 @@ uv run pytest -q                              # the tested math (108+ tests)
 uv run stockskill value NVDA --growth 0.15    # fair value: DCF + reverse DCF + multiples
 uv run stockskill screen --lane core          # rank a universe into a shortlist
 uv run stockskill pulse                        # market pulse: sectors, breadth, regime, sentiment
+uv run stockskill evaluate NVDA buy --price 207 --stop 190 --target 250   # score a trade
 
 # the dashboards
 uv run stockskill smart-watchlist             # build a dynamic pinned + growth/value/sector list
@@ -42,7 +43,8 @@ uv run stockskill holdings buy AAPU 10 --price 45   # update holdings from a tra
 |---|---|
 | `value TICKER` | Fair value — two-stage DCF, reverse DCF (market-implied growth), relative multiples, dividend model; blended range + margin of safety. Assumption-sensitive names are flagged low-confidence instead of getting a false verdict. |
 | `screen --lane core\|aggressive` | Rank a universe by percentile score (quality+value or growth+momentum). |
-| `pulse` | Market radar: a market bar (indices/commodities/crypto), sector & factor rotation, breadth, a regime snapshot (VIX, yield curve, credit, leadership), CVR3, CNN Fear & Greed, and rotation-leader detection. |
+| `pulse` | Market radar: a market bar (indices/commodities/crypto), sector & factor rotation, breadth, a regime snapshot (VIX, yield curve, credit, leadership), CVR3, CNN Fear & Greed, rotation-leader detection, and a **commodity climate** read (copper = growth, gold = fear). |
+| `evaluate TICKER buy\|sell\|short` | Score a **proposed trade** factor-by-factor (valuation, technical signal, trend, RSI, analyst consensus, risk/reward) into an alignment scorecard — analysis, not a yes/no. |
 | `smart-watchlist` | Build a **dynamic** ticker list: pinned staples (always kept) + ~25 rotating picks by growth, undervaluation, and leading sectors — each with its 2x/3x leveraged ETF. |
 | `watchlist` | The multi-ticker **dashboard** (see below). |
 | `dashboard` | Self-contained HTML of the market pulse + your portfolio look-through, with a market-status badge and self-refresh. |

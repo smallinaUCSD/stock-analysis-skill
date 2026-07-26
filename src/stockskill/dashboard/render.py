@@ -162,6 +162,9 @@ def render_dashboard(*, status, updated_et: str, updated_local: str,
             items.append(f'<span class="mq"><b>Fear &amp; Greed</b> {fg[0]:.0f} '
                          f'({html.escape(str(fg[1]))})</span>')
         items.append(f'<span class="mq"><b>CVR3</b> {html.escape(market.get("cvr3","n/a"))}</span>')
+        clim = market.get("climate")
+        if clim:
+            items.append(f'<span class="mq"><b>Climate</b> {html.escape(clim)}</span>')
         rot = market.get("rotation")
         if rot:
             items.append(f'<span class="mq"><b>Rotation</b> {html.escape(rot[0])} '

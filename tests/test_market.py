@@ -1,8 +1,24 @@
 import pytest
 
 from stockskill.pulse import (
-    cvr3_signal, market_quotes, detect_rotation, all_market_tickers,
+    cvr3_signal, market_quotes, detect_rotation, all_market_tickers, market_climate,
 )
+
+
+def test_market_climate_risk_on():
+    # copper +10%, gold -5%, copper/gold rising -> risk-on
+    cu = [100.0] * 21 + [110.0]
+    au = [100.0] * 21 + [95.0]
+    c = market_climate({"HG=F": cu, "GC=F": au})
+    assert c.score >= 2 and "Risk-on" in c.label
+
+
+def test_market_climate_risk_off():
+    # copper -10%, gold +10% (fear bid), copper/gold falling -> risk-off
+    cu = [100.0] * 21 + [90.0]
+    au = [100.0] * 21 + [110.0]
+    c = market_climate({"HG=F": cu, "GC=F": au})
+    assert c.score <= -2 and "Risk-off" in c.label
 
 
 def test_cvr3_signal():

@@ -261,7 +261,7 @@ def cmd_pulse(args: argparse.Namespace) -> int:
     from .data.prices import price_map, save_price_map, load_price_map
     from .pulse import (all_tickers, sector_table, factor_table, breadth, regime,
                         all_market_tickers, market_quotes, detect_rotation,
-                        cvr3_signal, fetch_fear_greed)
+                        cvr3_signal, fetch_fear_greed, market_climate)
 
     fetch_list = list(dict.fromkeys([*all_tickers(), *all_market_tickers()]))
     if args.price_map and os.path.exists(args.price_map) and not args.refresh:
@@ -332,6 +332,9 @@ def cmd_pulse(args: argparse.Namespace) -> int:
     fg = fetch_fear_greed()
     if fg:
         print(f"  Fear & Greed: {fg.score:.0f}/100 ({fg.rating})")
+    clim = market_climate(pm)
+    print(f"  Market climate: {clim.label}"
+          + (f"  [{'; '.join(clim.notes)}]" if clim.notes else ""))
     leader = detect_rotation(pm)
     if leader:
         print(f"  Rotation leader: {leader.label} ({leader.ticker}) "
@@ -350,7 +353,7 @@ def _compute_dashboard_data(price_map_path: str | None, period: str, refresh: bo
     from .data.prices import price_map, save_price_map, load_price_map
     from .pulse import (all_tickers, sector_table, factor_table, breadth, regime,
                         all_market_tickers, market_quotes, detect_rotation,
-                        cvr3_signal, fetch_fear_greed)
+                        cvr3_signal, fetch_fear_greed, market_climate)
 
     fetch_list = list(dict.fromkeys([*all_tickers(), *all_market_tickers()]))
     if price_map_path and os.path.exists(price_map_path) and not refresh:
@@ -373,6 +376,7 @@ def _compute_dashboard_data(price_map_path: str | None, period: str, refresh: bo
         "cvr3": cvr3_signal(pm.get("^VIX", [])),
         "fear_greed": (fg.score, fg.rating) if fg else None,
         "rotation": (leader.label, leader.ret_3d) if leader else None,
+        "climate": market_climate(pm).label,
     }
     return sectors, factors, (b.pct_positive_1m, b.pct_above_50d, b.n_sectors), rg, market
 
@@ -598,6 +602,51 @@ def cmd_holdings(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_evaluate(args: argparse.Namespace) -> int:
+    from .data.fundamentals import fetch_snapshot
+    from .data.prices import ohlcv
+    from .analyze import analyze_ticker
+    from .signals import SignalConfig, build_snapshot, active_signal, trend
+    from .trade import evaluate_trade
+
+    tk = args.ticker.upper()
+    snap = fetch_snapshot(tk)
+    price = args.price if args.price is not None else snap.price
+    if price is None:
+        print(f"no price for {tk}; pass --price", file=sys.stderr)
+        return 1
+
+    d = analyze_ticker(tk, snapshot=snap, with_options=False)
+    val, cons = d.get("valuation", {}), d.get("consensus", {})
+
+    tsig = tscore = rsi = None
+    o = ohlcv(tk, "1y")
+    if o["close"]:
+        s = build_snapshot(o["high"], o["low"], o["close"], o["volume"])
+        cfg = SignalConfig.from_env()
+        tsig = active_signal(s, cfg)
+        tscore = trend(s, tsig, cfg).score
+        rsi = s.rsi
+
+    ev = evaluate_trade(
+        tk, args.action, price,
+        valuation_mos=(val.get("margin_of_safety") if val.get("reliable") else None),
+        valuation_signal=val.get("signal"),
+        tech_signal=tsig, trend_score=tscore, rsi=rsi,
+        consensus_reco=cons.get("reco"), consensus_target_vs_price=cons.get("target_vs_price"),
+        stop=args.stop, target=args.target)
+
+    print(f"=== Evaluate: {ev.action} {ev.ticker} @ ${price:,.2f} ===")
+    for fac in ev.factors:
+        mark = "✓" if fac.stance == "support" else ("✗" if fac.stance == "against" else "·")
+        print(f"  {mark} {fac.name}: {fac.detail}")
+    tail = f"   R:R {ev.rr:.1f}:1" if ev.rr else ""
+    print(f"\n  Support {ev.n_support} · Against {ev.n_against}{tail}")
+    print(f"  → {ev.alignment}")
+    print("\n  Analysis, not advice — the decision is yours.")
+    return 0
+
+
 def cmd_smart_watchlist(args: argparse.Namespace) -> int:
     from concurrent.futures import ThreadPoolExecutor, as_completed
     from .data.fundamentals import fetch_snapshot
@@ -742,6 +791,14 @@ def build_parser() -> argparse.ArgumentParser:
     sw.add_argument("--value", type=int, default=10, help="# undervalued picks")
     sw.add_argument("--sectors", type=int, default=3, help="# leading sectors")
     sw.set_defaults(func=cmd_smart_watchlist)
+
+    ev = sub.add_parser("evaluate", help="score a proposed trade against the analysis")
+    ev.add_argument("ticker")
+    ev.add_argument("action", choices=["buy", "sell", "short"])
+    ev.add_argument("--price", type=float, help="entry price (default: latest)")
+    ev.add_argument("--stop", type=float)
+    ev.add_argument("--target", type=float)
+    ev.set_defaults(func=cmd_evaluate)
     return p
 
 
