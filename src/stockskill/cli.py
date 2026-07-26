@@ -603,40 +603,14 @@ def cmd_holdings(args: argparse.Namespace) -> int:
 
 
 def cmd_evaluate(args: argparse.Namespace) -> int:
-    from .data.fundamentals import fetch_snapshot
-    from .data.prices import ohlcv
-    from .analyze import analyze_ticker
-    from .signals import SignalConfig, build_snapshot, active_signal, trend
-    from .trade import evaluate_trade
+    from .analyze import evaluate_ticker
 
-    tk = args.ticker.upper()
-    snap = fetch_snapshot(tk)
-    price = args.price if args.price is not None else snap.price
-    if price is None:
-        print(f"no price for {tk}; pass --price", file=sys.stderr)
+    ev = evaluate_ticker(args.ticker.upper(), args.action, args.price, args.stop, args.target)
+    if ev.price is None:
+        print(f"no price for {args.ticker.upper()}; pass --price", file=sys.stderr)
         return 1
 
-    d = analyze_ticker(tk, snapshot=snap, with_options=False)
-    val, cons = d.get("valuation", {}), d.get("consensus", {})
-
-    tsig = tscore = rsi = None
-    o = ohlcv(tk, "1y")
-    if o["close"]:
-        s = build_snapshot(o["high"], o["low"], o["close"], o["volume"])
-        cfg = SignalConfig.from_env()
-        tsig = active_signal(s, cfg)
-        tscore = trend(s, tsig, cfg).score
-        rsi = s.rsi
-
-    ev = evaluate_trade(
-        tk, args.action, price,
-        valuation_mos=(val.get("margin_of_safety") if val.get("reliable") else None),
-        valuation_signal=val.get("signal"),
-        tech_signal=tsig, trend_score=tscore, rsi=rsi,
-        consensus_reco=cons.get("reco"), consensus_target_vs_price=cons.get("target_vs_price"),
-        stop=args.stop, target=args.target)
-
-    print(f"=== Evaluate: {ev.action} {ev.ticker} @ ${price:,.2f} ===")
+    print(f"=== Evaluate: {ev.action} {ev.ticker} @ ${ev.price:,.2f} ===")
     for fac in ev.factors:
         mark = "✓" if fac.stance == "support" else ("✗" if fac.stance == "against" else "·")
         print(f"  {mark} {fac.name}: {fac.detail}")

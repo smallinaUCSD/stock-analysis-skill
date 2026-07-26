@@ -52,6 +52,30 @@ _EXTRA_CSS = """
 table.methods{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}
 table.methods td{padding:3px 0;border-bottom:1px solid var(--border)}
 table.methods td.r{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+/* market climate */
+.climate{background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  padding:12px 16px;margin:14px 0}
+.climate .lab{font-size:15px;font-weight:700}
+.climate.good .lab{color:var(--good)} .climate.warn .lab{color:var(--warn)} .climate.crit .lab{color:var(--crit)}
+.climate .notes{font-size:12.5px;color:var(--muted);margin-top:4px}
+.climate .metrics{font-size:12px;margin-top:6px;font-variant-numeric:tabular-nums}
+/* trade evaluator */
+.evalcard{background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  padding:14px 16px;margin:16px 0}
+.evalcard h2{font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 10px}
+.evform{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.evform input,.evform select{font-size:13px;padding:8px 10px;border-radius:9px;
+  border:1px solid var(--border);background:var(--surface-2);color:var(--ink)}
+.evform input{width:110px} .evform #ev-ticker{width:120px}
+.evform button{font-size:13px;padding:8px 16px;border-radius:9px;border:none;
+  background:var(--accent);color:#fff;font-weight:650;cursor:pointer}
+.factor{display:flex;gap:8px;align-items:baseline;font-size:13px;padding:3px 0;border-bottom:1px solid var(--border)}
+.factor .mk{font-weight:700;width:16px}
+.factor.support .mk{color:var(--good)} .factor.against .mk{color:var(--crit)} .factor.neutral .mk{color:var(--muted)}
+.factor .fn{font-weight:600;min-width:120px} .factor .fd{color:var(--muted)}
+.align{margin-top:10px;padding:8px 12px;border-radius:9px;font-weight:650;font-size:13px}
+.align.pos{background:var(--good);color:#fff} .align.neg{background:var(--crit);color:#fff}
+.align.mid{background:var(--surface-2);border:1px solid var(--border)}
 """
 
 PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
@@ -59,6 +83,7 @@ PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 <title>Stock Analyzer</title><style>__CSS____EXTRA__</style></head>
 <body><div class="wrap">
 <header><h1>Stock Analyzer</h1><span class="muted">search any ticker</span></header>
+<div id="climate" class="climate"><span class="muted">Loading market climate…</span></div>
 <div class="searchwrap">
   <div class="search">
     <input id="q" placeholder="Company or ticker, e.g. oracle, NVDA, costco" autofocus
@@ -72,6 +97,20 @@ PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 </div>
 <div class="quick" id="quick"></div>
 <div id="out"></div>
+
+<div class="evalcard">
+  <h2>🎯 Trade Evaluator</h2>
+  <div class="evform">
+    <input id="ev-ticker" placeholder="Ticker" autocomplete="off">
+    <select id="ev-action"><option value="buy">Buy</option>
+      <option value="short">Short</option><option value="sell">Sell</option></select>
+    <input id="ev-price" placeholder="Entry $ (opt)">
+    <input id="ev-stop" placeholder="Stop $ (opt)">
+    <input id="ev-target" placeholder="Target $ (opt)">
+    <button onclick="runEval()">Evaluate</button>
+  </div>
+  <div id="eval-out" style="margin-top:12px"></div>
+</div>
 <div class="disclaimer">Analysis, not investment advice. The valuation signal is price vs.
 this tool's DCF-based fair value (assumptions shown); bear/base/bull vary growth and discount
 rate; analyst consensus is reported third-party data. Options figures are informational.
@@ -222,6 +261,58 @@ function render(d){
      + '</div><div style="height:8px"></div>'+opt+'</div>'
    + '</div>';
 }
+
+// ---- market climate widget ----
+async function loadClimate(){
+  const el = document.getElementById('climate');
+  try{
+    const c = await (await fetch('/api/climate')).json();
+    const tone = c.score>=2?'good':(c.score<=-2?'crit':'warn');
+    el.className = 'climate '+tone;
+    const m = [];
+    if(c.copper_1m!=null) m.push('Copper 1m '+pctS(c.copper_1m));
+    if(c.gold_1m!=null) m.push('Gold 1m '+pctS(c.gold_1m));
+    if(c.copper_gold_1m!=null) m.push('Copper/Gold '+pctS(c.copper_gold_1m));
+    el.innerHTML = '<div class="lab">🌡️ Market climate: '+esc(c.label)+'</div>'
+      + (c.notes&&c.notes.length? '<div class="notes">'+c.notes.map(esc).join(' · ')+'</div>':'')
+      + (m.length? '<div class="metrics">'+m.join('  ·  ')+'</div>':'');
+  }catch(e){ el.innerHTML='<span class="muted">Climate unavailable.</span>'; }
+}
+
+// ---- trade evaluator ----
+async function runEval(){
+  const t = document.getElementById('ev-ticker').value.trim().toUpperCase();
+  if(!t){ document.getElementById('ev-ticker').focus(); return; }
+  const out = document.getElementById('eval-out');
+  const params = new URLSearchParams({action: document.getElementById('ev-action').value});
+  for(const k of ['price','stop','target']){
+    const v = document.getElementById('ev-'+k).value.trim();
+    if(v) params.set(k, v);
+  }
+  out.innerHTML = '<div class="loader">Evaluating '+esc(t)+' …</div>';
+  try{
+    const r = await fetch('/api/evaluate/'+encodeURIComponent(t)+'?'+params.toString());
+    const d = await r.json();
+    if(d.error){ out.innerHTML='<div class="muted">'+esc(d.error)+'</div>'; return; }
+    out.innerHTML = renderEval(d);
+  }catch(e){ out.innerHTML='<div class="muted">Failed: '+esc(e)+'</div>'; }
+}
+function renderEval(d){
+  const mark = {support:'✓', against:'✗', neutral:'·'};
+  const facs = d.factors.map(f=>
+    '<div class="factor '+f.stance+'"><span class="mk">'+mark[f.stance]+'</span>'
+    + '<span class="fn">'+esc(f.name)+'</span><span class="fd">'+esc(f.detail)+'</span></div>').join('');
+  const net = d.n_support - d.n_against;
+  const acls = net>=2?'pos':(net<=-2?'neg':'mid');
+  const rr = d.rr!=null ? ' · R:R '+d.rr.toFixed(1)+':1' : '';
+  return '<div style="font-weight:700;margin-bottom:6px">'+esc(d.action)+' '+esc(d.ticker)
+    + ' @ '+money(d.price)+'</div>'+facs
+    + '<div class="align '+acls+'">Support '+d.n_support+' · Against '+d.n_against+rr
+    + ' — '+esc(d.alignment)+'</div>'
+    + '<div class="muted" style="font-size:11px;margin-top:6px">Analysis, not advice — the decision is yours.</div>';
+}
+document.getElementById('ev-ticker').addEventListener('keydown', e=>{ if(e.key==='Enter') runEval(); });
+loadClimate();
 </script>
 </body></html>"""
 
