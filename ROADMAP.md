@@ -89,6 +89,10 @@ functions** (our core rule), same as the rest of `stockskill`.
       (~60s open / 5m extended / 30m closed) and the page auto-refresh matches.
 - [x] **Holdings from trades**: `stockskill holdings buy/sell/list/reprice`
       (shares-based, infers shares from legacy dollar rows, reprices at latest).
+- [x] **Dynamic (smart) watchlist** (`watchlist/dynamic.py` + `smart-watchlist`):
+      pinned staples (never rotated out) + ~25 rotating picks by growth /
+      undervaluation (DCF margin of safety) / leading sectors, each with its
+      2x/3x leveraged ETF. Writes a sectioned `data/smart_tickers.csv`.
 - [ ] Corporate events: next-earnings date + earnings-week badge, dividend ex-date
 - [ ] Polish: external links also on heatmap tiles; multi-page swipeable cards
 
@@ -118,17 +122,20 @@ functions** (our core rule), same as the rest of `stockskill`.
 - Note: earnings straddle/pre-earnings ideas need per-ticker options data +
   earnings date — surface in the analyzer (which fetches options) as a follow-on.
 
-## Phase 7 — ML breakout/crash predictor
-`src/stockskill/ml/` (+ `ML_GUIDE.md`)
-- [ ] Feature engineering: 28–30 technical + fundamental features (incl. denoised P/E)
-- [ ] Gradient Boosting classifier, StandardScaler, model persistence (`data/ml_models/`)
-- [ ] Training pipeline: stratified sampling, 2y history, per-ticker cache, verbose/quiet
-- [ ] Predict: breakout score, crash risk, class (BREAKOUT/CRASH/NEUTRAL), confidence
-- [ ] Crash filter: only flag CRASH when technicals **and** high/volatile P/E agree
-- [ ] Performance tracking: record predictions, rolling win-rate / expected-return / sample-size
-- [ ] Surface in dashboard INDICATORS (color-coded) + alerts
+## Phase 7 — Monte Carlo simulation (the "ML" step)  ← NEXT
+Per direction, the modeling step is **Monte Carlo simulation** rather than a
+gradient-boosting classifier. `src/stockskill/montecarlo/`:
+- [ ] Price-path simulation (GBM and/or bootstrapped historical returns) from a
+      ticker's drift & volatility; N paths over a horizon.
+- [ ] Outcome distribution: probability of >X% gain (breakout-ish) / >Y% loss
+      (crash-ish), expected return, percentile bands (p5/p50/p95), VaR.
+- [ ] Reuse the tested `portfolio/decay.py` engine where it fits (it already
+      Monte-Carlos leveraged paths); generalize to any ticker/portfolio.
+- [ ] Surface in the analyzer / watchlist card (probability cone + up/down odds).
+- [ ] Optional portfolio-level MC (correlated paths) for drawdown odds.
+- Honesty: outputs are probabilities from an explicit model, never predictions.
 
-## Phase 8 — Automation (decision: local vs cloud)
+## Phase 8 — Automation (Dad's GitHub Actions)
 - [ ] GitHub Actions `build.yml`: rebuild dashboard every ~30 min during market hours
 - [ ] GitHub Actions `mlbuild.yml`: retrain ML daily Mon–Fri, commit model+cache
 - [ ] Decide: keep our **local cron** (private, no cloud) vs Dad's **GitHub Actions**

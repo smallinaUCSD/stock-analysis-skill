@@ -598,6 +598,52 @@ def cmd_holdings(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_smart_watchlist(args: argparse.Namespace) -> int:
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from .data.fundamentals import fetch_snapshot
+    from .analyze import analyze_ticker
+    from .watchlist.dynamic import CANDIDATES, Candidate, build_smart_universe, write_sectioned
+    from .pulse import SECTOR_ETFS, sector_table
+    from .data.prices import price_map
+
+    def score(tk: str) -> Candidate:
+        try:
+            snap = fetch_snapshot(tk)
+        except Exception:  # noqa: BLE001
+            return Candidate(tk)
+        growth = snap.revenue_growth if snap.revenue_growth is not None else snap.earnings_growth
+        mos = None
+        try:
+            v = analyze_ticker(tk, snapshot=snap, with_options=False)["valuation"]
+            if v.get("reliable") and not v.get("low_confidence"):
+                mos = v.get("margin_of_safety")
+        except Exception:  # noqa: BLE001
+            pass
+        return Candidate(tk, growth, mos, snap.sector)
+
+    print(f"Scoring {len(CANDIDATES)} candidates (growth + undervaluation) ...")
+    candidates = []
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        for fut in as_completed([ex.submit(score, tk) for tk in CANDIDATES]):
+            candidates.append(fut.result())
+
+    sec_pm = price_map(list(SECTOR_ETFS), period="3mo")
+    sector_leaders = [r.ticker for r in sector_table(sec_pm, "1m")
+                      if r.returns.get("1m") is not None]
+
+    universe = build_smart_universe(candidates, sector_leaders, n_growth=args.growth,
+                                    n_value=args.value, n_sectors=args.sectors)
+    write_sectioned(args.out, universe)
+    s = universe["sections"]
+    print(f"Wrote {args.out}: {len(universe['all'])} tickers "
+          f"(pinned {len(s['PINNED'])} + leveraged {len(s['LEVERAGED'])}, "
+          f"growth {len(s['GROWTH'])}, value {len(s['VALUE'])}, sector {len(s['SECTOR'])})")
+    for name in ("GROWTH", "VALUE", "SECTOR"):
+        print(f"  {name:<7}: {', '.join(s[name]) or '(none)'}")
+    print(f"\nRender it:  uv run stockskill watchlist --tickers {args.out} --open")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="stockskill", description="Reproducible stock analysis.")
     sub = p.add_subparsers(dest="command", required=True)
@@ -688,6 +734,14 @@ def build_parser() -> argparse.ArgumentParser:
     h.add_argument("--account", default="brokerage")
     h.add_argument("--file", default="holdings.csv")
     h.set_defaults(func=cmd_holdings)
+
+    sw = sub.add_parser("smart-watchlist",
+                        help="build a dynamic tickers.csv (pinned core + growth/value/sector)")
+    sw.add_argument("--out", default="data/smart_tickers.csv")
+    sw.add_argument("--growth", type=int, default=10, help="# growth picks")
+    sw.add_argument("--value", type=int, default=10, help="# undervalued picks")
+    sw.add_argument("--sectors", type=int, default=3, help="# leading sectors")
+    sw.set_defaults(func=cmd_smart_watchlist)
     return p
 
 

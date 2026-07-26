@@ -16,3 +16,6 @@ watchlist.html
 
 # holdings.csv holds real balances -- keep it out of git.
 holdings.csv
+
+# Generated dynamic watchlist
+data/smart_tickers.csv

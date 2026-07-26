@@ -1,61 +1,126 @@
 # stock-analysis-skill
 
-Reproducible stock and portfolio analysis for Claude. **The model never does
-the math** — every number is produced by tested Python in the `stockskill`
-package. Same inputs → same output, provable by re-running.
+A reproducible stock-analysis toolkit and dashboard for Claude. **The model
+never does the math** — every number is produced by tested Python in the
+`stockskill` package. Same inputs → same output, provable by re-running.
 
-See [SKILL.md](SKILL.md) for how Claude uses this, and `references/` for
-methodology.
+It combines two things most tools keep separate:
+- **Fundamental depth** — DCF valuation, portfolio look-through leverage, risk.
+- **Technical breadth** — 30+ indicators, trading signals, a multi-view
+  watchlist dashboard, alerts, trade setups, and a market-pulse radar.
+
+See [SKILL.md](SKILL.md) for how Claude uses this, [`references/`](references/)
+for methodology, and [ROADMAP.md](ROADMAP.md) for what's built and what's next.
 
 ## Quickstart
 
 ```bash
-uv run pytest -q                       # 50 tests over the math
-uv run stockskill value AAPL --growth 0.08 --peer-pe 28 --peer-ev-ebitda 20
-uv run stockskill portfolio --holdings holdings.csv
-uv run stockskill lookthrough --holdings holdings.csv
-uv run stockskill decay --multiplier 3 --vol 0.45 --drift 0.08 --expense 0.0095
-uv run stockskill screen --lane core --top 15 --cache-dir snaps
-uv run stockskill pulse --price-map pm.json
-uv run stockskill dashboard --open      # visual HTML dashboard
-uv run stockskill serve --open          # interactive analyzer (search any ticker)
+uv run pytest -q                              # the tested math (108+ tests)
+
+# analysis
+uv run stockskill value NVDA --growth 0.15    # fair value: DCF + reverse DCF + multiples
+uv run stockskill screen --lane core          # rank a universe into a shortlist
+uv run stockskill pulse                        # market pulse: sectors, breadth, regime, sentiment
+
+# the dashboards
+uv run stockskill smart-watchlist             # build a dynamic pinned + growth/value/sector list
+uv run stockskill watchlist --open            # multi-ticker technical dashboard
+uv run stockskill watchlist --watch           # ...live, refreshing during market hours
+uv run stockskill dashboard --open            # market pulse + your portfolio
+uv run stockskill serve --open                # interactive: search any ticker
+
+# portfolio & holdings
+uv run stockskill portfolio                   # look-through leverage, concentration
+uv run stockskill lookthrough                 # true underlying exposure of leveraged ETFs
+uv run stockskill decay --multiplier 3        # leveraged-ETF volatility decay
+uv run stockskill holdings buy AAPU 10 --price 45   # update holdings from a trade
 ```
 
-## What's here
+## Commands
 
-| Capability | Command | Module |
-|---|---|---|
-| Fair value of a stock (DCF, reverse DCF, multiples, DDM) | `value` | `valuation/` |
-| Rank a universe into a shortlist (core + aggressive lanes) | `screen` | `screener/` |
-| Market pulse: sector/factor rotation, breadth, regime | `pulse` | `pulse/` |
-| Visual HTML dashboard (pulse + portfolio, self-refresh) | `dashboard` | `dashboard/` |
-| Interactive analyzer: search any ticker, live valuation | `serve` | `server/`, `analyze.py` |
-| True underlying exposure of leveraged/basket ETFs | `lookthrough` | `portfolio/lookthrough.py` |
-| Concentration / factor / leverage review | `portfolio` | `portfolio/risk.py` |
-| Leveraged-ETF volatility decay | `decay` | `portfolio/decay.py` |
+| Command | What it does |
+|---|---|
+| `value TICKER` | Fair value — two-stage DCF, reverse DCF (market-implied growth), relative multiples, dividend model; blended range + margin of safety. Assumption-sensitive names are flagged low-confidence instead of getting a false verdict. |
+| `screen --lane core\|aggressive` | Rank a universe by percentile score (quality+value or growth+momentum). |
+| `pulse` | Market radar: a market bar (indices/commodities/crypto), sector & factor rotation, breadth, a regime snapshot (VIX, yield curve, credit, leadership), CVR3, CNN Fear & Greed, and rotation-leader detection. |
+| `smart-watchlist` | Build a **dynamic** ticker list: pinned staples (always kept) + ~25 rotating picks by growth, undervaluation, and leading sectors — each with its 2x/3x leveraged ETF. |
+| `watchlist` | The multi-ticker **dashboard** (see below). |
+| `dashboard` | Self-contained HTML of the market pulse + your portfolio look-through, with a market-status badge and self-refresh. |
+| `serve` | Local Flask app to **search any ticker** and get live valuation, bear/base/bull, analyst consensus, and an options snapshot. |
+| `portfolio` / `lookthrough` | Portfolio look-through: expands leveraged/basket ETFs into true underlying $ exposure, effective leverage, HHI concentration, factor groups. |
+| `decay` | Leveraged-ETF volatility decay via Monte Carlo or a real price path. |
+| `holdings buy\|sell\|list\|reprice` | Maintain `holdings.csv` from trades (shares-based, reprices to latest). |
 
-Scheduling: `./scripts/install_schedule.sh` adds a cron entry (pre-open, every
-30 min intraday, close; weekdays). See `references/dashboard-and-scheduling.md`.
+## The watchlist dashboard
 
-## Design
+`stockskill watchlist` builds a self-contained HTML dashboard over your
+[`data/tickers.csv`](data/tickers.csv) (sectioned: `[M7]`, `[MEME]`, …). It
+fetches every ticker **in parallel** (with an on-disk cache) and computes
+everything from the tested indicator + signal libraries.
 
-- **Math and data are separate.** Pure, unit-tested functions take explicit
-  numbers; the data layer (`data/`, free yfinance) feeds them. A saved snapshot
-  makes any valuation reproducible offline.
-- **Leverage is made visible.** The registry (`leverage/registry.py`) expands
-  products like FNGU (3x basket) and AAPU (2x AAPL) into look-through exposure.
-- **Guardrails:** analysis and trade-offs only, never personalized buy/sell
-  advice; leveraged products always come with a decay check.
+- **Three views** — Table (sortable, sparklines), **Cards**, Heatmap — with a
+  view toggle, live search, and light/dark theme, all persisted.
+- **Faceted filter chips** — signal / condition (oversold, squeeze, surge…) /
+  category (tech, leveraged, ETF, dividend) / section (M7, MEME…).
+- **Sector-performance strip** — 1-month diverging bars.
+- **Alert banner** — 52w highs/lows, surges/crashes, volume spikes, squeezes,
+  active signals, and your custom `data/alerts.json`. Dismissible.
+- **Click a card → a modal mini-window** with the full detail: the trade setup
+  (ATR entry/stop/target + position sizing, for BUY/SHORT), buy calls/puts
+  options ideas, and the **stock-analyzer valuation** (fair value bear/base/bull,
+  valuation signal, reverse-DCF implied growth, analyst consensus).
+- **Realtime** — `--watch` regenerates on a market-aware cadence (~60s open,
+  5m extended, 30m closed) and the page auto-refresh matches.
 
-## Not yet built (roadmap)
+Signals are **rule-based indicator states, not investment advice** — the tool
+shows analysis and trade-offs; the decision is yours.
 
-Watchlist monitor and Thesis journal. The paid-session live layer (Morningstar/
-Barchart) needs the Claude-in-Chrome extension connected. The regime/recession
-playbook is documented (`references/regime-playbook.md`) and its dashboard is
-computed by `pulse`.
+### Dynamic (smart) watchlist
 
-## Data note
+`stockskill smart-watchlist` builds the ticker list automatically:
+- **Pinned staples** (COST, AAPL, META, …) are always kept — never rotated out.
+- **~25 rotating picks** from a curated candidate pool: top **growth** (revenue
+  growth), top **undervalued** (positive DCF margin of safety), and the leading
+  **sectors** (by 1-month performance).
+- Each selected company/sector also gets its **2x/3x leveraged ETF** where one
+  exists (AAPL→AAPU, semis→SOXL, energy→ERX, …).
 
-Free sources (yfinance/Yahoo) only, and paid sites (Morningstar/Barchart) are
-read via your own logged-in browser when needed — no credentials are stored or
-entered by the tool.
+It writes a sectioned `data/smart_tickers.csv`; render it with
+`watchlist --tickers data/smart_tickers.csv`.
+
+## Data, scheduling & config
+
+- **Free data** (yfinance/Yahoo). Paid sources (Morningstar/Barchart) are read
+  via your own logged-in browser when needed — no credentials handled by the tool.
+- **Scheduling** — `./scripts/install_schedule.sh` adds a cron entry (pre-open,
+  every 30 min intraday, close; weekdays) that regenerates the dashboard **and**
+  watchlist. See [`references/dashboard-and-scheduling.md`](references/dashboard-and-scheduling.md).
+- **Config** — trading strategy and thresholds via env vars
+  (`TRADING_STRATEGY`, `BB_*`, `RSI_*`, `WEIGHT_*`, `ACCOUNT_SIZE`, …).
+
+## Architecture
+
+```
+src/stockskill/
+  technicals/   RSI, MACD, Bollinger, ATR, Ichimoku, Stochastic, ADX, OBV, …
+  signals/      BB/RSI/MACD/Ichimoku/Combined strategies, trend score, confidence
+  valuation/    DCF, reverse DCF, multiples, DDM, scenarios, engine
+  portfolio/    look-through leverage, concentration, decay, holdings management
+  pulse/        sector/factor rotation, breadth, regime, market bar, sentiment
+  trade/        ATR trade setup, position sizing, options-strategy suggestions
+  alerts/       auto + custom alert engine
+  watchlist/    ticker parsing, parallel pipeline, row model, dashboard render
+  dashboard/    pulse+portfolio HTML dashboard
+  server/       Flask interactive analyzer + symbol search
+  data/         yfinance adapters (fundamentals, OHLCV, options, search)
+  leverage/     leveraged-ETF registry (look-through)
+```
+
+**Design:** math and data are separate — pure, unit-tested functions take
+explicit numbers; the data layer feeds them. A saved snapshot makes any
+valuation reproducible offline.
+
+## Not investment advice
+
+This is analysis tooling. It surfaces valuation, risk, and indicator states and
+leaves the buy/sell/hold decision to you. Free data may be delayed or incomplete.
