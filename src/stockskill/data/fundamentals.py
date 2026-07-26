@@ -40,6 +40,12 @@ class FundamentalSnapshot:
     earnings_growth: float | None = None
     profit_margin: float | None = None
     roe: float | None = None
+    # reported third-party analyst consensus (NOT our view -- displayed as-is)
+    analyst_reco: str | None = None          # e.g. "buy", "hold"
+    analyst_mean: float | None = None        # 1=strong buy .. 5=strong sell
+    analyst_count: int | None = None
+    target_mean: float | None = None
+    name: str | None = None
 
     def to_json(self, path: str | Path) -> None:
         Path(path).write_text(json.dumps(asdict(self), indent=2))
@@ -111,4 +117,9 @@ def fetch_snapshot(ticker: str) -> FundamentalSnapshot:
         earnings_growth=info.get("earningsGrowth"),
         profit_margin=info.get("profitMargins"),
         roe=info.get("returnOnEquity"),
+        analyst_reco=info.get("recommendationKey"),
+        analyst_mean=info.get("recommendationMean"),
+        analyst_count=info.get("numberOfAnalystOpinions"),
+        target_mean=info.get("targetMeanPrice"),
+        name=info.get("longName") or info.get("shortName"),
     )

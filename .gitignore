@@ -8,5 +8,10 @@ __pycache__/
 *.snapshot.json
 snapshots/
 
-# Keep the template holdings out of accidental commits if you add real $:
-# holdings.csv   # uncomment if you fill in real dollar amounts you don't want tracked
+# Generated dashboard output, caches, logs
+dashboard.html
+.cache/
+*.log
+
+# holdings.csv holds real balances -- keep it out of git.
+holdings.csv
