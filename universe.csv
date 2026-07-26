@@ -55,6 +55,16 @@ ELV
 ZTS
 SYK
 BSX
+VEEV
+DXCM
+IDXX
+HUM
+MCK
+IQV
+RMD
+MRNA
+HCA
+CI
 
 # --- Utilities ---
 NEE
@@ -100,6 +110,58 @@ RGTI
 QBTS
 QUBT
 ARQQ
+
+# --- Semiconductors / chips ---
+ASML
+TSM
+MU
+QCOM
+TXN
+INTC
+ARM
+KLAC
+LRCX
+AMAT
+ADI
+NXPI
+MRVL
+ON
+MCHP
+TER
+
+# --- AI infrastructure / data centers ---
+NBIS
+EQIX
+DLR
+VRT
+ANET
+CIEN
+SNOW
+MDB
+CEG
+VST
+SMR
+OKLO
+TLN
+
+# --- Space / aerospace & defense ---
+RKLB
+LUNR
+ASTS
+RDW
+PL
+LMT
+RTX
+NOC
+BA
+
+# --- Industrials / materials ---
+GLW
+CMI
+CAT
+DE
+ETN
+HON
 
 # --- Safe / broad-market funds ---
 VOO
