@@ -83,7 +83,6 @@ PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 <title>Stock Analyzer</title><style>__CSS____EXTRA__</style></head>
 <body><div class="wrap">
 <header><h1>Stock Analyzer</h1><span class="muted">search any ticker</span></header>
-<div id="climate" class="climate"><span class="muted">Loading market climate…</span></div>
 <div class="searchwrap">
   <div class="search">
     <input id="q" placeholder="Company or ticker, e.g. oracle, NVDA, costco" autofocus
@@ -262,23 +261,6 @@ function render(d){
    + '</div>';
 }
 
-// ---- market climate widget ----
-async function loadClimate(){
-  const el = document.getElementById('climate');
-  try{
-    const c = await (await fetch('/api/climate')).json();
-    const tone = c.score>=2?'good':(c.score<=-2?'crit':'warn');
-    el.className = 'climate '+tone;
-    const m = [];
-    if(c.copper_1m!=null) m.push('Copper 1m '+pctS(c.copper_1m));
-    if(c.gold_1m!=null) m.push('Gold 1m '+pctS(c.gold_1m));
-    if(c.copper_gold_1m!=null) m.push('Copper/Gold '+pctS(c.copper_gold_1m));
-    el.innerHTML = '<div class="lab">🌡️ Market climate: '+esc(c.label)+'</div>'
-      + (c.notes&&c.notes.length? '<div class="notes">'+c.notes.map(esc).join(' · ')+'</div>':'')
-      + (m.length? '<div class="metrics">'+m.join('  ·  ')+'</div>':'');
-  }catch(e){ el.innerHTML='<span class="muted">Climate unavailable.</span>'; }
-}
-
 // ---- trade evaluator ----
 async function runEval(){
   const t = document.getElementById('ev-ticker').value.trim().toUpperCase();
@@ -312,7 +294,6 @@ function renderEval(d){
     + '<div class="muted" style="font-size:11px;margin-top:6px">Analysis, not advice — the decision is yours.</div>';
 }
 document.getElementById('ev-ticker').addEventListener('keydown', e=>{ if(e.key==='Enter') runEval(); });
-loadClimate();
 </script>
 </body></html>"""
 

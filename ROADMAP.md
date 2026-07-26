@@ -122,15 +122,14 @@ functions** (our core rule), same as the rest of `stockskill`.
 - Note: earnings straddle/pre-earnings ideas need per-ticker options data +
   earnings date — surface in the analyzer (which fetches options) as a follow-on.
 
-## Phase 7 — Monte Carlo simulation (the "ML" step)  ← NEXT
-Per direction, the modeling step is **Monte Carlo simulation** rather than a
-gradient-boosting classifier. `src/stockskill/montecarlo/`:
-- [ ] Price-path simulation (GBM and/or bootstrapped historical returns) from a
-      ticker's drift & volatility; N paths over a horizon.
-- [ ] Outcome distribution: probability of >X% gain (breakout-ish) / >Y% loss
-      (crash-ish), expected return, percentile bands (p5/p50/p95), VaR.
-- [ ] Reuse the tested `portfolio/decay.py` engine where it fits (it already
-      Monte-Carlos leveraged paths); generalize to any ticker/portfolio.
+## Phase 7 — Monte Carlo simulation (the "ML" step)  ← IN PROGRESS (`montecarlo/`, 7 tests)
+The modeling step is **Monte Carlo simulation** (not a classifier).
+- [x] Price-path simulation: **GBM** (fit drift & vol) + **bootstrap** (resample
+      historical daily returns) over an N-day horizon. `stockskill montecarlo TICKER`.
+- [x] Outcome distribution: P(gain ≥ X) / P(loss ≥ Y), expected & median return,
+      percentile bands (p5/p25/p50/p75/p95), VaR(95%).
+- [x] "Training" = param estimation from 2y history; `--climate` nudges drift by
+      the commodity climate score (known macro trends baked in).
 - [ ] Surface in the analyzer / watchlist card (probability cone + up/down odds).
 - [ ] Optional portfolio-level MC (correlated paths) for drawdown odds.
 - Honesty: outputs are probabilities from an explicit model, never predictions.

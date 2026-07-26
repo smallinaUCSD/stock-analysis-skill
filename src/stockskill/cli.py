@@ -602,6 +602,40 @@ def cmd_holdings(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_montecarlo(args: argparse.Namespace) -> int:
+    from .data.prices import closing_prices
+    from .montecarlo import montecarlo
+
+    tk = args.ticker.upper()
+    closes = closing_prices(tk, "2y")
+    if not closes:
+        print(f"no data for {tk}", file=sys.stderr)
+        return 1
+
+    drift_adj, clim_note = 0.0, ""
+    if args.climate:
+        from .pulse import market_climate
+        pm = {"HG=F": closing_prices("HG=F", "3mo"), "GC=F": closing_prices("GC=F", "3mo")}
+        c = market_climate(pm)
+        drift_adj = 0.03 * c.score          # +/-3%/yr drift per climate point
+        clim_note = f"  [climate: {c.label}, drift {drift_adj:+.1%}]"
+
+    r = montecarlo(closes, days=args.days, n_paths=args.paths, method=args.method,
+                   gain=args.gain, loss=args.loss, seed=args.seed, drift_adj=drift_adj)
+    print(f"=== Monte Carlo: {tk} — {args.days}d horizon, {args.paths:,} paths "
+          f"({args.method}){clim_note} ===")
+    print(f"  Spot ${r.spot:,.2f}   drift {r.drift_annual:+.1%}/yr   vol {r.vol_annual:.1%}/yr")
+    print(f"  Expected return {r.expected_return:+.1%}   median {r.median_return:+.1%}")
+    print(f"  P(up) {r.prob_up:.0%}   P(gain ≥ {args.gain:.0%}) {r.prob_gain:.0%}   "
+          f"P(loss ≥ {args.loss:.0%}) {r.prob_loss:.0%}")
+    p = r.pctiles
+    print(f"  Percentiles  p5 {p['p5']:+.1%}  p25 {p['p25']:+.1%}  p50 {p['p50']:+.1%}  "
+          f"p75 {p['p75']:+.1%}  p95 {p['p95']:+.1%}")
+    print(f"  VaR (95%) {r.var_95:+.1%}  (≈ ${r.spot*(1+r.var_95):,.2f})")
+    print("\n  Probabilities from an explicit model, not a prediction.")
+    return 0
+
+
 def cmd_evaluate(args: argparse.Namespace) -> int:
     from .analyze import evaluate_ticker
 
@@ -773,6 +807,17 @@ def build_parser() -> argparse.ArgumentParser:
     ev.add_argument("--stop", type=float)
     ev.add_argument("--target", type=float)
     ev.set_defaults(func=cmd_evaluate)
+
+    mc = sub.add_parser("montecarlo", help="Monte Carlo outcome distribution for a ticker")
+    mc.add_argument("ticker")
+    mc.add_argument("--days", type=int, default=63, help="horizon in trading days (~63 = 3mo)")
+    mc.add_argument("--paths", type=int, default=20000)
+    mc.add_argument("--method", choices=["gbm", "bootstrap"], default="gbm")
+    mc.add_argument("--gain", type=float, default=0.10, help="gain threshold for P(gain)")
+    mc.add_argument("--loss", type=float, default=0.10, help="loss threshold for P(loss)")
+    mc.add_argument("--climate", action="store_true", help="nudge drift by market climate")
+    mc.add_argument("--seed", type=int, default=12345)
+    mc.set_defaults(func=cmd_montecarlo)
     return p
 
 
