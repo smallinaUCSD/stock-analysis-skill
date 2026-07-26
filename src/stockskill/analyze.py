@@ -74,38 +74,64 @@ def analyze_ticker(ticker: str, growth: float | None = None,
     earnings_basis = "DCF (earnings)" in methods
     reliable = has_cashflow or ("DDM" in methods and (div_yield or 0) >= 0.03)
 
-    note = ""
-    if not reliable and snap.fcf is not None and snap.fcf <= 0:
-        note = ("No positive free cash flow and no positive earnings — nothing "
-                "reliable to value on. Lean on the analyst view rather than a "
-                "single fair value.")
-    elif not reliable:
-        note = ("Only a dividend model was available; that's not a meaningful "
-                "fair value for a low-yield or growth name.")
-    elif earnings_basis:
-        note = ("Valued on net income — free cash flow is negative (heavy capex "
-                "or one-off), so treat this fair value as a rougher, "
-                "earnings-based proxy.")
+    tpct = base_out.terminal_value_pct
+    growth_clamped = "clamped" in (growth_source or "")
+    base_fv = rep.weighted_base()
+
+    notes: list[str] = []
+    signal = "no reliable fair-value basis"
+    low_confidence = False
+
+    if not reliable:
+        if snap.fcf is not None and snap.fcf <= 0:
+            notes.append("No positive free cash flow and no positive earnings — "
+                         "nothing reliable to value on; lean on the analyst view.")
+        else:
+            notes.append("Only a dividend model was available; not a meaningful "
+                         "fair value for a low-yield or growth name.")
+    else:
+        signal = rep.verdict()
+        if earnings_basis:
+            notes.append("Valued on net income — free cash flow is negative "
+                         "(heavy capex or one-off), a rougher earnings-based proxy.")
+        # Confidence gate: only humble the signal when the estimate is genuinely
+        # fragile -- a hyper-grower whose growth we had to cap, or a value that
+        # rests mostly on the terminal (far-future) assumption.
+        reasons = []
+        if growth_clamped:
+            reasons.append("growth had to be capped — a hyper-grower the model "
+                           "can't reliably extrapolate for a decade")
+        if tpct is not None and tpct > 0.80:
+            reasons.append(f"{tpct:.0%} of the value sits beyond year 10")
+        if reasons:
+            low_confidence = True
+            signal = "assumption-sensitive — read the range, not a single call"
+            notes.insert(0, "Low confidence: " + "; ".join(reasons)
+                         + ". Small changes in growth or discount rate move the "
+                         "fair value a lot — weigh the bear/base/bull range and "
+                         "the analyst view, not one number.")
+    note = " ".join(notes)
 
     if reliable:
         valuation = {
-            "reliable": True, "note": note, "price": price,
-            "fair_value_base": rep.weighted_base(),
+            "reliable": True, "low_confidence": low_confidence, "note": note,
+            "price": price,
+            "fair_value_base": base_fv,
             "fair_value_low": rng[0] if rng else None,
             "fair_value_high": rng[2] if rng else None,
             "bear": fv["bear"], "base": fv["base"], "bull": fv["bull"],
             "margin_of_safety": rep.margin_of_safety(),
-            "signal": rep.verdict(),
+            "signal": signal,
             "implied_market_growth": base_out.implied_market_growth,
         }
     else:
         # Withhold fair-value numbers; show only what's honest.
         valuation = {
-            "reliable": False, "note": note, "price": price,
+            "reliable": False, "low_confidence": True, "note": note, "price": price,
             "fair_value_base": None, "fair_value_low": None, "fair_value_high": None,
             "bear": None, "base": None, "bull": None,
             "margin_of_safety": None,
-            "signal": "no reliable fair-value basis",
+            "signal": signal,
             "implied_market_growth": None,
         }
     valuation.update({

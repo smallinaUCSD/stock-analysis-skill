@@ -36,6 +36,24 @@ def test_dcf_monotonic_in_growth():
     assert fv(0.02) < fv(0.06) < fv(0.12)
 
 
+def test_dcf_fade_lowers_value_for_high_growth():
+    # Fading a high growth toward terminal must value less than holding it flat.
+    common = dict(fcf0=100, shares=100, discount_rate=0.10, stage1_growth=0.30,
+                  stage1_years=10, terminal_growth=0.025)
+    flat = two_stage_dcf(DCFInputs(**common)).fair_value_per_share
+    faded = two_stage_dcf(DCFInputs(**common, fade=True)).fair_value_per_share
+    assert faded < flat
+
+
+def test_dcf_fade_noop_single_year():
+    # With one explicit year there's nothing to fade -> identical to flat.
+    common = dict(fcf0=100, shares=100, discount_rate=0.10, stage1_growth=0.20,
+                  stage1_years=1, terminal_growth=0.025)
+    flat = two_stage_dcf(DCFInputs(**common)).fair_value_per_share
+    faded = two_stage_dcf(DCFInputs(**common, fade=True)).fair_value_per_share
+    assert faded == pytest.approx(flat)
+
+
 def test_dcf_rejects_rate_below_terminal():
     with pytest.raises(ValueError):
         two_stage_dcf(DCFInputs(fcf0=100, shares=100, discount_rate=0.02,
