@@ -256,6 +256,177 @@ def cmd_screen(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_pulse(args: argparse.Namespace) -> int:
+    import os
+    from .data.prices import price_map, save_price_map, load_price_map
+    from .pulse import all_tickers, sector_table, factor_table, breadth, regime
+
+    if args.price_map and os.path.exists(args.price_map) and not args.refresh:
+        pm = load_price_map(args.price_map)
+        print(f"Loaded cached price map: {args.price_map}")
+    else:
+        print(f"Fetching {len(all_tickers())} tickers ({args.period}) ...")
+        pm = price_map(all_tickers(), period=args.period)
+        if args.price_map:
+            save_price_map(pm, args.price_map)
+            print(f"Saved price map -> {args.price_map}")
+
+    wins = ["1d", "1w", "1m", "3m"]
+    print("\n=== Sector rotation (sorted by 1m) ===")
+    print(f"  {'sector':<22}{'ticker':<7}" + "".join(f"{w:>8}" for w in wins))
+    for r in sector_table(pm, "1m"):
+        cells = "".join((f"{'  n/a':>8}" if r.returns[w] is None else f"{r.returns[w]:>8.1%}") for w in wins)
+        print(f"  {r.name:<22}{r.ticker:<7}{cells}")
+
+    print("\n=== Factor / style rotation (relative strength, num - den) ===")
+    for r in factor_table(pm):
+        cells = "".join((f"{'  n/a':>8}" if r.rs[w] is None else f"{r.rs[w]:>+8.1%}") for w in wins)
+        print(f"  {r.label:<26}{r.num}/{r.den:<6}{cells}")
+
+    b = breadth(pm)
+    print("\n=== Breadth ===")
+    pp = "n/a" if b.pct_positive_1m is None else f"{b.pct_positive_1m:.0%}"
+    pa = "n/a" if b.pct_above_50d is None else f"{b.pct_above_50d:.0%}"
+    print(f"  Sectors positive over 1m: {pp}   Sectors above 50d MA: {pa}   (n={b.n_sectors})")
+
+    rg = regime(pm)
+    print("\n=== Regime snapshot ===")
+    labels = {
+        "vix": "VIX", "10y_yield": "10Y yield", "3m_yield": "3M yield",
+        "yield_curve_10y_3m": "Curve (10Y-3M)", "spy_1m": "S&P 500 (1m)",
+        "spy_vs_rsp_1m": "Cap-weight vs equal-weight (1m)",
+        "hyg_vs_lqd_1m": "HY vs IG credit (1m)",
+        "growth_vs_value_1m": "Growth vs Value (1m)",
+        "gold_1m": "Gold (1m)", "dollar_1m": "US Dollar (1m)",
+    }
+    pct_keys = {"spy_1m", "spy_vs_rsp_1m", "hyg_vs_lqd_1m", "growth_vs_value_1m", "gold_1m", "dollar_1m"}
+    for k, lab in labels.items():
+        v = rg.values.get(k)
+        if v is None:
+            disp = "n/a"
+        elif k in pct_keys:
+            disp = f"{v:+.1%}"
+        else:
+            disp = f"{v:.2f}"
+        print(f"  {lab:<34}{disp:>10}")
+    if rg.flags:
+        on = [k for k, val in rg.flags.items() if val]
+        print("  flags: " + (", ".join(on) if on else "none tripped"))
+
+    print("\nInterpretation is yours: these are computed facts, not signals. "
+          "Rising VIX + inverted curve + narrow leadership + credit risk-off "
+          "together lean defensive; see references/regime-playbook.md.")
+    return 0
+
+
+def _compute_dashboard_data(price_map_path: str | None, period: str, refresh: bool):
+    import os
+    from .data.prices import price_map, save_price_map, load_price_map
+    from .pulse import all_tickers, sector_table, factor_table, breadth, regime
+
+    if price_map_path and os.path.exists(price_map_path) and not refresh:
+        pm = load_price_map(price_map_path)
+    else:
+        pm = price_map(all_tickers(), period=period)
+        if price_map_path:
+            save_price_map(pm, price_map_path)
+
+    sectors = [(r.name, r.ticker, r.returns["1d"], r.returns["1w"],
+                r.returns["1m"], r.returns["3m"]) for r in sector_table(pm, "1m")]
+    factors = [(r.label, r.num, r.den, r.rs["1m"]) for r in factor_table(pm)]
+    b = breadth(pm)
+    rg = regime(pm)
+    return sectors, factors, (b.pct_positive_1m, b.pct_above_50d, b.n_sectors), rg
+
+
+def _compute_portfolio_data(holdings_path: str):
+    import os
+    if not os.path.exists(holdings_path):
+        return None
+    from .portfolio.io import load_holdings_csv
+    from .portfolio.lookthrough import expand
+    from .portfolio import risk
+    from .config import FACTOR_GROUPS
+
+    lt = expand(load_holdings_csv(holdings_path))
+    weights = lt.exposure_weights()
+    top = [(ul, amt, weights.get(ul, 0.0)) for ul, amt in lt.top(10)]
+    groups = [(ge.group, ge.dollars, ge.share)
+              for ge in risk.group_exposure(lt.notional_by_underlying, FACTOR_GROUPS)]
+    return {
+        "effective_leverage": lt.effective_leverage,
+        "total_equity": lt.total_equity,
+        "total_notional": lt.total_notional,
+        "top_exposures": top,
+        "groups": groups,
+    }
+
+
+def _write_dashboard(args, refresh_seconds: int) -> str:
+    from datetime import datetime
+    from .marketclock import market_status, ET
+    from .dashboard import render_dashboard
+
+    status = market_status()
+    sectors, factors, breadth_t, rg = _compute_dashboard_data(
+        args.price_map, args.period, args.refresh)
+    portfolio = _compute_portfolio_data(args.holdings)
+
+    now = datetime.now(ET)
+    html_out = render_dashboard(
+        status=status,
+        updated_et=now.strftime("%a %b %d, %I:%M %p"),
+        updated_local=datetime.now().astimezone().strftime("%I:%M %p %Z"),
+        refresh_seconds=refresh_seconds,
+        regime_values=rg.values, regime_flags=rg.flags,
+        sectors=sectors, factors=factors, breadth=breadth_t, portfolio=portfolio,
+    )
+    with open(args.out, "w") as f:
+        f.write(html_out)
+    return status.badge
+
+
+def cmd_dashboard(args: argparse.Namespace) -> int:
+    import os
+    import time
+
+    refresh_seconds = max(60, int(args.interval * 60))
+    badge = _write_dashboard(args, refresh_seconds)
+    print(f"[{badge}] wrote {args.out}")
+
+    if args.open:
+        os.system(f"open {args.out!r}" if sys.platform == "darwin" else f"xdg-open {args.out!r}")
+
+    if not args.watch:
+        return 0
+
+    print(f"Watching: regenerating every {args.interval:g} min. Ctrl-C to stop.")
+    try:
+        while True:
+            time.sleep(refresh_seconds)
+            try:
+                badge = _write_dashboard(args, refresh_seconds)
+                print(f"[{badge}] updated {args.out} at {time.strftime('%H:%M:%S')}")
+            except Exception as e:  # noqa: BLE001
+                print(f"  update failed: {e}", file=sys.stderr)
+    except KeyboardInterrupt:
+        print("\nstopped.")
+    return 0
+
+
+def cmd_serve(args: argparse.Namespace) -> int:
+    import os
+    from .server import create_app
+
+    app = create_app()
+    url = f"http://{args.host}:{args.port}"
+    print(f"Stock Analyzer at {url}  (Ctrl-C to stop)")
+    if args.open:
+        os.system(f"open {url!r}" if sys.platform == "darwin" else f"xdg-open {url!r}")
+    app.run(host=args.host, port=args.port, debug=False)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="stockskill", description="Reproducible stock analysis.")
     sub = p.add_subparsers(dest="command", required=True)
@@ -299,6 +470,30 @@ def build_parser() -> argparse.ArgumentParser:
     sc.add_argument("--refresh", action="store_true", help="re-fetch even if cached")
     sc.add_argument("--momentum", help="period for aggressive-lane momentum, e.g. 1y")
     sc.set_defaults(func=cmd_screen)
+
+    pu = sub.add_parser("pulse", help="market pulse: sector/factor rotation, breadth, regime")
+    pu.add_argument("--period", default="1y", help="history window to fetch")
+    pu.add_argument("--price-map", help="JSON cache path (save/load for reproducibility)")
+    pu.add_argument("--refresh", action="store_true", help="re-fetch even if cached")
+    pu.set_defaults(func=cmd_pulse)
+
+    db = sub.add_parser("dashboard", help="write a self-contained HTML dashboard")
+    db.add_argument("--out", default="dashboard.html", help="output HTML path")
+    db.add_argument("--holdings", default="holdings.csv")
+    db.add_argument("--period", default="1y")
+    db.add_argument("--price-map", help="JSON cache path for the price series")
+    db.add_argument("--refresh", action="store_true", help="re-fetch prices even if cached")
+    db.add_argument("--interval", type=float, default=30.0,
+                    help="minutes between updates / meta-refresh (default 30)")
+    db.add_argument("--watch", action="store_true", help="keep running, regenerate every interval")
+    db.add_argument("--open", action="store_true", help="open the file in the browser after writing")
+    db.set_defaults(func=cmd_dashboard)
+
+    sv = sub.add_parser("serve", help="run the interactive stock analyzer (search any ticker)")
+    sv.add_argument("--host", default="127.0.0.1")
+    sv.add_argument("--port", type=int, default=8787)
+    sv.add_argument("--open", action="store_true", help="open the browser after starting")
+    sv.set_defaults(func=cmd_serve)
     return p
 
 

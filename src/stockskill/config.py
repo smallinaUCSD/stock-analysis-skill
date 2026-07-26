@@ -12,8 +12,9 @@ FACTOR_GROUPS: dict[str, str] = {
     "GOOGL": "mega-cap platform", "GOOG": "mega-cap platform",
     "AMZN": "mega-cap platform", "META": "mega-cap platform",
     "NFLX": "mega-cap platform",
-    # AI / semiconductors
+    # AI / semiconductors (DRAM = Roundhill Memory ETF, a 1x memory-chip basket)
     "NVDA": "AI / semis", "AVGO": "AI / semis", "AMD": "AI / semis",
+    "DRAM": "AI / semis",
     # software growth
     "CRM": "software growth", "CRWD": "software growth",
     "SNOW": "software growth", "PLTR": "software growth",
@@ -26,4 +27,11 @@ FACTOR_GROUPS: dict[str, str] = {
     "COST": "defensive staples", "PEP": "defensive staples",
     "PG": "defensive staples", "KO": "defensive staples",
     "WMT": "defensive staples",
+    # active large-cap growth funds (held directly, 1x)
+    "FFLG": "large-cap growth", "FCNTX": "large-cap growth",
+    "FIDGRCO": "large-cap growth", "FIDCONTRA": "large-cap growth",
+    "WBSMID": "smid-cap growth",
+    # diversifiers
+    "VTINTL": "international", "EMMKT": "emerging markets",
+    "CASH": "cash",
 }

@@ -47,7 +47,7 @@ The project is a uv package. Run everything through uv:
 
 ```bash
 uv run stockskill --help
-uv run pytest -q          # 26 tests; run after any change to the math
+uv run pytest -q          # 42 tests; run after any change to the math
 ```
 
 ## Commands (this is where the math lives)
@@ -111,6 +111,52 @@ good as the list. `coverage` shows how much of the scoring weight had data
 (banks lack EBITDA metrics, etc.). Always run `value TICKER` on shortlisted
 names for a real fair-value check before drawing conclusions.
 
+### Pulse — what's trending and why
+Reads the market from free ETF/macro data: sector rotation, factor/style
+rotation, breadth, and a regime snapshot (VIX, yield curve, credit, leadership)
+with rule-based flags. `--price-map` caches series for reproducibility.
+
+```bash
+uv run stockskill pulse --price-map pm.json
+```
+
+These are **computed facts, not signals** — no single number is a call. A
+defensive lean is a *cluster* (rising VIX + inverted/flattening curve + narrow
+breadth + credit risk-off + defensive leadership together). See
+`references/regime-playbook.md`. The proprietary "why" (Morningstar/Barchart
+analyst views) is a manual live read via the Claude-in-Chrome extension when
+connected — deliberately not automated into the CLI.
+
+### Dashboard — the visual view (+ scheduling)
+Writes a self-contained, theme-aware HTML dashboard (pulse + portfolio) with a
+market-status badge and self-refresh. Runs once, or loops with `--watch`.
+
+```bash
+uv run stockskill dashboard --open                 # generate + open
+uv run stockskill dashboard --watch --interval 30  # live loop
+./scripts/install_schedule.sh                       # cron: pre-open, every 30m, close (Mon-Fri)
+```
+
+The scheduler edits the user's crontab — a persistent change. Show them the
+cadence and let them run the installer; don't modify crontab silently. See
+`references/dashboard-and-scheduling.md`.
+
+### Serve — interactive analyzer (search any ticker)
+A local Flask app: search a ticker → live price, valuation signal, bear/base/
+bull fair value, reverse-DCF implied growth, reported analyst consensus, and an
+options snapshot. All math from the tested engine; base growth is data-driven
+(reported revenue growth, clamped, overridable).
+
+```bash
+uv run stockskill serve --open        # http://127.0.0.1:8787
+```
+
+**Boundary:** this emits *analysis*, never a personalized buy/sell/hold
+instruction. The valuation signal (price vs. our DCF fair value) and the
+reported analyst consensus are shown separately — they often disagree, and the
+decision is the user's. Do not add a synthesized "recommended action" field.
+See `references/stock-analyzer.md`.
+
 ## Holdings file
 
 `holdings.csv`: `ticker,market_value,account`. Leveraged tickers are expanded
@@ -123,6 +169,7 @@ numbers to mean anything.
 - New leveraged product → add to `src/stockskill/leverage/registry.py`.
 - New factor/sector tag → `src/stockskill/config.py`.
 - New screen lane / metric weights → `src/stockskill/screener/screen.py` (LANES).
+- New pulse sector/factor/regime ticker → `src/stockskill/pulse/universe.py`.
 - New valuation method → add a pure function under `src/stockskill/valuation/`,
   wire it into `service.py`, and **add a test with a hand-checked value.**
 
@@ -134,3 +181,7 @@ numbers to mean anything.
 - `references/portfolio-review-checklist.md` — what to look at and thresholds.
 - `references/financial-red-flags.md` — accounting/quality warning signs.
 - `references/screener-methodology.md` — how ranking, lanes, and coverage work.
+- `references/market-pulse.md` — what each pulse section means; the paid layer.
+- `references/regime-playbook.md` — reading the macro regime; defensive rotation.
+- `references/dashboard-and-scheduling.md` — the HTML dashboard and cron setup.
+- `references/stock-analyzer.md` — the interactive `serve` app and its boundary.
