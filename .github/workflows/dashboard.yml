@@ -1,0 +1,50 @@
+name: Dashboard
+
+# Publishes the multi-ticker WATCHLIST dashboard (public tickers only -- no
+# personal data) to GitHub Pages, refreshed during US market hours.
+# The portfolio dashboard is intentionally NOT published (it contains real
+# holdings; holdings.csv is gitignored so CI never sees it anyway).
+#
+# Scheduled workflows run on the DEFAULT branch, so this takes effect once
+# merged to main. Enable Pages first: Settings -> Pages -> Source: GitHub Actions.
+
+on:
+  schedule:
+    # every 30 min, ~US market hours in UTC (covers EDT & EST), weekdays.
+    - cron: "*/30 13-21 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: uv sync --frozen || uv sync
+      - name: Generate watchlist dashboard
+        run: |
+          mkdir -p _site
+          # prefer the dynamic smart list if the daily refresh has produced one
+          if [ -f data/smart_tickers.csv ]; then TICKERS=data/smart_tickers.csv; else TICKERS=data/tickers.csv; fi
+          uv run stockskill watchlist --tickers "$TICKERS" --out _site/index.html
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

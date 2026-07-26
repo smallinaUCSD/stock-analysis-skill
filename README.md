@@ -97,6 +97,10 @@ It writes a sectioned `data/smart_tickers.csv`; render it with
 - **Scheduling** — `./scripts/install_schedule.sh` adds a cron entry (pre-open,
   every 30 min intraday, close; weekdays) that regenerates the dashboard **and**
   watchlist. See [`references/dashboard-and-scheduling.md`](references/dashboard-and-scheduling.md).
+- **Cloud automation** — GitHub Actions (`.github/workflows/`) run the tests on
+  every push and publish the **watchlist** to GitHub Pages during market hours
+  (public tickers only — the portfolio dashboard is never published). See
+  [`references/github-actions.md`](references/github-actions.md).
 - **Config** — trading strategy and thresholds via env vars
   (`TRADING_STRATEGY`, `BB_*`, `RSI_*`, `WEIGHT_*`, `ACCOUNT_SIZE`, …).
 

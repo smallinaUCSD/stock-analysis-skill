@@ -134,11 +134,16 @@ The modeling step is **Monte Carlo simulation** (not a classifier).
 - [ ] Optional portfolio-level MC (correlated paths) for drawdown odds.
 - Honesty: outputs are probabilities from an explicit model, never predictions.
 
-## Phase 8 — Automation (Dad's GitHub Actions)
-- [ ] GitHub Actions `build.yml`: rebuild dashboard every ~30 min during market hours
-- [ ] GitHub Actions `mlbuild.yml`: retrain ML daily Mon–Fri, commit model+cache
-- [ ] Decide: keep our **local cron** (private, no cloud) vs Dad's **GitHub Actions**
-      (always-on, but pushes data to a repo). Could do both.
+## Phase 8 — Automation (Dad's GitHub Actions)  ✅ DONE (`.github/workflows/`)
+- [x] `ci.yml`: `uv run pytest` on push / PR.
+- [x] `dashboard.yml`: render the watchlist and publish to **GitHub Pages**
+      every 30 min during market hours (weekdays). Public tickers only —
+      the portfolio dashboard is never published.
+- [x] `refresh-watchlist.yml`: daily rebuild of the dynamic `smart_tickers.csv`,
+      committed so the dashboard renders a fresh list (Dad's mlbuild analogue).
+- Setup + privacy notes: `references/github-actions.md`. Takes effect after
+      merge to main + enabling Pages (Settings → Pages → Source: GitHub Actions).
+- Local cron (`scripts/install_schedule.sh`) remains as the private alternative.
 
 ---
 
