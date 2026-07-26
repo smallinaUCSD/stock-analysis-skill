@@ -36,19 +36,21 @@ functions** (our core rule), same as the rest of `stockskill`.
 
 ---
 
-## Phase 1 — Technical-indicator foundation  (everything below depends on this)
+## Phase 1 — Technical-indicator foundation  ✅ DONE (`technicals/`, 18 tests)
 `src/stockskill/technicals/` — pure functions over a price/volume series, tested.
-- [ ] RSI (14, EWM)
-- [ ] MACD (12/26/9) + signal + histogram + crossover state
-- [ ] Bollinger Bands: MA20±2σ, position %, width %, squeeze detection
-- [ ] ATR (14) + historical volatility (30d annualized)
-- [ ] Moving averages SMA50/SMA200 + Golden/Death cross detection
-- [ ] Stochastic %K/%D, ADX, CCI, MFI, Williams %R
-- [ ] ROC, Volume ROC, OBV, volume bias (up/down), volume spike vs avg
-- [ ] Ichimoku (Tenkan/Kijun/Senkou A-B/Chikou), vectorized
-- [ ] Price-change metrics: Day / 5D / 1M / 6M / YTD / 1Y
-- [ ] Sparkline series (30d/5d/1m/6m/ytd/1y + volume)
-- [ ] Denoised P/E: P/E relative to 5Y average, P/E volatility (1Y std)
+- [x] RSI (14, EWM)
+- [x] MACD (12/26/9) + signal + histogram + crossover state
+- [x] Bollinger Bands: MA20±2σ, position %, width %, squeeze detection
+- [x] ATR (14) + historical volatility (30d annualized)
+- [x] Moving averages SMA50/SMA200 + Golden/Death cross detection
+- [x] Stochastic %K/%D, ADX, CCI, MFI, Williams %R
+- [x] ROC, Volume ROC, OBV, volume bias (up/down), volume spike vs avg
+- [x] Ichimoku (Tenkan/Kijun/Senkou A-B), vectorized
+- [x] Price-change metrics: Day / 5D / 1M / 6M / YTD / 1Y
+- [x] Sparkline series
+- [x] Denoised P/E: P/E relative to average, P/E volatility (std)
+- [x] OHLCV fetcher in the data layer (`data.ohlcv`) to feed the indicators
+- Note: 1Y change needs >252 bars; fetch >1y of history in Phase 3 so it fills.
 
 ## Phase 2 — Trading strategies, trend & signal confidence
 `src/stockskill/signals/` — deterministic signal states, configurable.
