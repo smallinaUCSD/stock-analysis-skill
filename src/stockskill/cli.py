@@ -461,9 +461,10 @@ def cmd_serve(args: argparse.Namespace) -> int:
     import os
     from .server import create_app
 
-    app = create_app(tickers_path=args.tickers, cache_dir=args.cache_dir)
+    app = create_app(tickers_path=args.tickers, cache_dir=args.cache_dir,
+                     holdings_path=args.holdings)
     url = f"http://{args.host}:{args.port}"
-    print(f"Live dashboard at {url}  (board at /, analyzer at /analyze; Ctrl-C to stop)")
+    print(f"Live dashboard at {url}  (board /, holdings /holdings, analyzer /analyze; Ctrl-C to stop)")
     if args.open:
         os.system(f"open {url!r}" if sys.platform == "darwin" else f"xdg-open {url!r}")
     app.run(host=args.host, port=args.port, debug=False)
@@ -738,6 +739,7 @@ def build_parser() -> argparse.ArgumentParser:
     sv.add_argument("--port", type=int, default=8787)
     sv.add_argument("--tickers", default="data/tickers.csv", help="watchlist ticker file")
     sv.add_argument("--cache-dir", help="per-ticker cache dir (e.g. .cache/stock_cache)")
+    sv.add_argument("--holdings", default="holdings.csv", help="holdings ledger (local only)")
     sv.add_argument("--open", action="store_true", help="open the browser after starting")
     sv.set_defaults(func=cmd_serve)
 

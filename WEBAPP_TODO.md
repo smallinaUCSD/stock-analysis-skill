@@ -42,14 +42,20 @@ Buttons that open a small modal which runs the feature live and shows the result
       live. New endpoints: /api/pulse, /api/lookthrough/<t>, /api/montecarlo/<t>
       (value/evaluate reuse /api/stock, /api/evaluate). All verified in-browser.
 
-## 6. Holdings dashboard (centralized, part of the app)
-- [ ] View holdings split by account: **brokerage / Roth IRA / 401k**.
-- [ ] **Execute trades** (buy/sell) that update internal values (reuse `holdings`).
-- [ ] **Deposit / withdraw cash** per account.
+## 6. Holdings dashboard (centralized, part of the app) — LOCAL ONLY
+- [x] View holdings split by account: **Brokerage / Roth IRA / 401(k)**, with
+      per-account + grand totals and stat tiles (total / invested / cash).
+- [x] **Record trades** (buy/sell, dollar-based) that update holdings.csv and
+      settle against the account's cash. Bookkeeping — never places a real order.
+- [x] **Deposit / withdraw cash** per account.
+- Served at `/holdings`; reachable from the board toolbar. holdings.csv stays
+  gitignored and is NEVER written to a static file or published to Pages.
+  Verified end-to-end against a copy (buy/sell/close/cash all reconcile).
 
 ## 7. Monte Carlo dashboard
-- [ ] A page/modal to simulate a stock: inputs (ticker, horizon, paths, method,
-      thresholds) → distribution + probability cone + up/down odds. (ML deep-dive later.)
+- [x] Delivered as the **Monte Carlo tool pop-up** (item 5): ticker + horizon
+      (1/3/6mo, 1y) + method (GBM/bootstrap) → E[r], P(up/gain/loss), VaR, and a
+      p5..p95 outcome cone. `/api/montecarlo/<ticker>`. (Deeper ML dive: future.)
 
 ## Notes
 - SpaceX / Oracle-2x handled via DXYZ / ORCX (verified live).

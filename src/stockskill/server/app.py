@@ -22,13 +22,17 @@ from flask import Flask, jsonify, request
 from ..analyze import analyze_ticker
 from .page import analyzer_html
 from .watchlist_service import WatchlistService
+from .holdings_service import HoldingsService
+from .holdings_page import holdings_html
 
 _TICKER_RE = re.compile(r"^[A-Za-z0-9.\-\^]{1,12}$")
 
 
-def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = None) -> Flask:
+def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = None,
+               holdings_path: str = "holdings.csv") -> Flask:
     app = Flask(__name__)
     board = WatchlistService(tickers_path=tickers_path, cache_dir=cache_dir)
+    holdings = HoldingsService(path=holdings_path)
 
     @app.get("/")
     def index():
@@ -37,6 +41,33 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
     @app.get("/analyze")
     def analyze():
         return analyzer_html()
+
+    # --- holdings (LOCAL ONLY — never written to a file or published) ---
+    @app.get("/holdings")
+    def holdings_page():
+        from datetime import datetime
+        from ..marketclock import ET
+        return holdings_html(holdings.snapshot(),
+                             updated=datetime.now(ET).strftime("%a %b %d, %I:%M %p") + " ET")
+
+    @app.get("/api/holdings")
+    def holdings_json():
+        return jsonify(holdings.snapshot())
+
+    @app.post("/api/holdings/trade")
+    def holdings_trade():
+        amt = request.args.get("amount", type=float)
+        settle = request.args.get("settle", "1") not in ("0", "false", "no")
+        res = holdings.trade(request.args.get("ticker", ""), request.args.get("account", ""),
+                             request.args.get("side", ""), amt or 0.0, settle_cash=settle)
+        return jsonify(res), (200 if res.get("ok") else 400)
+
+    @app.post("/api/holdings/cash")
+    def holdings_cash():
+        amt = request.args.get("amount", type=float)
+        res = holdings.cash(request.args.get("account", ""),
+                            request.args.get("direction", ""), amt or 0.0)
+        return jsonify(res), (200 if res.get("ok") else 400)
 
     @app.post("/api/watchlist/add")
     def watchlist_add():

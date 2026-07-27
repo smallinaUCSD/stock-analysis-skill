@@ -124,7 +124,8 @@ table.wl tr.item:hover td{background:var(--surface-2)}
 /* tools bar + tool modal */
 .toolsbar{display:flex;flex-wrap:wrap;gap:6px;margin-left:6px}
 .tool-b{font:600 12px inherit;padding:6px 11px;border-radius:9px;cursor:pointer;
-  background:var(--surface);border:1px solid var(--border);color:var(--ink)}
+  background:var(--surface);border:1px solid var(--border);color:var(--ink);
+  text-decoration:none;display:inline-flex;align-items:center}
 .tool-b:hover{border-color:var(--accent);color:var(--accent)}
 .tool-head h3{margin:0 34px 10px 0;font-size:17px}
 .tool-form{margin-bottom:10px}
@@ -749,6 +750,7 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
         '<button class="tool-b" onclick="openTool(\'evaluate\')">✅ Evaluate</button>'
         '<button class="tool-b" onclick="openTool(\'lookthrough\')">🔍 Look-through</button>'
         '<button class="tool-b" onclick="openTool(\'montecarlo\')">🎲 Monte Carlo</button>'
+        '<a class="tool-b" href="/holdings">💼 Holdings</a>'
         '</span>'
         '<span id="addmsg" class="muted"></span></div>'
     ) if served else ""
