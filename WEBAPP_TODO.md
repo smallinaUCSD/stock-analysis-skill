@@ -61,3 +61,12 @@ Buttons that open a small modal which runs the feature live and shows the result
 - SpaceX / Oracle-2x handled via DXYZ / ORCX (verified live).
 - The `--watch` static generation stays available for the cron/Pages path;
   the interactive app is the served version.
+
+## 8. Alerts (next milestone)
+- [x] **Earnings flag on cards**: yfinance next-earnings date -> a colored flag
+      (today / tomorrow / in Nd / next week) on the card + an "Earnings ≤7d"
+      filter chip. (fundamentals.next_earnings -> row.next_earnings -> card.)
+- [ ] **News**: relevant recent headlines per ticker (yfinance `.news`) shown in
+      the expanded card / a News pop-up. (self-contained; per-ticker fetch.)
+- [ ] **Macro alerts**: Fed decisions, jobs reports, large layoffs, etc. Needs an
+      events/news source — pick one (econ calendar API or curated feed). Design TBD.

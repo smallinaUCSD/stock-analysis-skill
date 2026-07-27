@@ -48,6 +48,7 @@ class TickerRow:
     week52_high: float | None = None
     week52_low: float | None = None
     week52_position: float | None = None                 # 0..1 within the 52w range
+    next_earnings: str | None = None                     # ISO date of next earnings
     # flags & tags
     flags: set = field(default_factory=set)
     categories: set = field(default_factory=set)
@@ -132,6 +133,7 @@ def build_row(td: TickerData, cfg: SignalConfig | None = None,
             rng = snap.fifty_two_week_high - snap.fifty_two_week_low
             if rng > 0:
                 row.week52_position = (row.price - snap.fifty_two_week_low) / rng
+        row.next_earnings = snap.next_earnings
         row.categories = detect_categories(td.ticker, snap.name, snap.sector,
                                             snap.quote_type, snap.dividend_annual)
         # Embed the analyzer valuation (reuses the fetched snapshot -- no network).
@@ -164,4 +166,19 @@ def _flags(r: TickerRow, cfg: SignalConfig) -> set:
         f.add("near_52w_high")
     if r.price and r.week52_low and r.price <= 1.01 * r.week52_low:
         f.add("near_52w_low")
+    if earnings_days(r.next_earnings) is not None and earnings_days(r.next_earnings) <= 7:
+        f.add("earnings_soon")
     return f
+
+
+def earnings_days(iso: str | None) -> int | None:
+    """Whole days from today until the ISO earnings date (None if unknown/past)."""
+    if not iso:
+        return None
+    try:
+        from datetime import date
+        y, m, d = (int(x) for x in iso.split("-"))
+        delta = (date(y, m, d) - date.today()).days
+        return delta if delta >= 0 else None
+    except Exception:
+        return None

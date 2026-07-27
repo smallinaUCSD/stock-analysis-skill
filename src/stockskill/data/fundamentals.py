@@ -116,6 +116,19 @@ def fetch_snapshot(ticker: str) -> FundamentalSnapshot:
 
     dividend = _first(info.get("dividendRate"), info.get("trailingAnnualDividendRate"))
 
+    # Next earnings date (upcoming only). yfinance gives unix timestamps in info;
+    # keep it only if it's today or later (else it's the last report).
+    next_earnings = None
+    ets = _first(info.get("earningsTimestampStart"), info.get("earningsTimestamp"))
+    if ets:
+        try:
+            from datetime import datetime, timezone
+            ed = datetime.fromtimestamp(ets, tz=timezone.utc).date()
+            if ed >= date.today():
+                next_earnings = ed.isoformat()
+        except Exception:
+            next_earnings = None
+
     return FundamentalSnapshot(
         ticker=ticker.upper(),
         as_of=date.today().isoformat(),
@@ -145,4 +158,5 @@ def fetch_snapshot(ticker: str) -> FundamentalSnapshot:
         fifty_two_week_high=info.get("fiftyTwoWeekHigh"),
         fifty_two_week_low=info.get("fiftyTwoWeekLow"),
         avg_volume=info.get("averageVolume"),
+        next_earnings=next_earnings,
     )

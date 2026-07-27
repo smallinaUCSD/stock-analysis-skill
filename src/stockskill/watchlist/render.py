@@ -21,6 +21,7 @@ _FLAG_LABEL = {
     "oversold": "Oversold", "overbought": "Overbought", "surge": "Surge",
     "crash": "Crash", "squeeze": "Squeeze", "vol_spike": "Vol spike",
     "near_52w_high": "52w High", "near_52w_low": "52w Low",
+    "earnings_soon": "Earnings ≤7d",
 }
 _CAT_LABEL = {"tech": "Tech", "leveraged": "Leveraged", "etf": "ETF", "dividend": "Dividend"}
 _EXT_LINKS = [
@@ -97,6 +98,10 @@ table.wl tr.item:hover td:first-child{background:var(--surface-2)}
 .card-item{cursor:pointer;position:relative;transition:border-color .12s}
 .card-item:hover{border-color:var(--accent)}
 .trendline{font-size:12.5px;font-weight:650;margin:1px 0 6px}
+.erflag{display:inline-block;font-size:10.5px;font-weight:650;padding:2px 7px;border-radius:6px;margin:0 0 6px}
+.erflag.er-now{background:var(--crit);color:#fff}
+.erflag.er-soon{background:var(--warn);color:#111}
+.erflag.er-wk{background:var(--surface-2);border:1px solid var(--border);color:var(--muted)}
 .details-cta{margin-top:8px;padding-top:8px;border-top:1px solid var(--border);
   text-align:center;font-size:11.5px;font-weight:650;color:var(--accent)}
 .card-detail{display:none;margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);cursor:default}
@@ -475,6 +480,23 @@ def _card_detail(r):
             f'{_chart_html(r)}{ts_sec}{_options_html(r)}{_valuation_html(r)}</div>')
 
 
+def _earnings_badge(r):
+    """A small flag on the card when earnings are within two weeks."""
+    from .row import earnings_days
+    d = earnings_days(getattr(r, "next_earnings", None))
+    if d is None or d > 14:
+        return ""
+    if d == 0:
+        txt, cls = "Earnings today", "er-now"
+    elif d == 1:
+        txt, cls = "Earnings tomorrow", "er-now"
+    elif d <= 6:
+        txt, cls = f"Earnings in {d}d", "er-soon"
+    else:
+        txt, cls = "Earnings next week", "er-wk"
+    return f'<span class="erflag {cls}">📅 {txt}</span>'
+
+
 def _card_html(r):
     if r.error or r.price is None:
         return (f'<div class="card-item item" {_data_attrs(r)}>'
@@ -496,6 +518,7 @@ def _card_html(r):
         f'<span class="card-price">${r.price:,.2f} <span class="{dcls}" style="font-size:13px">{dtxt}</span></span></div>'
         f'<div class="nm">{html.escape((r.name or "")[:34])}</div>'
         f'<div class="trendline {tcls}">{html.escape(trend_word)} <span class="muted">· trend {r.trend_score:+.0f}</span></div>'
+        f'{_earnings_badge(r)}'
         f'<div class="card-spark">{_spark(r.sparkline, w=222, h=34)}</div>'
         f'<div style="margin:4px 0">{_indicator_chips(r)}</div>'
         + mrow("1M", r.changes.get("1m")) + mrow("1Y", r.changes.get("1y"))
@@ -536,7 +559,7 @@ def _chip_bar(rows):
         if s in signals:
             out.append(chip("signal", s, f"{_SIG_EMOJI.get(s,'')} {s}"))
     for fl in ("oversold", "overbought", "surge", "crash", "squeeze", "vol_spike",
-               "near_52w_high", "near_52w_low"):
+               "near_52w_high", "near_52w_low", "earnings_soon"):
         if fl in flags:
             out.append(chip("condition", fl, _FLAG_LABEL[fl]))
     for cat in ("tech", "leveraged", "etf", "dividend"):
