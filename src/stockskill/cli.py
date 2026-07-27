@@ -506,13 +506,18 @@ def _generate_watchlist(args) -> str:
     sec_pm = price_map(list(SECTOR_ETFS), period="3mo")
     sectors = [(r.name, r.ticker, r.returns.get("1m")) for r in sector_table(sec_pm, "1m")]
 
+    # markets panel (indices / commodities / crypto) — live like the stocks
+    from .pulse import market_quotes, all_market_tickers
+    mkt_pm = price_map(all_market_tickers(), period="5d")
+    markets = market_quotes(mkt_pm)
+
     status = market_status()
     refresh = _refresh_seconds_for(status, getattr(args, "interval", None))
     now = datetime.now(ET)
     html_out = render_watchlist(
         rows, title="Watchlist", updated=now.strftime("%a %b %d, %I:%M %p") + " ET",
         status_badge=status.badge, status_label=status.label, alerts=alerts,
-        sectors=sectors, refresh_seconds=refresh)
+        sectors=sectors, markets=markets, refresh_seconds=refresh)
     with open(args.out, "w") as f:
         f.write(html_out)
     ok = sum(1 for r in rows if r.price is not None)

@@ -21,9 +21,9 @@ feature reachable as a pop-up. The static HTML generators stay for cron/offline.
 - [x] Make the **close (✕) button bigger / easier to hit**.
 
 ## 3. Layout (all views)
-- [ ] **Left panel**: condensed sector performance — always visible.
-- [ ] **Right panel**: commodities (indices/metals/crypto), live-updating like stocks.
-- [ ] Move the **filter chips below** the two panels.
+- [x] **Left panel**: condensed sector performance — always visible (no longer collapsible).
+- [x] **Right panel**: Markets — indices/metals/crypto, refreshed with the page like stocks.
+- [x] Move the **filter chips below** the two panels.
 
 ## 4. Serve the watchlist as THE live dashboard (architecture shift)
 - [ ] `serve` home = the watchlist (cards/table/heatmap), served from Flask.

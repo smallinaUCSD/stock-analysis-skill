@@ -107,12 +107,22 @@ table.wl tr.item:hover td{background:var(--surface-2)}
 #modal-body .card-detail{display:block}
 #modal-body .details-cta{display:none}
 #modal-body .card-item{cursor:default;border:none;padding:0}
-/* sector performance */
-details.sectors{background:var(--surface);border:1px solid var(--border);border-radius:12px;
-  padding:10px 14px;margin-bottom:14px}
-details.sectors summary{cursor:pointer;font-size:12.5px;font-weight:650;color:var(--muted);
-  text-transform:uppercase;letter-spacing:.04em;list-style:none}
-details.sectors summary::-webkit-details-marker{display:none}
+/* left/right panels (sectors + markets), always visible */
+.panels{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+@media (max-width:720px){.panels{grid-template-columns:1fr}}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 14px}
+.panel-h{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.04em;margin-bottom:6px}
+.panel-body{max-height:230px;overflow:auto}
+.mkgroup{font-size:9.5px;font-weight:700;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.05em;margin:6px 0 2px;opacity:.75}
+.mkgroup:first-child{margin-top:0}
+.mkrow{display:grid;grid-template-columns:1fr auto 62px;align-items:baseline;gap:8px;
+  padding:2px 0;font-size:12.5px}
+.mkname{color:var(--ink)}
+.mkpx{font-variant-numeric:tabular-nums;color:var(--muted)}
+.mkchg{text-align:right;font-variant-numeric:tabular-nums;font-weight:650}
+.mkchg.up{color:var(--up)} .mkchg.down{color:var(--down)}
 .secrow{display:grid;grid-template-columns:120px 1fr 54px;align-items:center;gap:8px;padding:2px 0;font-size:12px}
 .secname{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted)}
 .secbar{display:flex;align-items:center;height:12px}
@@ -493,7 +503,8 @@ def _banner(alerts, cap=14):
 def _sector_html(sectors):
     present = [(n, t, r) for (n, t, r) in (sectors or []) if r is not None]
     if not present:
-        return ""
+        return '<section class="panel"><div class="panel-h">Sector performance · 1M</div>' \
+               '<div class="muted" style="font-size:12px">unavailable</div></section>'
     mx = max(abs(r) for _, _, r in present) or 0.01
     rows = []
     for name, tk, r in sorted(present, key=lambda x: x[2], reverse=True):
@@ -506,14 +517,41 @@ def _sector_html(sectors):
             f'<div class="secbar"><div class="sechalf neg">{neg}</div>'
             f'<div class="secaxis"></div><div class="sechalf pos">{pos}</div></div>'
             f'<div class="secval {cls}">{r*100:+.1f}%</div></div>')
-    return ('<details class="sectors"><summary>Sector performance (1m) ▾</summary>'
-            '<div style="margin-top:8px">' + "".join(rows) + '</div></details>')
+    return ('<section class="panel"><div class="panel-h">Sector performance · 1M</div>'
+            '<div class="panel-body">' + "".join(rows) + '</div></section>')
+
+
+_MKT_GROUP_LABEL = {"index": "Indices", "commodity": "Commodities", "crypto": "Crypto"}
+
+
+def _markets_html(markets):
+    quotes = [q for q in (markets or []) if q.last is not None]
+    if not quotes:
+        return '<section class="panel"><div class="panel-h">Markets</div>' \
+               '<div class="muted" style="font-size:12px">unavailable</div></section>'
+    rows = []
+    last_group = None
+    for q in quotes:
+        if q.group != last_group:
+            rows.append(f'<div class="mkgroup">{_MKT_GROUP_LABEL.get(q.group, q.group)}</div>')
+            last_group = q.group
+        chg = q.change
+        ccls = "up" if (chg or 0) >= 0 else "down"
+        chg_txt = f"{chg*100:+.2f}%" if chg is not None else "—"
+        px = f"${q.last:,.2f}" if q.last < 100 else f"${q.last:,.0f}"
+        rows.append(
+            f'<div class="mkrow"><span class="mkname">{html.escape(q.name)}</span>'
+            f'<span class="mkpx">{px}</span>'
+            f'<span class="mkchg {ccls}">{chg_txt}</span></div>')
+    return ('<section class="panel"><div class="panel-h">Markets</div>'
+            '<div class="panel-body">' + "".join(rows) + '</div></section>')
 
 
 def render_watchlist(rows, title="Watchlist", updated="", status_badge="", status_label="",
-                     alerts=None, sectors=None, refresh_seconds=1800):
+                     alerts=None, sectors=None, markets=None, refresh_seconds=1800):
     banner, _sig = _banner(alerts or [])
     sector_html = _sector_html(sectors)
+    markets_html = _markets_html(markets)
     table = "".join(_row_html(r) for r in rows)
     cards = "".join(_card_html(r) for r in rows)
     tiles = "".join(_tile_html(r) for r in rows)
@@ -540,8 +578,8 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
   <span class="count" id="count">{ok} of {len(rows)} tickers</span>
   <button class="tbtn" onclick="toggleTheme()" style="margin-left:auto">◐ Theme</button>
 </div>
+<div class="panels">{sector_html}{markets_html}</div>
 <div class="chips">{chips}<button class="chip-f" onclick="clearChips()">Clear</button></div>
-{sector_html}
 <div id="view-table" class="view active"><div class="tablewrap"><table class="wl" id="wl">
 <thead><tr>{heads}</tr></thead><tbody>{table}</tbody></table></div></div>
 <div id="view-card" class="view"><div class="cards">{cards}</div></div>
