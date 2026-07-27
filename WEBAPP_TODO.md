@@ -68,8 +68,9 @@ Buttons that open a small modal which runs the feature live and shows the result
       filter chip. (fundamentals.next_earnings -> row.next_earnings -> card.)
 - [x] **News (A1)**: recent per-ticker headlines (yfinance `.news`) in the
       expanded card — clickable, publisher · age. `GET /api/news/<ticker>`.
-- [x] **Macro alerts (A2)**: FOMC decision countdown (curated, verified 2026
-      calendar) + a keyword scan of market-news headlines (layoffs / Fed / jobs /
-      inflation / tariffs), both prepended to the alert marquee. `data/macro.py`.
+- [x] **Macro alerts (A2)**: a dedicated **Macro panel** (3rd panel, not the
+      sliding marquee): Rates & vol (VIX, 10Y yield, DXY), the next Fed decision
+      (verified 2026 FOMC calendar), and scanned market-event headlines (layoffs /
+      Fed / jobs / inflation / tariffs). `data/macro.py` + build `_macro_panel`.
       (CPI/jobs exact release dates intentionally not hardcoded — the news scan
       catches them when topical, avoiding wrong dates.)

@@ -175,9 +175,16 @@ table.wl th:nth-child(15),table.wl td:nth-child(15){text-align:left}
 .mc-row b.up{color:var(--up)} .mc-row b.down{color:var(--down)}
 .mc-bar{height:9px;background:var(--surface-2);border-radius:5px;overflow:hidden}
 .mc-fill{height:9px;border-radius:5px} .mc-fill.up{background:var(--up)} .mc-fill.down{background:var(--down)}
-/* left/right panels (sectors + markets), always visible */
-.panels{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
-@media (max-width:720px){.panels{grid-template-columns:1fr}}
+/* panels (sectors + markets + macro), always visible */
+.panels{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px}
+@media (max-width:980px){.panels{grid-template-columns:1fr 1fr}}
+@media (max-width:640px){.panels{grid-template-columns:1fr}}
+.macro-fomc{font-size:12.5px;padding:2px 0}
+.macro-fomc b{font-weight:700}
+.macro-ev{display:block;text-decoration:none;color:var(--ink);font-size:12px;
+  line-height:1.35;padding:3px 0;border-bottom:1px dashed var(--border)}
+.macro-ev:last-child{border-bottom:none}
+a.macro-ev:hover{color:var(--accent)}
 .panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 14px}
 .panel-h{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
   letter-spacing:.04em;margin-bottom:6px}
@@ -699,6 +706,47 @@ def _markets_html(markets):
             '<div class="panel-body">' + "".join(rows) + '</div></section>')
 
 
+def _macro_html(macro):
+    """Macro-trends panel: rate/vol gauges, next Fed decision, event headlines."""
+    macro = macro or {}
+    body = ""
+    inds = [i for i in macro.get("indicators", []) if i.get("display") not in (None, "—")]
+    if inds:
+        rows = []
+        for i in inds:
+            chg = i.get("change")
+            ccls = "up" if (chg or 0) >= 0 else "down"
+            chg_txt = f"{chg*100:+.2f}%" if chg is not None else "—"
+            rows.append(
+                f'<div class="mkrow"><span class="mkname">{html.escape(i["name"])}</span>'
+                f'<span class="mkpx">{html.escape(str(i["display"]))}</span>'
+                f'<span class="mkchg {ccls}">{chg_txt}</span></div>')
+        body += '<div class="mkgroup">Rates &amp; vol</div>' + "".join(rows)
+
+    fomc = macro.get("fomc")
+    if fomc:
+        iso, days = fomc
+        when = "today" if days == 0 else ("tomorrow" if days == 1 else f"in {days}d")
+        body += ('<div class="mkgroup">Fed</div>'
+                 f'<div class="macro-fomc">🏛️ Fed decision (FOMC) <b>{when}</b> '
+                 f'<span class="muted">· {html.escape(iso)}</span></div>')
+
+    events = macro.get("events", [])
+    if events:
+        ev = []
+        for e in events:
+            inner = f'{e.get("emoji","")} {html.escape(e.get("title",""))}'
+            url = e.get("url") or ""
+            ev.append(f'<a class="macro-ev" href="{html.escape(url)}" target="_blank" rel="noopener">{inner}</a>'
+                      if url else f'<div class="macro-ev">{inner}</div>')
+        body += '<div class="mkgroup">Market events</div>' + "".join(ev)
+
+    if not body:
+        body = '<div class="muted" style="font-size:12px">no macro data</div>'
+    return ('<section class="panel"><div class="panel-h">Macro</div>'
+            '<div class="panel-body">' + body + '</div></section>')
+
+
 _SERVED_JS = r"""
 let _addResults=[], _addTimer=null;
 function addMsg(t,cls){ const m=document.getElementById('addmsg'); if(m){ m.textContent=t||''; m.className=(cls||'muted'); } }
@@ -830,10 +878,11 @@ function _mcCone(p){ const keys=['p95','p75','p50','p25','p5']; const vals=keys.
 
 def render_watchlist(rows, title="Watchlist", updated="", status_badge="", status_label="",
                      alerts=None, sectors=None, markets=None, refresh_seconds=1800,
-                     served=False, updated_ts=None):
+                     served=False, updated_ts=None, macro=None):
     banner, _sig = _banner(alerts or [])
     sector_html = _sector_html(sectors)
     markets_html = _markets_html(markets)
+    macro_html = _macro_html(macro)
     add_html = (
         '<div class="addbar"><div class="addwrap">'
         '<input id="addq" placeholder="Add ticker (e.g. NVDA or &quot;oracle&quot;)…" '
@@ -885,7 +934,7 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
   <button class="tbtn" onclick="toggleTheme()" style="margin-left:auto">◐ Theme</button>
 </div>
 {add_html}
-<div class="panels">{sector_html}{markets_html}</div>
+<div class="panels">{sector_html}{markets_html}{macro_html}</div>
 <div class="chips">{chips}<button class="chip-f" onclick="clearChips()">Clear</button></div>
 <div id="view-table" class="view active"><div class="tablewrap"><table class="wl" id="wl">
 <thead><tr>{heads}</tr></thead><tbody>{table}</tbody></table></div></div>
