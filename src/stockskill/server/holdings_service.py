@@ -84,12 +84,13 @@ class HoldingsService:
             if shares is None and price and r.market_value:
                 shares = r.market_value / price
             value = (shares * price) if (shares is not None and price) else (r.market_value or 0.0)
+            value = round(value, 2)   # avoid float noise from value/price*price round-trips
             today_pct = (price / prev - 1) if (price and prev) else None
-            today_dollar = (shares * (price - prev)) if (shares is not None and price and prev) else None
+            today_dollar = round(shares * (price - prev), 2) if (shares is not None and price and prev) else None
             cost = r.cost_basis
             net_pct = (price / cost - 1) if (price and cost) else None
-            net_dollar = (shares * (price - cost)) if (shares is not None and price and cost) else None
-            cost_total = (shares * cost) if (shares is not None and cost) else None
+            net_dollar = round(shares * (price - cost), 2) if (shares is not None and price and cost) else None
+            cost_total = round(shares * cost, 2) if (shares is not None and cost) else None
             a["positions"].append({
                 "ticker": r.ticker, "shares": shares, "price": price,
                 "cost_basis": cost, "cost_total": cost_total, "market_value": value,
