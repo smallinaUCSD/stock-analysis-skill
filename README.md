@@ -4,10 +4,12 @@ A reproducible stock-analysis toolkit and dashboard for Claude. **The model
 never does the math** — every number is produced by tested Python in the
 `stockskill` package. Same inputs → same output, provable by re-running.
 
-It combines two things most tools keep separate:
+It combines three things most tools keep separate:
 - **Fundamental depth** — DCF valuation, portfolio look-through leverage, risk.
-- **Technical breadth** — 30+ indicators, trading signals, a multi-view
-  watchlist dashboard, alerts, trade setups, and a market-pulse radar.
+- **Technical breadth** — 30+ indicators, trading signals, alerts, trade setups,
+  a market-pulse radar, and Monte Carlo simulation.
+- **One live web app** (`serve`) — a multi-view watchlist board, a per-account
+  holdings dashboard, and every analysis tool reachable as a pop-up.
 
 See [SKILL.md](SKILL.md) for how Claude uses this, [`references/`](references/)
 for methodology, and [ROADMAP.md](ROADMAP.md) for what's built and what's next.
@@ -15,22 +17,23 @@ for methodology, and [ROADMAP.md](ROADMAP.md) for what's built and what's next.
 ## Quickstart
 
 ```bash
-uv run pytest -q                              # the tested math (108+ tests)
+uv run pytest -q                              # the tested math (135 tests)
 
-# analysis
+# the live app — this is the main way to use it
+uv run stockskill serve --open                # live dashboard: watchlist board + holdings + tools
+
+# analysis (CLI)
 uv run stockskill value NVDA --growth 0.15    # fair value: DCF + reverse DCF + multiples
 uv run stockskill screen --lane core          # rank a universe into a shortlist
 uv run stockskill pulse                        # market pulse: sectors, breadth, regime, sentiment
 uv run stockskill evaluate NVDA buy --price 207 --stop 190 --target 250   # score a trade
 
-# the dashboards
+# static / offline dashboards (for cron + GitHub Pages)
 uv run stockskill smart-watchlist             # build a dynamic pinned + growth/value/sector list
-uv run stockskill watchlist --open            # multi-ticker technical dashboard
-uv run stockskill watchlist --watch           # ...live, refreshing during market hours
+uv run stockskill watchlist --open            # multi-ticker technical dashboard -> HTML file
 uv run stockskill dashboard --open            # market pulse + your portfolio
-uv run stockskill serve --open                # interactive: search any ticker
 
-# portfolio & holdings
+# portfolio & holdings (CLI)
 uv run stockskill portfolio                   # look-through leverage, concentration
 uv run stockskill lookthrough                 # true underlying exposure of leveraged ETFs
 uv run stockskill decay --multiplier 3        # leveraged-ETF volatility decay
@@ -46,36 +49,53 @@ uv run stockskill holdings buy AAPU 10 --price 45   # update holdings from a tra
 | `pulse` | Market radar: a market bar (indices/commodities/crypto), sector & factor rotation, breadth, a regime snapshot (VIX, yield curve, credit, leadership), CVR3, CNN Fear & Greed, rotation-leader detection, and a **commodity climate** read (copper = growth, gold = fear). |
 | `evaluate TICKER buy\|sell\|short` | Score a **proposed trade** factor-by-factor (valuation, technical signal, trend, RSI, analyst consensus, risk/reward) into an alignment scorecard — analysis, not a yes/no. |
 | `smart-watchlist` | Build a **dynamic** ticker list: pinned staples (always kept) + ~25 rotating picks by growth, undervaluation, and leading sectors — each with its 2x/3x leveraged ETF. |
-| `watchlist` | The multi-ticker **dashboard** (see below). |
+| `watchlist` | Renders the multi-ticker dashboard to a **static HTML file** (for cron/Pages). The same board is served live by `serve` (see below). |
 | `dashboard` | Self-contained HTML of the market pulse + your portfolio look-through, with a market-status badge and self-refresh. |
-| `serve` | Local Flask app to **search any ticker** and get live valuation, bear/base/bull, analyst consensus, and an options snapshot. |
+| `serve` | The **live web app** (Flask): the watchlist board at `/`, a holdings dashboard at `/holdings`, the ticker analyzer at `/analyze`, and Evaluate / Look-through / Monte Carlo tool pop-ups. |
 | `portfolio` / `lookthrough` | Portfolio look-through: expands leveraged/basket ETFs into true underlying $ exposure, effective leverage, HHI concentration, factor groups. |
 | `decay` | Leveraged-ETF volatility decay via Monte Carlo or a real price path. |
 | `holdings buy\|sell\|list\|reprice` | Maintain `holdings.csv` from trades (shares-based, reprices to latest). |
 
-## The watchlist dashboard
+## The live app (`serve`)
 
-`stockskill watchlist` builds a self-contained HTML dashboard over your
-[`data/tickers.csv`](data/tickers.csv) (sectioned: `[M7]`, `[MEME]`, …). It
-fetches every ticker **in parallel** (with an on-disk cache) and computes
+`stockskill serve` is the main interface — one Flask app that unifies the
+watchlist, holdings, and analysis tools. It builds the board over your
+[`data/tickers.csv`](data/tickers.csv) (sectioned: `[M7]`, `[SEMIS]`, …),
+fetching every ticker **in parallel** (with an on-disk cache) and computing
 everything from the tested indicator + signal libraries.
 
-- **Three views** — Table (sortable, sparklines), **Cards**, Heatmap — with a
-  view toggle, live search, and light/dark theme, all persisted.
-- **Faceted filter chips** — signal / condition (oversold, squeeze, surge…) /
-  category (tech, leveraged, ETF, dividend) / section (M7, MEME…).
-- **Sector-performance strip** — 1-month diverging bars.
+**The board (`/`)**
+- **Three views** — Table (sortable, sparklines, a frozen Ticker column when you
+  scroll sideways), **Cards**, Heatmap — with live search and light/dark theme.
+- **Two always-on panels** — sector performance (left) and a live Markets panel
+  (right: indices, commodities, crypto) — with the **filter chips** below them.
+- **Add-ticker box** with live autocomplete (name or symbol) that fetches and
+  adds a ticker to the board on the fly.
+- **Faceted filter chips** — signal / condition (oversold, squeeze, earnings ≤7d…)
+  / category / section.
 - **Alert banner** — 52w highs/lows, surges/crashes, volume spikes, squeezes,
   active signals, and your custom `data/alerts.json`. Dismissible.
-- **Click a card → a modal mini-window** with the full detail: the trade setup
-  (ATR entry/stop/target + position sizing, for BUY/SHORT), buy calls/puts
-  options ideas, and the **stock-analyzer valuation** (fair value bear/base/bull,
-  valuation signal, reverse-DCF implied growth, analyst consensus).
-- **Realtime** — `--watch` regenerates on a market-aware cadence (~60s open,
-  5m extended, 30m closed) and the page auto-refresh matches.
+- **Earnings flag** on each card — today / tomorrow / in N days / next week.
+- **Click a card → a modal** with the full detail: an **interactive price chart**
+  (1M–5Y/Max, real axes, hover shows date + price), the trade setup (ATR
+  entry/stop/target + position sizing), options ideas, and the **stock-analyzer
+  valuation** (fair value bear/base/bull, signal, reverse-DCF growth, consensus).
+- **Live** — the server caches on a market-aware cadence (~60s open, 5m extended,
+  30m closed); the page refreshes to match.
 
-Signals are **rule-based indicator states, not investment advice** — the tool
-shows analysis and trade-offs; the decision is yours.
+**Tool pop-ups** — Evaluate a trade, leverage Look-through, and Monte Carlo run
+live in a modal (`/api/evaluate`, `/api/lookthrough`, `/api/montecarlo`).
+
+**Holdings dashboard (`/holdings`, local only)** — opens in a new tab; positions
+split by account (Brokerage / Roth IRA / 401(k)) with shares, live price,
+today's gain, net gain, cost basis, value and % of account; cash as Fidelity
+SPAXX; summary tiles (total, current value, cost basis, cash, day change).
+Record trades (bookkeeping — buy/sell, optional price/share to track cost basis)
+and deposit/withdraw cash. `holdings.csv` is gitignored and **never published**.
+
+The `watchlist` command renders the same board to a **static HTML file** for the
+cron/GitHub-Pages path. Signals are **rule-based indicator states, not investment
+advice** — the tool shows analysis and trade-offs; the decision is yours.
 
 ### Dynamic (smart) watchlist
 
@@ -115,9 +135,10 @@ src/stockskill/
   pulse/        sector/factor rotation, breadth, regime, market bar, sentiment
   trade/        ATR trade setup, position sizing, options-strategy suggestions
   alerts/       auto + custom alert engine
-  watchlist/    ticker parsing, parallel pipeline, row model, dashboard render
+  montecarlo/   GBM + bootstrap price simulation (E[r], probability cone, VaR)
+  watchlist/    ticker parsing, parallel pipeline, row model, board build + render
   dashboard/    pulse+portfolio HTML dashboard
-  server/       Flask interactive analyzer + symbol search
+  server/       Flask live app: board + holdings services/pages, analyzer, tool APIs
   data/         yfinance adapters (fundamentals, OHLCV, options, search)
   leverage/     leveraged-ETF registry (look-through)
 ```

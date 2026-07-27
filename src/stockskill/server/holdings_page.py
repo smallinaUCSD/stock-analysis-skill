@@ -101,10 +101,9 @@ def holdings_html(snap: dict, updated: str = "") -> str:
 <header><h1>Holdings</h1>
   <span class="status closed">LOCAL ONLY</span>
   <span class="sub" style="margin:0">Updated {html.escape(updated)}</span>
-  <button class="tbtn" onclick="window.close()" style="margin-left:auto">✕ Close tab</button></header>
-<p class="muted" style="font-size:12px;margin:-6px 0 14px">
-  <a href="/">← back to watchlist</a> &nbsp;·&nbsp; Private &amp; local — never published.
-  Trades here are bookkeeping to mirror your brokerage; nothing is sent to a broker.</p>
+  <button class="h-close" onclick="window.close()" title="Close tab" style="margin-left:auto">✕</button></header>
+<p style="font-size:12px;margin:-6px 0 14px">
+  <a class="h-back" href="/">← back to watchlist</a></p>
 
 <div class="h-tiles">
   <div class="h-tile"><span>Total</span><b>{_money(snap.get("grand_total"))}</b></div>
@@ -185,8 +184,15 @@ _EXTRA_CSS = """
 .h-tiles{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px}
 .h-tile{flex:1 1 140px;background:var(--surface);border:1px solid var(--border);
   border-radius:12px;padding:12px 16px}
-.h-tile span{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
-.h-tile b{font-size:23px;font-variant-numeric:tabular-nums}
+.h-tile>span{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.h-tile b{font-size:23px;font-weight:700;font-variant-numeric:tabular-nums}
+/* softer back link + circular close (matches the card modal ✕) */
+.h-back{color:var(--muted);text-decoration:none}
+.h-back:hover{color:var(--ink);text-decoration:underline}
+.h-close{width:34px;height:34px;border:1px solid var(--border);border-radius:50%;
+  background:var(--surface-2);color:var(--ink);font-size:17px;cursor:pointer;line-height:1;
+  display:flex;align-items:center;justify-content:center}
+.h-close:hover{background:var(--crit);color:#fff;border-color:transparent}
 /* accounts stacked vertically */
 .h-accounts{display:flex;flex-direction:column;gap:12px;margin-bottom:18px}
 .h-acct{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 16px}
