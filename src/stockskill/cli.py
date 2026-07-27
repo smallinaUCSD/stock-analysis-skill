@@ -467,7 +467,8 @@ def cmd_serve(args: argparse.Namespace) -> int:
     print(f"Live dashboard at {url}  (board /, holdings /holdings, analyzer /analyze; Ctrl-C to stop)")
     if args.open:
         os.system(f"open {url!r}" if sys.platform == "darwin" else f"xdg-open {url!r}")
-    app.run(host=args.host, port=args.port, debug=False)
+    # threaded so API calls (news, tools) aren't blocked while the board refetches
+    app.run(host=args.host, port=args.port, debug=False, threaded=True)
     return 0
 
 

@@ -831,8 +831,9 @@ function _newsSec(inner){ return '<div class="det-sec"><div class="det-h">Recent
 function loadNews(root){
   const el=root.querySelector('.cardnews'); if(!el) return;
   const t=el.dataset.ticker; if(!t) return;
+  const nm=(root.querySelector('.nm')||{}).textContent||'';
   el.innerHTML=_newsSec('<div class="muted" style="font-size:12px">loading…</div>');
-  fetch('/api/news/'+encodeURIComponent(t)).then(r=>r.json()).then(d=>{
+  fetch('/api/news/'+encodeURIComponent(t)+(nm?'?name='+encodeURIComponent(nm):'')).then(r=>r.json()).then(d=>{
     const items=(d.items||[]);   // already ranked most-recent first by the server
     if(!items.length){ el.innerHTML=_newsSec('<div class="muted" style="font-size:12px">No recent news.</div>'); return; }
     const rows=items.map(n=>{

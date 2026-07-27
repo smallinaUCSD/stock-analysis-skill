@@ -45,7 +45,38 @@ def _url(c: dict) -> str:
     return c.get("link") or ""
 
 
-def fetch_news(ticker: str, limit: int = 6) -> list[dict]:
+# dropped when tokenizing a company name for relevance matching
+_NAME_STOP = {"inc", "inc.", "corp", "corp.", "corporation", "co", "co.", "company",
+              "ltd", "plc", "sa", "nv", "ag", "holdings", "holding", "group",
+              "technologies", "technology", "systems", "the", "class", "cl", "&",
+              "com", "incorporated", "limited", "companies", "international", "intl"}
+
+
+def _name_tokens(name: str | None) -> list[str]:
+    if not name:
+        return []
+    toks = []
+    for t in name.replace(",", " ").replace(".", " ").lower().split():
+        if t in _NAME_STOP or len(t) < 3:
+            continue
+        toks.append(t)
+    return toks
+
+
+def _relevant(text: str, ticker: str, tokens: list[str]) -> bool:
+    low = text.lower()
+    if ticker.lower() in low:
+        return True
+    return any(tok in low for tok in tokens)
+
+
+def fetch_news(ticker: str, limit: int = 6, name: str | None = None) -> list[dict]:
+    """Recent, company-relevant headlines, newest first.
+
+    When ``name`` is given, keep only items whose headline/summary mentions the
+    ticker or a company-name token (drops broad market roundups). Falls back to
+    the unfiltered set if that would leave nothing.
+    """
     import yfinance as yf
 
     try:
@@ -53,6 +84,7 @@ def fetch_news(ticker: str, limit: int = 6) -> list[dict]:
     except Exception:  # noqa: BLE001
         return []
 
+    tokens = _name_tokens(name)
     out: list[dict] = []
     for item in raw:
         if not isinstance(item, dict):
@@ -63,6 +95,7 @@ def fetch_news(ticker: str, limit: int = 6) -> list[dict]:
         title = (c.get("title") or "").strip()
         if not title:
             continue
+        summary = (c.get("summary") or c.get("description") or "")
         prov = c.get("provider")
         publisher = prov.get("displayName") if isinstance(prov, dict) else (c.get("publisher") or "")
         pub = _iso(c.get("pubDate") or c.get("displayTime") or c.get("providerPublishTime"))
@@ -73,14 +106,20 @@ def fetch_news(ticker: str, limit: int = 6) -> list[dict]:
             "published": pub or "",
             "age": _age(pub),
             "_ts": _epoch(pub),
+            "_rel": _relevant(title + " " + summary, ticker, tokens),
             "type": (c.get("contentType") or "").upper(),
         })
 
-    # rank most-recent first, then keep the top ``limit`` (undated sort last)
-    out.sort(key=lambda n: n["_ts"], reverse=True)
-    for n in out:
+    # keep only company-relevant items when we can tell them apart
+    relevant = [n for n in out if n["_rel"]]
+    kept = relevant if relevant else out
+
+    # rank most-recent first, then take the top ``limit`` (undated sort last)
+    kept.sort(key=lambda n: n["_ts"], reverse=True)
+    for n in kept:
         n.pop("_ts", None)
-    return out[:limit]
+        n.pop("_rel", None)
+    return kept[:limit]
 
 
 def _epoch(iso: str | None) -> float:

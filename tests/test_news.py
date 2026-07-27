@@ -56,3 +56,38 @@ def test_fetch_news_ranks_most_recent_first_and_limits(monkeypatch):
     out = fetch_news("AAPL", limit=3)
     assert [n["title"] for n in out] == ["newest", "middle", "older"]  # undated dropped by limit
     assert "_ts" not in out[0]   # internal sort key stripped
+
+
+def test_fetch_news_filters_to_company_relevant(monkeypatch):
+    def item(title, iso):
+        return {"content": {"title": title, "summary": "", "pubDate": iso,
+                            "provider": {"displayName": "P"},
+                            "clickThroughUrl": {"url": "https://x/" + title.replace(' ', '')}}}
+    fake = [
+        item("S&P and Nasdaq dip as investors focus on tech earnings", "2026-07-27T12:00:00Z"),
+        item("Apple hits record high before earnings", "2026-07-27T09:00:00Z"),
+        item("Fed holds rates steady", "2026-07-27T08:00:00Z"),
+    ]
+
+    class _T:
+        def __init__(self, *a, **k): self.news = fake
+
+    monkeypatch.setattr("yfinance.Ticker", _T, raising=False)
+    out = fetch_news("AAPL", limit=6, name="Apple Inc.")
+    titles = [n["title"] for n in out]
+    assert titles == ["Apple hits record high before earnings"]   # market/Fed roundups dropped
+
+
+def test_fetch_news_falls_back_when_nothing_relevant(monkeypatch):
+    def item(title):
+        return {"content": {"title": title, "summary": "",
+                            "provider": {"displayName": "P"}, "pubDate": "2026-07-27T10:00:00Z",
+                            "clickThroughUrl": {"url": "https://x/" + title.replace(' ', '')}}}
+    fake = [item("Broad market rally continues"), item("Bonds sell off")]
+
+    class _T:
+        def __init__(self, *a, **k): self.news = fake
+
+    monkeypatch.setattr("yfinance.Ticker", _T, raising=False)
+    out = fetch_news("AAPL", limit=6, name="Apple Inc.")
+    assert len(out) == 2   # nothing matched -> fall back to all (don't blank the section)
