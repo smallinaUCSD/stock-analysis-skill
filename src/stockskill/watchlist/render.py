@@ -827,21 +827,22 @@ function refreshData(){
 }
 // ---- recent news in the expanded card (served) ----
 function _esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function _newsSec(inner){ return '<div class="det-sec"><div class="det-h">Recent news</div>'+inner+'</div>'; }
 function loadNews(root){
   const el=root.querySelector('.cardnews'); if(!el) return;
   const t=el.dataset.ticker; if(!t) return;
-  el.innerHTML='<div class="det-sec"><div class="det-h">Recent news</div><div class="muted" style="font-size:12px">loading…</div></div>';
+  el.innerHTML=_newsSec('<div class="muted" style="font-size:12px">loading…</div>');
   fetch('/api/news/'+encodeURIComponent(t)).then(r=>r.json()).then(d=>{
-    const items=(d.items||[]);
-    if(!items.length){ el.innerHTML=''; return; }
+    const items=(d.items||[]);   // already ranked most-recent first by the server
+    if(!items.length){ el.innerHTML=_newsSec('<div class="muted" style="font-size:12px">No recent news.</div>'); return; }
     const rows=items.map(n=>{
       const meta=[n.publisher, n.age].filter(Boolean).join(' · ');
       const inner='<div class="nw-t">'+_esc(n.title)+'</div>'+(meta?'<div class="nw-m">'+_esc(meta)+'</div>':'');
       return n.url ? '<a class="nw" href="'+_esc(n.url)+'" target="_blank" rel="noopener">'+inner+'</a>'
                    : '<div class="nw">'+inner+'</div>';
     }).join('');
-    el.innerHTML='<div class="det-sec"><div class="det-h">Recent news</div>'+rows+'</div>';
-  }).catch(()=>{ el.innerHTML=''; });
+    el.innerHTML=_newsSec(rows);
+  }).catch(()=>{ el.innerHTML=_newsSec('<div class="muted" style="font-size:12px">News unavailable right now.</div>'); });
 }
 // ---- analysis tool pop-ups ----
 function closeTool(e){ if(e&&e.target&&e.target.id!=='toolmodal'&&e.type==='click') return;

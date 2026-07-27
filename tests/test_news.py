@@ -35,3 +35,24 @@ def test_fetch_news_normalizes_new_shape(monkeypatch):
     assert out[0]["title"] == "Big news"
     assert out[0]["publisher"] == "Reuters"
     assert out[0]["url"] == "https://x/story"
+
+
+def test_fetch_news_ranks_most_recent_first_and_limits(monkeypatch):
+    def item(title, iso):
+        return {"content": {"title": title, "pubDate": iso,
+                            "provider": {"displayName": "P"},
+                            "clickThroughUrl": {"url": "https://x/" + title}}}
+    fake = [
+        item("older", "2026-07-25T10:00:00Z"),
+        item("newest", "2026-07-27T09:00:00Z"),
+        item("middle", "2026-07-26T12:00:00Z"),
+        item("undated", None),
+    ]
+
+    class _T:
+        def __init__(self, *a, **k): self.news = fake
+
+    monkeypatch.setattr("yfinance.Ticker", _T, raising=False)
+    out = fetch_news("AAPL", limit=3)
+    assert [n["title"] for n in out] == ["newest", "middle", "older"]  # undated dropped by limit
+    assert "_ts" not in out[0]   # internal sort key stripped

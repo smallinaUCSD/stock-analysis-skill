@@ -9,9 +9,11 @@ from __future__ import annotations
 
 from datetime import datetime
 
-# last good Sector / Markets / Macro panel data (per server process), so a
-# rate-limited fetch reuses the previous values instead of showing "unavailable".
+# last good Sector / Markets / Macro panel data, so a rate-limited fetch reuses
+# the previous values instead of showing "unavailable". Held in memory and, when
+# a cache dir is configured, persisted to disk so it also survives a restart.
 _LAST_GOOD: dict = {}
+_PANEL_KEYS = ("sectors", "markets", "macro")
 
 
 def _keep_good(key: str, value, is_good):
@@ -24,6 +26,43 @@ def _keep_good(key: str, value, is_good):
         _LAST_GOOD[key] = value
         return value
     return _LAST_GOOD.get(key, value)
+
+
+def _panel_cache_file(cache_dir: str) -> str:
+    import os
+    return os.path.join(cache_dir, "_panels.pkl")
+
+
+def _panels_load(cache_dir: str | None) -> None:
+    """Seed the in-memory panel cache from disk once (survives a restart)."""
+    if not cache_dir or _LAST_GOOD.get("_loaded"):
+        return
+    _LAST_GOOD["_loaded"] = True
+    import os
+    import pickle
+    p = _panel_cache_file(cache_dir)
+    if os.path.exists(p):
+        try:
+            with open(p, "rb") as f:
+                data = pickle.load(f)
+            for k in _PANEL_KEYS:
+                if k in data and k not in _LAST_GOOD:
+                    _LAST_GOOD[k] = data[k]
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _panels_save(cache_dir: str | None) -> None:
+    if not cache_dir:
+        return
+    import os
+    import pickle
+    try:
+        os.makedirs(cache_dir, exist_ok=True)
+        with open(_panel_cache_file(cache_dir), "wb") as f:
+            pickle.dump({k: _LAST_GOOD[k] for k in _PANEL_KEYS if k in _LAST_GOOD}, f)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 # rate / volatility gauges shown in the Macro panel
@@ -129,10 +168,12 @@ def build_watchlist_html(tickers_spec, *, period: str = "5y", workers: int = 5,
     macro = _macro_panel()
 
     # Keep the last good panel data so a failed/rate-limited fetch doesn't blank
-    # the Sector / Markets / Macro panels (they persist for the server process).
+    # the Sector / Markets / Macro panels (in memory + on disk when cached).
+    _panels_load(cache_dir)
     sectors = _keep_good("sectors", sectors, lambda s: any(r is not None for _, _, r in s))
     markets = _keep_good("markets", markets, lambda m: any(q.last is not None for q in m))
     macro = _keep_good("macro", macro, lambda mc: bool(mc.get("indicators") or mc.get("events")))
+    _panels_save(cache_dir)
 
     status = market_status()
     refresh = refresh_seconds_for(status, interval)

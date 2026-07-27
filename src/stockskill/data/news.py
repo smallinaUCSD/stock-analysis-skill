@@ -72,8 +72,21 @@ def fetch_news(ticker: str, limit: int = 6) -> list[dict]:
             "url": _url(c),
             "published": pub or "",
             "age": _age(pub),
+            "_ts": _epoch(pub),
             "type": (c.get("contentType") or "").upper(),
         })
-        if len(out) >= limit:
-            break
-    return out
+
+    # rank most-recent first, then keep the top ``limit`` (undated sort last)
+    out.sort(key=lambda n: n["_ts"], reverse=True)
+    for n in out:
+        n.pop("_ts", None)
+    return out[:limit]
+
+
+def _epoch(iso: str | None) -> float:
+    if not iso:
+        return 0.0
+    try:
+        return datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp()
+    except Exception:
+        return 0.0
