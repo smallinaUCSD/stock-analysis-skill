@@ -9,6 +9,22 @@ from __future__ import annotations
 
 from datetime import datetime
 
+# last good Sector / Markets / Macro panel data (per server process), so a
+# rate-limited fetch reuses the previous values instead of showing "unavailable".
+_LAST_GOOD: dict = {}
+
+
+def _keep_good(key: str, value, is_good):
+    """Return ``value`` if it looks good and remember it; else the last good one."""
+    try:
+        ok = value is not None and is_good(value)
+    except Exception:  # noqa: BLE001
+        ok = False
+    if ok:
+        _LAST_GOOD[key] = value
+        return value
+    return _LAST_GOOD.get(key, value)
+
 
 # rate / volatility gauges shown in the Macro panel
 _MACRO_INDICATORS = [("^VIX", "VIX (CBOE)"), ("^VVIX", "VVIX (vol of vol)"),
@@ -111,6 +127,12 @@ def build_watchlist_html(tickers_spec, *, period: str = "5y", workers: int = 5,
     mkt_pm = price_map(all_market_tickers(), period="5d")
     markets = market_quotes(mkt_pm)
     macro = _macro_panel()
+
+    # Keep the last good panel data so a failed/rate-limited fetch doesn't blank
+    # the Sector / Markets / Macro panels (they persist for the server process).
+    sectors = _keep_good("sectors", sectors, lambda s: any(r is not None for _, _, r in s))
+    markets = _keep_good("markets", markets, lambda m: any(q.last is not None for q in m))
+    macro = _keep_good("macro", macro, lambda mc: bool(mc.get("indicators") or mc.get("events")))
 
     status = market_status()
     refresh = refresh_seconds_for(status, interval)

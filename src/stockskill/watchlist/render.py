@@ -795,6 +795,36 @@ document.addEventListener('click', e=>{
   if(!e.target.closest('.addwrap')){ const s=document.getElementById('addsug'); if(s) s.style.display='none'; }
 });
 
+// ---- live update in place (no full page reload) ----
+let _refreshing=false;
+function _resort(){
+  if(sortState.col==null) return;
+  const tb=document.querySelector('#wl tbody'); if(!tb) return;
+  const rows=Array.from(tb.querySelectorAll('tr.item'));
+  rows.sort((a,b)=>{
+    const av=parseFloat(a.children[sortState.col]?.dataset.sort ?? 'NaN');
+    const bv=parseFloat(b.children[sortState.col]?.dataset.sort ?? 'NaN');
+    if(isNaN(av)&&isNaN(bv)) return 0; if(isNaN(av)) return 1; if(isNaN(bv)) return -1;
+    return (av-bv)*sortState.dir;
+  });
+  rows.forEach(r=>tb.appendChild(r));
+}
+function refreshData(){
+  if(_refreshing || document.getElementById('modal').classList.contains('show')) return;
+  _refreshing=true;
+  fetch(location.pathname, {cache:'no-store'}).then(r=>r.text()).then(txt=>{
+    const doc=new DOMParser().parseFromString(txt,'text/html');
+    const swap=(sel)=>{ const n=doc.querySelector(sel), o=document.querySelector(sel);
+      if(n&&o && o.innerHTML!==n.innerHTML) o.innerHTML=n.innerHTML; };
+    swap('#wl tbody'); swap('#view-card .cards'); swap('#view-heatmap');
+    swap('.panels'); swap('.banner-vp');
+    const nb=doc.querySelector('.status'), ob=document.querySelector('.status');
+    if(nb&&ob) ob.className=nb.className, ob.textContent=nb.textContent;
+    const nu=doc.getElementById('updated'), ou=document.getElementById('updated');
+    if(nu&&ou){ ou.dataset.ts=nu.dataset.ts; fmtUpdated(); }
+    wireTableScroll(); _resort(); applyFilter();
+  }).catch(()=>{}).finally(()=>{ _refreshing=false; });
+}
 // ---- recent news in the expanded card (served) ----
 function _esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function loadNews(root){
@@ -928,9 +958,11 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
     ok = sum(1 for r in rows if r.price is not None)
     badge = (f'<span class="status {html.escape(status_label)}">{html.escape(status_badge)}</span>'
              if status_badge else "")
+    # Served: poll + update-in-place (no full reload). Static file: meta-refresh.
+    meta_refresh = "" if served else f'<meta http-equiv="refresh" content="{int(refresh_seconds)}">'
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="refresh" content="{int(refresh_seconds)}">
+{meta_refresh}
 <title>{html.escape(title)}</title><style>{_CSS}{_CSS_EXTRA}</style></head>
 <body><div class="wrap">
 <header><h1>{html.escape(title)}</h1>{badge}
@@ -1148,11 +1180,7 @@ function sortBy(col){{
   }});
   rows.forEach(r=>tb.appendChild(r));
 }}
-(function init(){{
-  const t=localStorage.getItem('wl_theme'); if(t) document.documentElement.setAttribute('data-theme', t);
-  const b=document.getElementById('banner');
-  if(b && localStorage.getItem('wl_banner')===b.dataset.sig) b.style.display='none';
-  setView(view);
+function fmtUpdated(){{
   const up=document.getElementById('updated');
   if(up && up.dataset.ts){{
     const d=new Date(parseInt(up.dataset.ts,10));
@@ -1160,10 +1188,24 @@ function sortBy(col){{
       {{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}})
       +' '+(Intl.DateTimeFormat().resolvedOptions().timeZone||'local');
   }}
+}}
+function wireTableScroll(){{
   document.querySelectorAll('.tablewrap').forEach(w=>{{
+    if(w._wired) return; w._wired=1;
     const upd=()=>w.classList.toggle('scrolled', w.scrollLeft>2);
     w.addEventListener('scroll', upd, {{passive:true}}); upd();
   }});
+}}
+const REFRESH_MS = {int(refresh_seconds)}*1000;
+const SERVED = {"true" if served else "false"};
+(function init(){{
+  const t=localStorage.getItem('wl_theme'); if(t) document.documentElement.setAttribute('data-theme', t);
+  const b=document.getElementById('banner');
+  if(b && localStorage.getItem('wl_banner')===b.dataset.sig) b.style.display='none';
+  setView(view);
+  fmtUpdated();
+  wireTableScroll();
+  if(SERVED && typeof refreshData==='function') setInterval(refreshData, Math.max(30000, REFRESH_MS));
 }})();
 {js_served}
 </script>
