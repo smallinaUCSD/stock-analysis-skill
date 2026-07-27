@@ -157,7 +157,7 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
         con = sorted(p.constituents.items(), key=lambda kv: kv[1], reverse=True)
         return jsonify({
             "ok": True, "ticker": p.ticker, "name": p.name, "kind": p.kind,
-            "multiplier": p.multiplier, "verify": p.verify,
+            "multiplier": p.multiplier, "verify": p.verify, "as_of": p.as_of,
             "constituents": [{"underlying": u, "weight": w} for u, w in con],
         })
 

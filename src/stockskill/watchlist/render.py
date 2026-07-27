@@ -69,6 +69,10 @@ table.wl th:first-child{z-index:3}
   box-shadow:6px 0 8px -4px rgba(0,0,0,.35)}
 table.wl tr.item:hover td{background:var(--surface-2)}
 table.wl tr.item:hover td:first-child{background:var(--surface-2)}
+/* left-align Sector (9), Conf (14), Indicators (15) */
+table.wl th:nth-child(9),table.wl td:nth-child(9),
+table.wl th:nth-child(14),table.wl td:nth-child(14),
+table.wl th:nth-child(15),table.wl td:nth-child(15){text-align:left}
 .tk{font-weight:700}.nm{color:var(--muted);font-size:11px;font-weight:400}
 .badge{font-weight:700;font-size:11px;padding:2px 7px;border-radius:6px}
 .badge.buy{background:var(--good);color:#fff}.badge.short{background:var(--crit);color:#fff}
@@ -98,6 +102,8 @@ table.wl tr.item:hover td:first-child{background:var(--surface-2)}
 .card-item{cursor:pointer;position:relative;transition:border-color .12s}
 .card-item:hover{border-color:var(--accent)}
 .trendline{font-size:12.5px;font-weight:650;margin:1px 0 6px}
+.exthrs{font-size:11.5px;color:var(--muted);margin:1px 0 5px;font-variant-numeric:tabular-nums}
+.exthrs b{color:var(--ink);font-weight:700}
 .erflag{display:inline-block;font-size:10.5px;font-weight:650;padding:2px 7px;border-radius:6px;margin:0 0 6px}
 .erflag.er-now{background:var(--crit);color:#fff}
 .erflag.er-soon{background:var(--warn);color:#111}
@@ -228,15 +234,24 @@ table.wl tr.item:hover td:first-child{background:var(--surface-2)}
 .chart-tip b{color:var(--ink)}
 /* heatmap */
 .heat{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
+.heat-group{margin-bottom:16px}
+.heat-h{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.03em;margin:0 0 7px;padding-bottom:4px;border-bottom:1px solid var(--border)}
 .tile-item{border:1px solid var(--border);border-radius:10px;padding:10px 12px;text-align:center}
 .tile-item .t{font-weight:700;font-size:13px}
 .tile-item .c{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
 .tile-item .s{font-size:10px;color:var(--muted)}
 .view{display:none}.view.active{display:block}
-.banner{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding:9px 14px;
+.banner{display:flex;align-items:center;gap:12px;padding:9px 14px;
   margin:10px 0;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;font-size:12.5px}
+.banner-vp{flex:1;overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent,#000 3%,#000 97%,transparent);
+  mask-image:linear-gradient(90deg,transparent,#000 3%,#000 97%,transparent)}
+.banner-track{display:inline-flex;gap:26px;white-space:nowrap;animation:marquee 45s linear infinite;will-change:transform}
+.banner:hover .banner-track{animation-play-state:paused}
+@keyframes marquee{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 .banner .a{white-space:nowrap}
-.banner .x{margin-left:auto;cursor:pointer;color:var(--muted);border:none;background:none;font-size:15px}
+.banner .x{cursor:pointer;color:var(--muted);border:none;background:none;font-size:15px;flex:0 0 auto}
+@media (prefers-reduced-motion:reduce){.banner-track{animation:none}}
 """
 
 
@@ -498,6 +513,17 @@ def _earnings_badge(r):
     return f'<span class="erflag {cls}">📅 {txt}</span>'
 
 
+def _ext_html(r):
+    """Pre/after-hours price line, shown only when an extended session is active."""
+    if getattr(r, "ext_price", None) is None:
+        return ""
+    st = (r.market_state or "").upper()
+    label = "Pre-market" if st.startswith("PRE") else "After hours"
+    cls, txt = _pct(r.ext_change)
+    return (f'<div class="exthrs">{label} <b>${r.ext_price:,.2f}</b> '
+            f'<span class="{cls}">{txt}</span></div>')
+
+
 def _card_html(r):
     if r.error or r.price is None:
         return (f'<div class="card-item item" {_data_attrs(r)}>'
@@ -518,6 +544,7 @@ def _card_html(r):
         f'<span class="badge {sig_cls}">{r.signal}</span></div>'
         f'<span class="card-price">${r.price:,.2f} <span class="{dcls}" style="font-size:13px">{dtxt}</span></span></div>'
         f'<div class="nm">{html.escape((r.name or "")[:34])}</div>'
+        f'{_ext_html(r)}'
         f'<div class="trendline {tcls}">{html.escape(trend_word)} <span class="muted">· trend {r.trend_score:+.0f}</span></div>'
         f'{_earnings_badge(r)}'
         f'<div class="card-spark">{_spark(r.sparkline, w=222, h=34)}</div>'
@@ -541,6 +568,36 @@ def _tile_html(r):
         f'<div class="c">{dtxt}</div>'
         f'<div class="s">{r.signal} {r.trend_arrow}</div></div>'
     )
+
+
+def _heatmap_html(rows):
+    """Heatmap grouped by sector, sectors ordered by average day change."""
+    def day(r):
+        d = r.changes.get("1d") if not (r.error or r.price is None) else None
+        return d
+
+    groups: dict[str, list] = {}
+    for r in rows:
+        sec = (r.sector or "Other") if not (r.error or r.price is None) else "No data"
+        groups.setdefault(sec, []).append(r)
+
+    def avg(rs):
+        vals = [day(r) for r in rs if day(r) is not None]
+        return sum(vals) / len(vals) if vals else -99
+
+    out = []
+    for sec, rs in sorted(groups.items(), key=lambda kv: avg(kv[1]), reverse=True):
+        a = avg(rs)
+        cls, atxt = _pct(a if a != -99 else None)
+        rs_sorted = sorted(rs, key=lambda r: (day(r) if day(r) is not None else -99), reverse=True)
+        tiles = "".join(_tile_html(r) for r in rs_sorted)
+        avg_html = f'<span class="{cls}">{atxt}</span>' if a != -99 else ""
+        out.append(
+            f'<div class="heat-group" data-sector="{html.escape(sec)}">'
+            f'<div class="heat-h">{html.escape(sec)} {avg_html} '
+            f'<span class="muted">· {len(rs)}</span></div>'
+            f'<div class="heat">{tiles}</div></div>')
+    return "".join(out)
 
 
 def _chip_bar(rows):
@@ -571,17 +628,19 @@ def _chip_bar(rows):
     return "".join(out)
 
 
-def _banner(alerts, cap=14):
+def _banner(alerts):
+    """A single-line marquee that slides through every alert (no truncation)."""
     if not alerts:
         return "", ""
-    shown = alerts[:cap]
-    extra = len(alerts) - len(shown)
     items = "".join(f'<span class="a">{html.escape(a.emoji)} {html.escape(a.message)}</span>'
-                    for a in shown)
-    if extra > 0:
-        items += f'<span class="a muted">+{extra} more</span>'
-    sig = f"{len(alerts)}:" + ",".join(a.kind for a in shown[:5])
-    banner = (f'<div class="banner" id="banner" data-sig="{html.escape(sig)}">{items}'
+                    for a in alerts)
+    # scale the loop duration with the amount of text so it reads at a steady pace
+    dur = max(20, min(150, len(alerts) * 3))
+    sig = f"{len(alerts)}:" + ",".join(a.kind for a in alerts[:5])
+    track = (f'<div class="banner-track" style="animation-duration:{dur}s">'
+             f'{items}{items}</div>')
+    banner = (f'<div class="banner" id="banner" data-sig="{html.escape(sig)}">'
+              f'<div class="banner-vp">{track}</div>'
               f'<button class="x" onclick="dismissBanner()" title="Dismiss">✕</button></div>')
     return banner, sig
 
@@ -715,7 +774,7 @@ function runLook(){ const t=_tkv('ltk'); if(!t){ toolErr('enter a ticker'); retu
     h+=_row('Type', d.kind==='single'?'single-stock':'basket');
     h+='<div class="t-h">Underlying exposure</div><table class="fvtable"><tbody>'+
       d.constituents.map(c=>'<tr><td class="fl">'+c.underlying+'</td><td class="fv">'+(c.weight*100).toFixed(1)+'%</td><td>'+(c.weight*d.multiplier*100).toFixed(0)+'% notional</td></tr>').join('')+'</tbody></table>';
-    if(d.verify) h+='<div class="t-note">Basket is a dated snapshot — verify vs issuer holdings.</div>';
+    if(d.kind==='basket') h+='<div class="t-note">Basket as of '+(d.as_of||'—')+'. Indices rebalance quarterly — confirm current weights with the issuer.'+(d.verify?' (unverified snapshot)':'')+'</div>';
     document.getElementById('tool-out').innerHTML=h;
   }).catch(()=>toolErr('look-through failed'));
 }
@@ -746,7 +805,7 @@ function _mcCone(p){ const keys=['p95','p75','p50','p25','p5']; const vals=keys.
 
 def render_watchlist(rows, title="Watchlist", updated="", status_badge="", status_label="",
                      alerts=None, sectors=None, markets=None, refresh_seconds=1800,
-                     served=False):
+                     served=False, updated_ts=None):
     banner, _sig = _banner(alerts or [])
     sector_html = _sector_html(sectors)
     markets_html = _markets_html(markets)
@@ -776,7 +835,7 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
     js_served = _SERVED_JS if served else ""
     table = "".join(_row_html(r) for r in rows)
     cards = "".join(_card_html(r) for r in rows)
-    tiles = "".join(_tile_html(r) for r in rows)
+    tiles = _heatmap_html(rows)
     heads = "".join(f'<th onclick="sortBy({i})">{h}</th>' for i, h in enumerate(_HEADERS))
     chips = _chip_bar(rows)
     ok = sum(1 for r in rows if r.price is not None)
@@ -788,7 +847,7 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
 <title>{html.escape(title)}</title><style>{_CSS}{_CSS_EXTRA}</style></head>
 <body><div class="wrap">
 <header><h1>{html.escape(title)}</h1>{badge}
-  <span class="sub" style="margin:0">Updated {html.escape(updated)}</span></header>
+  <span class="sub" style="margin:0">Updated <span id="updated" data-ts="{int(updated_ts) if updated_ts else ''}">{html.escape(updated)}</span></span></header>
 {banner}
 <div class="bar">
   <div class="seg">
@@ -806,7 +865,7 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
 <div id="view-table" class="view active"><div class="tablewrap"><table class="wl" id="wl">
 <thead><tr>{heads}</tr></thead><tbody>{table}</tbody></table></div></div>
 <div id="view-card" class="view"><div class="cards">{cards}</div></div>
-<div id="view-heatmap" class="view"><div class="heat">{tiles}</div></div>
+<div id="view-heatmap" class="view">{tiles}</div>
 
 <div id="modal" class="modal" onclick="closeModal(event)">
   <div class="modal-card" onclick="event.stopPropagation()">
@@ -850,6 +909,11 @@ function applyFilter(){{
     if(show) n++;
   }});
   document.getElementById('count').textContent = n+' of '+tot+' tickers';
+  // hide heatmap sector groups that have no visible tiles
+  document.querySelectorAll('#view-heatmap .heat-group').forEach(g=>{{
+    const any=[...g.querySelectorAll('.item')].some(el=>el.style.display!=='none');
+    g.style.display = any?'':'none';
+  }});
 }}
 function toggleChip(btn){{
   const g=btn.dataset.group, m=btn.dataset.match;
@@ -1001,6 +1065,13 @@ function sortBy(col){{
   const b=document.getElementById('banner');
   if(b && localStorage.getItem('wl_banner')===b.dataset.sig) b.style.display='none';
   setView(view);
+  const up=document.getElementById('updated');
+  if(up && up.dataset.ts){{
+    const d=new Date(parseInt(up.dataset.ts,10));
+    if(!isNaN(d)) up.textContent=d.toLocaleString(undefined,
+      {{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}})
+      +' '+(Intl.DateTimeFormat().resolvedOptions().timeZone||'local');
+  }}
   document.querySelectorAll('.tablewrap').forEach(w=>{{
     const upd=()=>w.classList.toggle('scrolled', w.scrollLeft>2);
     w.addEventListener('scroll', upd, {{passive:true}}); upd();

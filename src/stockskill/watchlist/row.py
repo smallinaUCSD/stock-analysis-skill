@@ -49,6 +49,10 @@ class TickerRow:
     week52_low: float | None = None
     week52_position: float | None = None                 # 0..1 within the 52w range
     next_earnings: str | None = None                     # ISO date of next earnings
+    # extended-hours (pre/post-market)
+    market_state: str | None = None
+    ext_price: float | None = None
+    ext_change: float | None = None
     # flags & tags
     flags: set = field(default_factory=set)
     categories: set = field(default_factory=set)
@@ -134,6 +138,9 @@ def build_row(td: TickerData, cfg: SignalConfig | None = None,
             if rng > 0:
                 row.week52_position = (row.price - snap.fifty_two_week_low) / rng
         row.next_earnings = snap.next_earnings
+        row.market_state = snap.market_state
+        row.ext_price = snap.ext_price
+        row.ext_change = snap.ext_change
         row.categories = detect_categories(td.ticker, snap.name, snap.sector,
                                             snap.quote_type, snap.dividend_annual)
         # Embed the analyzer valuation (reuses the fetched snapshot -- no network).

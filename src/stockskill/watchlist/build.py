@@ -56,6 +56,7 @@ def build_watchlist_html(tickers_spec, *, period: str = "5y", workers: int = 5,
     now = datetime.now(ET)
     html_out = render_watchlist(
         rows, title=title, updated=now.strftime("%a %b %d, %I:%M %p") + " ET",
+        updated_ts=int(now.timestamp() * 1000),
         status_badge=status.badge, status_label=status.label, alerts=alerts,
         sectors=sectors, markets=markets, refresh_seconds=refresh, served=served)
     ok = sum(1 for r in rows if r.price is not None)

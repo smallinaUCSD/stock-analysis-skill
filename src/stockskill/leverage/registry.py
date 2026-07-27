@@ -42,41 +42,44 @@ class LeveragedProduct:
 
 
 # NYSE FANG+ index (FNGU underlying): 10 equal-weighted names, rebalanced
-# quarterly. Snapshot -- VERIFY against the issuer's daily holdings file.
+# quarterly. Verified vs FNGG holdings 2026-07-24 (CRWD -> MU vs the prior snap).
 _FANG_PLUS = {
-    "AAPL": 0.1, "AMZN": 0.1, "AVGO": 0.1, "CRWD": 0.1, "GOOGL": 0.1,
-    "META": 0.1, "MSFT": 0.1, "NFLX": 0.1, "NVDA": 0.1, "PLTR": 0.1,
+    "AAPL": 0.1, "AMZN": 0.1, "AVGO": 0.1, "GOOGL": 0.1, "META": 0.1,
+    "MSFT": 0.1, "MU": 0.1, "NFLX": 0.1, "NVDA": 0.1, "PLTR": 0.1,
 }
 
-# Solactive FANG Innovation index (BULZ underlying): 15 tech/innovation names,
-# roughly equal-weighted. Snapshot -- VERIFY.
+# Solactive FANG Innovation index (BULZ underlying): 15 equal-weighted names.
+# Verified vs BULZ holdings 2026-07-20 (dropped CRM/CRWD/SNOW/UBER; added
+# SNDK/INTC/ORCL/MU).
 _FANG_INNOVATION = {
     "AAPL": 1 / 15, "AMD": 1 / 15, "AMZN": 1 / 15, "AVGO": 1 / 15,
-    "CRM": 1 / 15, "CRWD": 1 / 15, "GOOGL": 1 / 15, "META": 1 / 15,
-    "MSFT": 1 / 15, "NFLX": 1 / 15, "NVDA": 1 / 15, "PLTR": 1 / 15,
-    "SNOW": 1 / 15, "TSLA": 1 / 15, "UBER": 1 / 15,
+    "GOOGL": 1 / 15, "INTC": 1 / 15, "META": 1 / 15, "MSFT": 1 / 15,
+    "MU": 1 / 15, "NFLX": 1 / 15, "NVDA": 1 / 15, "ORCL": 1 / 15,
+    "PLTR": 1 / 15, "SNDK": 1 / 15, "TSLA": 1 / 15,
 }
 
 
 _REGISTRY: dict[str, LeveragedProduct] = {
-    "AAPU": LeveragedProduct("AAPU", "Direxion Daily AAPL Bull", "single", 2.0,
-                             {"AAPL": 1.0}, expense_ratio=0.0113),
-    "MSFU": LeveragedProduct("MSFU", "Direxion Daily MSFT Bull", "single", 2.0,
-                             {"MSFT": 1.0}, expense_ratio=0.0113),
-    "METU": LeveragedProduct("METU", "Direxion Daily META Bull", "single", 2.0,
-                             {"META": 1.0}, expense_ratio=0.0113),
-    "TSLL": LeveragedProduct("TSLL", "Direxion Daily TSLA Bull", "single", 2.0,
-                             {"TSLA": 1.0}, expense_ratio=0.0084),
+    "AAPU": LeveragedProduct("AAPU", "Direxion Daily AAPL Bull 2X", "single", 2.0,
+                             {"AAPL": 1.0}, expense_ratio=0.0113, verify=False),
+    "MSFU": LeveragedProduct("MSFU", "Direxion Daily MSFT Bull 2X", "single", 2.0,
+                             {"MSFT": 1.0}, expense_ratio=0.0113, verify=False),
+    "METU": LeveragedProduct("METU", "Direxion Daily META Bull 2X", "single", 2.0,
+                             {"META": 1.0}, expense_ratio=0.0113, verify=False),
+    "TSLL": LeveragedProduct("TSLL", "Direxion Daily TSLA Bull 2X", "single", 2.0,
+                             {"TSLA": 1.0}, expense_ratio=0.0084, verify=False),
     "CONL": LeveragedProduct("CONL", "GraniteShares 2x Long COIN Daily", "single",
-                             2.0, {"COIN": 1.0}, expense_ratio=0.0119),
+                             2.0, {"COIN": 1.0}, expense_ratio=0.0119, verify=False),
     "PTIR": LeveragedProduct("PTIR", "GraniteShares 2x Long PLTR Daily", "single",
-                             2.0, {"PLTR": 1.0}, expense_ratio=0.0119),
+                             2.0, {"PLTR": 1.0}, expense_ratio=0.0119, verify=False),
+    "ORCX": LeveragedProduct("ORCX", "Defiance Daily Target 2X Long ORCL", "single",
+                             2.0, {"ORCL": 1.0}, expense_ratio=0.0125, verify=False),
     "FNGU": LeveragedProduct("FNGU", "MicroSectors FANG+ 3X Leveraged ETN", "basket",
                              3.0, dict(_FANG_PLUS), structure="ETN",
-                             expense_ratio=0.0095),
+                             expense_ratio=0.0095, as_of="2026-07-24"),
     "BULZ": LeveragedProduct("BULZ", "MicroSectors FANG & Innovation 3X ETN", "basket",
                              3.0, dict(_FANG_INNOVATION), structure="ETN",
-                             expense_ratio=0.0095),
+                             expense_ratio=0.0095, as_of="2026-07-20"),
 }
 
 
