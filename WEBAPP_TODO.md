@@ -15,8 +15,9 @@ feature reachable as a pop-up. The static HTML generators stay for cron/offline.
 - [x] Always show a **trade setup** when expanded (direction from trend on HOLD).
 - [x] Color the valuation: **green undervalued / red overvalued / neutral fair**.
 - [x] Render **fair value as a table** (bear/base/bull rows, each vs price).
-- [ ] **Interactive price chart** with timeframe toggle (1/3/6mo, 1/2/5/10y) and a
-      hover tooltip showing price at the hovered point. (Embed a downsampled series.)
+- [x] **Interactive price chart** with timeframe toggle (1/3/6mo, 1/2/5y, Max) and
+      a hover tooltip showing price + date at the hovered point. Slices by calendar
+      date; recent ~6mo kept daily (crisp short views), older sampled weekly.
 - [x] Make the **close (✕) button bigger / easier to hit**.
 
 ## 3. Layout (all views)

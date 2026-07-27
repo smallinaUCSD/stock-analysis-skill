@@ -9,6 +9,7 @@ categories, sections) so one filter engine works across all three views.
 from __future__ import annotations
 
 import html
+import json
 import os
 
 from ..dashboard.render import _CSS
@@ -137,6 +138,16 @@ details.sectors summary::-webkit-details-marker{display:none}
 .fvtable td.fl{font-weight:600} .fvtable td.fl.up{color:var(--up)} .fvtable td.fl.down{color:var(--down)}
 .fvtable td.fv{text-align:right;font-weight:700;padding-right:12px}
 .fvtable td:last-child{text-align:right;color:var(--muted)}
+/* price chart */
+.chart-sec .tfbar{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px}
+.tfb{font:600 11px inherit;padding:2px 8px;border-radius:999px;cursor:pointer;
+  background:var(--surface-2);border:1px solid var(--border);color:var(--muted)}
+.tfb:hover{color:var(--ink)}
+.tfb.on{background:var(--accent,#3b82f6);border-color:transparent;color:#fff}
+.pricechart{position:relative;width:100%;height:150px;touch-action:none}
+.pricechart svg{display:block;width:100%;height:150px;overflow:visible}
+.chart-tip{font-size:11px;margin-top:4px;min-height:15px;font-variant-numeric:tabular-nums}
+.chart-tip b{color:var(--ink)}
 /* heatmap */
 .heat{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
 .tile-item{border:1px solid var(--border);border-radius:10px;padding:10px 12px;text-align:center}
@@ -364,11 +375,32 @@ def _valuation_html(r):
     return f'<div class="det-sec">{header}{body}{"".join(rows)}{note_html}</div>'
 
 
+_TIMEFRAMES = [("1mo", "1M"), ("3mo", "3M"), ("6mo", "6M"),
+               ("1y", "1Y"), ("2y", "2Y"), ("5y", "5Y"), ("max", "Max")]
+_CHART_DEFAULT_TF = "1y"
+
+
+def _chart_html(r):
+    ph = r.price_history or {}
+    closes = ph.get("c") or []
+    if len(closes) < 5:
+        return ""
+    series = json.dumps({"d": ph.get("d", []), "c": closes}, separators=(",", ":"))
+    btns = "".join(
+        f'<button type="button" class="tfb{" on" if tf == _CHART_DEFAULT_TF else ""}" '
+        f'data-tf="{tf}" onclick="chartTf(this)">{lbl}</button>'
+        for tf, lbl in _TIMEFRAMES)
+    return (f'<div class="det-sec chart-sec"><div class="det-h">Price history</div>'
+            f'<div class="tfbar">{btns}</div>'
+            f'<div class="pricechart" data-series="{html.escape(series, quote=True)}"></div>'
+            f'<div class="chart-tip muted">Hover the chart for price at a date</div></div>')
+
+
 def _card_detail(r):
     ts = _trade_setup_html(r)
     ts_sec = f'<div class="det-sec">{ts}</div>' if ts else ""
     return (f'<div class="card-detail" onclick="event.stopPropagation()">'
-            f'{ts_sec}{_options_html(r)}{_valuation_html(r)}</div>')
+            f'{_chart_html(r)}{ts_sec}{_options_html(r)}{_valuation_html(r)}</div>')
 
 
 def _card_html(r):
@@ -577,9 +609,74 @@ function setView(v){{
   applyFilter();
 }}
 function openCard(card){{
-  document.getElementById('modal-body').innerHTML =
-    '<div class="card-item">'+card.innerHTML+'</div>';
+  const body=document.getElementById('modal-body');
+  body.innerHTML='<div class="card-item">'+card.innerHTML+'</div>';
   document.getElementById('modal').classList.add('show');
+  drawCharts(body);
+}}
+const TF_DAYS={{'1mo':31,'3mo':92,'6mo':183,'1y':366,'2y':731,'5y':1827,'max':1e9}};
+function drawCharts(root){{
+  root.querySelectorAll('.pricechart').forEach(el=>{{
+    try{{ el._series=JSON.parse(el.dataset.series); }}catch(e){{ return; }}
+    const bar=el.closest('.chart-sec').querySelector('.tfb.on')
+             ||el.closest('.chart-sec').querySelector('.tfb');
+    renderChart(el, bar?bar.dataset.tf:'1y');
+  }});
+}}
+function chartTf(btn){{
+  const sec=btn.closest('.chart-sec');
+  sec.querySelectorAll('.tfb').forEach(b=>b.classList.toggle('on', b===btn));
+  renderChart(sec.querySelector('.pricechart'), btn.dataset.tf);
+}}
+function renderChart(el, tf){{
+  const s=el._series; if(!s||!s.c||!s.c.length) return;
+  const n=s.c.length;
+  const days=TF_DAYS[tf]||366;
+  const cutoff=new Date(s.d[n-1]).getTime()-days*86400000;
+  let start=0; for(let i=0;i<n;i++){{ if(new Date(s.d[i]).getTime()>=cutoff){{ start=i; break; }} }}
+  if(start>n-2) start=Math.max(0,n-2);
+  const c=s.c.slice(start), d=s.d.slice(start);
+  const W=340, H=150, PADX=2, PADY=10;
+  let lo=Math.min.apply(null,c), hi=Math.max.apply(null,c); const rng=(hi-lo)||1;
+  const X=i=> PADX + (c.length<2?0:i/(c.length-1)*(W-2*PADX));
+  const Y=v=> PADY + (1-(v-lo)/rng)*(H-2*PADY);
+  const up=c[c.length-1]>=c[0];
+  const stroke=up?'var(--up)':'var(--down)';
+  const line=c.map((v,i)=>X(i).toFixed(1)+','+Y(v).toFixed(1)).join(' ');
+  const area=`${{PADX}},${{H-PADY}} `+line+` ${{(W-PADX).toFixed(1)}},${{H-PADY}}`;
+  el.innerHTML=
+    '<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none">'
+    +'<polygon points="'+area+'" fill="'+stroke+'" opacity="0.08"/>'
+    +'<polyline points="'+line+'" fill="none" stroke="'+stroke+'" stroke-width="1.6" vector-effect="non-scaling-stroke"/>'
+    +'<line class="cx" x1="0" y1="'+PADY+'" x2="0" y2="'+(H-PADY)+'" stroke="var(--muted)" stroke-width="1" vector-effect="non-scaling-stroke" style="display:none"/>'
+    +'<circle class="cd" r="3.2" fill="'+stroke+'" style="display:none"/></svg>';
+  el._geom={{c,d,W,H,PADX,X,Y}};
+  const tip=el.closest('.chart-sec').querySelector('.chart-tip');
+  const first=d[0], last=d[d.length-1];
+  const pct=((c[c.length-1]-c[0])/c[0]*100);
+  const base='<b>'+fmtUSD(c[c.length-1])+'</b> · '+(pct>=0?'+':'')+pct.toFixed(1)+'% ('+first+' → '+last+')';
+  if(tip){{ tip.dataset.base=base; tip.innerHTML=base; }}
+  el.onmousemove=chartHover; el.onmouseleave=chartLeave; el.ontouchmove=chartHover;
+}}
+function fmtUSD(v){{ return '$'+v.toLocaleString(undefined,{{minimumFractionDigits:2,maximumFractionDigits:2}}); }}
+function chartHover(e){{
+  const el=e.currentTarget, g=el._geom; if(!g) return;
+  const r=el.getBoundingClientRect();
+  const cx=(e.touches?e.touches[0].clientX:e.clientX)-r.left;
+  const frac=Math.max(0,Math.min(1, cx/r.width));
+  let i=Math.round(frac*(g.c.length-1)); i=Math.max(0,Math.min(g.c.length-1,i));
+  const svg=el.querySelector('svg'), cxl=svg.querySelector('.cx'), dot=svg.querySelector('.cd');
+  const x=g.X(i), y=g.Y(g.c[i]);
+  cxl.setAttribute('x1',x); cxl.setAttribute('x2',x); cxl.style.display='';
+  dot.setAttribute('cx',x); dot.setAttribute('cy',y); dot.style.display='';
+  const tip=el.closest('.chart-sec').querySelector('.chart-tip');
+  if(tip) tip.innerHTML='<b>'+fmtUSD(g.c[i])+'</b> · '+g.d[i];
+}}
+function chartLeave(e){{
+  const el=e.currentTarget, svg=el.querySelector('svg');
+  if(svg){{ svg.querySelector('.cx').style.display='none'; svg.querySelector('.cd').style.display='none'; }}
+  const tip=el.closest('.chart-sec').querySelector('.chart-tip');
+  if(tip&&tip.dataset.base) tip.innerHTML=tip.dataset.base;
 }}
 function closeModal(e){{
   if(e && e.target && e.target.id!=='modal' && e.type==='click') return;

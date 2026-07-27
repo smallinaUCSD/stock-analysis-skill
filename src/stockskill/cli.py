@@ -773,7 +773,7 @@ def build_parser() -> argparse.ArgumentParser:
     wl = sub.add_parser("watchlist", help="multi-ticker technical dashboard (table view)")
     wl.add_argument("--tickers", default="data/tickers.csv")
     wl.add_argument("--out", default="watchlist.html")
-    wl.add_argument("--period", default="2y", help="history to fetch (>1y so 1Y change fills)")
+    wl.add_argument("--period", default="5y", help="history to fetch (>1y so 1Y change fills; feeds the card price chart)")
     wl.add_argument("--workers", type=int, default=5)
     wl.add_argument("--cache-dir", help="per-ticker cache dir (e.g. .cache/stock_cache)")
     wl.add_argument("--alerts", default="data/alerts.json", help="custom alerts JSON")

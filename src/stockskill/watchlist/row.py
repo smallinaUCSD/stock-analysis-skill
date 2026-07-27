@@ -58,16 +58,19 @@ class TickerRow:
     error: str | None = None
 
 
-def _downsample_history(dates, closes, n: int = 320) -> dict:
-    """Reduce a (dates, closes) series to ~n evenly-spaced points for charting."""
+def _downsample_history(dates, closes, daily_bars: int = 130, older_step: int = 5) -> dict:
+    """Compact a (dates, closes) series for the card chart.
+
+    Keeps the most recent ``daily_bars`` (~6 months) at full daily resolution so
+    the short timeframes (1M/3M) are crisp, and samples older history every
+    ``older_step`` bars (~weekly) to keep the embedded payload small. The chart
+    slices by calendar date, so uneven spacing is fine.
+    """
     L = len(closes)
     if L == 0:
         return {}
-    if L <= n:
-        idx = range(L)
-    else:
-        step = L / n
-        idx = sorted({int(i * step) for i in range(n)} | {L - 1})
+    cut = max(0, L - daily_bars)
+    idx = sorted(set(range(0, cut, older_step)) | set(range(cut, L)))
     return {"d": [dates[i].isoformat() for i in idx],
             "c": [round(float(closes[i]), 2) for i in idx]}
 
@@ -100,6 +103,9 @@ def build_row(td: TickerData, cfg: SignalConfig | None = None,
         row.ichimoku = ich.price_vs_cloud if ich else None
         row.volume_bias = ta.volume_bias(closes, vols) if vols else None
         row.vol_spike = ta.volume_spike(vols)[0] if vols else False
+        dates = o.get("dates") or []
+        if dates and len(dates) == len(closes):
+            row.price_history = _downsample_history(dates, closes)
 
         # signals
         s = build_snapshot(highs, lows, closes, vols)
