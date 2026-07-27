@@ -74,15 +74,18 @@ everything from the tested indicator + signal libraries.
   adds a ticker to the board on the fly.
 - **Faceted filter chips** — signal / condition (oversold, squeeze, earnings…)
   / category / section.
-- **Alert banner** — a sliding marquee that cycles through *every* alert (52w
-  highs/lows, surges/crashes, volume spikes, squeezes, active signals, and your
-  custom `data/alerts.json`); pauses on hover. Dismissible.
+- **Alert banner** — a sliding marquee that cycles through *every* alert: a **Fed
+  decision (FOMC) countdown** and **market-event headlines** (layoffs / Fed / jobs
+  / inflation / tariffs, scanned from the news feed), then 52w highs/lows,
+  surges/crashes, volume spikes, squeezes, active signals, and your custom
+  `data/alerts.json`. Pauses on hover; dismissible.
 - **Earnings flag** on each card — today / tomorrow / in N days / next week — plus
   a **pre/after-hours** price line when an extended session is live.
 - **Click a card → a modal** with the full detail: an **interactive price chart**
   (1M–5Y/Max, real axes, hover shows date + price), the trade setup (ATR
-  entry/stop/target + position sizing), options ideas, and the **stock-analyzer
-  valuation** (fair value bear/base/bull, signal, reverse-DCF growth, consensus).
+  entry/stop/target + position sizing), options ideas, the **stock-analyzer
+  valuation** (fair value bear/base/bull, signal, reverse-DCF growth, consensus),
+  and **recent news** headlines (clickable, publisher · age).
 - **Live** — the server caches on a market-aware cadence (~60s open, 5m extended,
   30m closed); the page refreshes to match and shows the update time in **your
   local timezone**.
