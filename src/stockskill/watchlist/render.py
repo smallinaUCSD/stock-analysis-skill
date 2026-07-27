@@ -102,9 +102,11 @@ table.wl th:nth-child(15),table.wl td:nth-child(15){text-align:left}
 .card-item{cursor:pointer;position:relative;transition:border-color .12s}
 .card-item:hover{border-color:var(--accent)}
 .trendline{font-size:12.5px;font-weight:650;margin:1px 0 6px}
-.exthrs{font-size:11.5px;color:var(--muted);margin:1px 0 5px;font-variant-numeric:tabular-nums}
+/* fixed-height slots so optional lines don't misalign cards */
+.exthrs{font-size:11.5px;color:var(--muted);margin:1px 0 5px;font-variant-numeric:tabular-nums;min-height:16px}
 .exthrs b{color:var(--ink);font-weight:700}
-.erflag{display:inline-block;font-size:10.5px;font-weight:650;padding:2px 7px;border-radius:6px;margin:0 0 6px}
+.erow{min-height:23px;margin-bottom:2px;display:flex;align-items:flex-start}
+.erflag{display:inline-block;font-size:10.5px;font-weight:650;padding:2px 7px;border-radius:6px;margin:0}
 .erflag.er-now{background:var(--crit);color:#fff}
 .erflag.er-soon{background:var(--warn);color:#111}
 .erflag.er-wk{background:var(--surface-2);border:1px solid var(--border);color:var(--muted)}
@@ -514,26 +516,32 @@ def _card_detail(r):
 
 
 def _earnings_badge(r):
-    """A small flag on the card when earnings are within two weeks."""
+    """Earnings flag when earnings are within two weeks.
+
+    Always renders a fixed-height slot (empty when there's no upcoming earnings)
+    so the sparkline and metric rows stay aligned across cards.
+    """
     from .row import earnings_days
     d = earnings_days(getattr(r, "next_earnings", None))
-    if d is None or d > 14:
-        return ""
-    if d == 0:
-        txt, cls = "Earnings today", "er-now"
-    elif d == 1:
-        txt, cls = "Earnings tomorrow", "er-now"
-    elif d <= 6:
-        txt, cls = f"Earnings in {d}d", "er-soon"
-    else:
-        txt, cls = "Earnings next week", "er-wk"
-    return f'<span class="erflag {cls}">📅 {txt}</span>'
+    inner = ""
+    if d is not None and d <= 14:
+        if d == 0:
+            txt, cls = "Earnings today", "er-now"
+        elif d == 1:
+            txt, cls = "Earnings tomorrow", "er-now"
+        elif d <= 6:
+            txt, cls = f"Earnings in {d}d", "er-soon"
+        else:
+            txt, cls = "Earnings next week", "er-wk"
+        inner = f'<span class="erflag {cls}">📅 {txt}</span>'
+    return f'<div class="erow">{inner}</div>'
 
 
 def _ext_html(r):
-    """Pre/after-hours price line, shown only when an extended session is active."""
+    """Pre/after-hours price line. Always renders a fixed-height slot (empty when
+    there's no extended session) so cards line up."""
     if getattr(r, "ext_price", None) is None:
-        return ""
+        return '<div class="exthrs"></div>'
     st = (r.market_state or "").upper()
     label = "Pre-market" if st.startswith("PRE") else "After hours"
     cls, txt = _pct(r.ext_change)
