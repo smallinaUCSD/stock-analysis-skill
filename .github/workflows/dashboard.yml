@@ -5,8 +5,10 @@ name: Dashboard
 # The portfolio dashboard is intentionally NOT published (it contains real
 # holdings; holdings.csv is gitignored so CI never sees it anyway).
 #
-# Scheduled workflows run on the DEFAULT branch, so this takes effect once
-# merged to main. Enable Pages first: Settings -> Pages -> Source: GitHub Actions.
+# Scheduled workflows run on the DEFAULT branch (main). configure-pages runs with
+# `enablement: true`, which turns Pages on automatically (Source: GitHub Actions)
+# so no manual Settings step is needed. If your org blocks Actions from enabling
+# Pages, enable it once at Settings -> Pages -> Source: GitHub Actions.
 
 on:
   schedule:
@@ -30,7 +32,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.12"
@@ -43,6 +45,8 @@ jobs:
           if [ -f data/smart_tickers.csv ]; then TICKERS=data/smart_tickers.csv; else TICKERS=data/tickers.csv; fi
           uv run stockskill watchlist --tickers "$TICKERS" --out _site/index.html
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true      # auto-enable Pages (fixes "Get Pages site failed")
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
