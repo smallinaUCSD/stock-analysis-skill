@@ -64,14 +64,17 @@ def market_status(now: datetime | None = None) -> MarketStatus:
 
 
 def refresh_seconds_for(status: "MarketStatus", base_interval: float | None = None) -> int:
-    """Auto-refresh cadence: fast when the market is open, slow when closed.
+    """Auto-refresh cadence: brisk when the market is open, slow when closed.
 
-    ``base_interval`` (minutes) overrides the adaptive schedule when given.
+    This interval is also the server's data-refetch TTL, so it's kept modest to
+    avoid hammering the free data source (a whole board of tickers plus the
+    market/macro panels refetches each cycle). ``base_interval`` (minutes)
+    overrides the adaptive schedule when given.
     """
     if base_interval:
-        return max(15, int(base_interval * 60))
+        return max(60, int(base_interval * 60))
     if status.is_open:
-        return 60           # ~realtime during regular hours
+        return 600          # 10 min during regular hours
     if status.label in ("pre-market", "after-hours"):
-        return 300
-    return 1800             # closed / weekend
+        return 900          # 15 min in extended hours
+    return 1800             # 30 min closed / weekend

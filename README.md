@@ -87,9 +87,10 @@ everything from the tested indicator + signal libraries.
   entry/stop/target + position sizing), options ideas, the **stock-analyzer
   valuation** (fair value bear/base/bull, signal, reverse-DCF growth, consensus),
   and **recent news** headlines (clickable, publisher · age).
-- **Live** — the server caches on a market-aware cadence (~60s open, 5m extended,
-  30m closed); the page refreshes to match and shows the update time in **your
-  local timezone**.
+- **Live** — the server caches and refetches on a market-aware cadence (~10m
+  open, 15m extended, 30m closed — kept modest to spare the free data source);
+  the page refreshes to match and shows the update time in **your local
+  timezone**.
 
 **Tool pop-ups** — Evaluate a trade, leverage Look-through (basket constituents ×
 multiplier, with the verified as-of date), and Monte Carlo run live in a modal

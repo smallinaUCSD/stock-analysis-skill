@@ -753,7 +753,7 @@ def build_parser() -> argparse.ArgumentParser:
     wl.add_argument("--watch", action="store_true",
                     help="keep regenerating live (fast during market hours)")
     wl.add_argument("--interval", type=float,
-                    help="minutes between updates (default: auto — 1m open, 5m ext, 30m closed)")
+                    help="minutes between updates (default: auto — 10m open, 15m ext, 30m closed)")
     wl.add_argument("--open", action="store_true", help="open the file after writing")
     wl.set_defaults(func=cmd_watchlist)
 
