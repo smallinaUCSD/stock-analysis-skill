@@ -54,13 +54,20 @@ _CSS_EXTRA = """
 .chip-f.on{background:var(--accent);color:#fff;border-color:transparent;font-weight:650}
 .chip-f small{opacity:.6}
 /* table */
-.tablewrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px}
+.tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border);border-radius:12px}
 table.wl{border-collapse:collapse;width:100%;font-size:12.5px;min-width:900px}
 table.wl th,table.wl td{padding:7px 10px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--border)}
-table.wl th{position:sticky;top:0;background:var(--surface-2);color:var(--muted);font-weight:650;
+table.wl th{position:sticky;top:0;z-index:2;background:var(--surface-2);color:var(--muted);font-weight:650;
   text-transform:uppercase;letter-spacing:.03em;font-size:11px;cursor:pointer;user-select:none}
-table.wl th:first-child,table.wl td:first-child{text-align:left;position:sticky;left:0;background:var(--surface)}
+/* freeze the Ticker column so the table stays readable while scrolling sideways */
+table.wl th:first-child,table.wl td:first-child{text-align:left;position:sticky;left:0;
+  background:var(--surface);box-shadow:1px 0 0 var(--border)}
+table.wl td:first-child{z-index:1}
+table.wl th:first-child{z-index:3}
+.tablewrap.scrolled table.wl th:first-child,.tablewrap.scrolled table.wl td:first-child{
+  box-shadow:6px 0 8px -4px rgba(0,0,0,.35)}
 table.wl tr.item:hover td{background:var(--surface-2)}
+table.wl tr.item:hover td:first-child{background:var(--surface-2)}
 .tk{font-weight:700}.nm{color:var(--muted);font-size:11px;font-weight:400}
 .badge{font-weight:700;font-size:11px;padding:2px 7px;border-radius:6px}
 .badge.buy{background:var(--good);color:#fff}.badge.short{background:var(--crit);color:#fff}
@@ -642,11 +649,10 @@ function _row(l,v){ return '<div class="t-kv"><span>'+l+'</span><b>'+v+'</b></di
 function _mrow(l,v,c){ return '<div class="t-kv"><span>'+l+'</span><b class="'+c+'">'+v+'</b></div>'; }
 
 const TOOLS = {
-  pulse:{title:'📊 Market pulse', form:'', auto:true, run:runPulse},
-  value:{title:'💰 Value a stock', form:'<div class="t-row"><input id="valuetk" placeholder="Ticker e.g. AAPL" autocomplete="off" onkeydown="if(event.key===&quot;Enter&quot;)runValue()"><button class="tbtn add" onclick="runValue()">Run</button></div>', run:runValue},
-  evaluate:{title:'✅ Evaluate a trade', form:'<div class="t-row"><input id="evtk" placeholder="Ticker e.g. NVDA" autocomplete="off"><select id="evact"><option value="buy">Buy</option><option value="sell">Sell</option><option value="short">Short</option></select></div><div class="t-row"><input id="evprice" placeholder="Price (opt)" inputmode="decimal"><input id="evstop" placeholder="Stop (opt)" inputmode="decimal"><input id="evtarget" placeholder="Target (opt)" inputmode="decimal"><button class="tbtn add" onclick="runEval()">Run</button></div>', run:runEval},
-  lookthrough:{title:'🔍 Leverage look-through', form:'<div class="t-row"><input id="ltk" placeholder="Leveraged ETF e.g. FNGU" autocomplete="off" onkeydown="if(event.key===&quot;Enter&quot;)runLook()"><button class="tbtn add" onclick="runLook()">Run</button></div>', run:runLook},
-  montecarlo:{title:'🎲 Monte Carlo', form:'<div class="t-row"><input id="mctk" placeholder="Ticker e.g. NVDA" autocomplete="off"><select id="mcdays"><option value="21">1 month</option><option value="63" selected>3 months</option><option value="126">6 months</option><option value="252">1 year</option></select><select id="mcmethod"><option value="gbm">GBM (log-normal)</option><option value="bootstrap">Bootstrap (historical)</option></select><button class="tbtn add" onclick="runMC()">Run</button></div>', run:runMC},
+  evaluate:{title:'Evaluate a trade', form:'<div class="t-row"><input id="evtk" placeholder="Ticker e.g. NVDA" autocomplete="off"><select id="evact"><option value="buy">Buy</option><option value="sell">Sell</option><option value="short">Short</option></select></div><div class="t-row"><input id="evprice" placeholder="Price (opt)" inputmode="decimal"><input id="evstop" placeholder="Stop (opt)" inputmode="decimal"><input id="evtarget" placeholder="Target (opt)" inputmode="decimal"><button class="tbtn add" onclick="runEval()">Run</button></div>', run:runEval},
+  lookthrough:{title:'Leverage look-through', form:'<div class="t-row"><input id="ltk" placeholder="Leveraged ETF e.g. FNGU" autocomplete="off" onkeydown="if(event.key===&quot;Enter&quot;)runLook()"><button class="tbtn add" onclick="runLook()">Run</button></div>', run:runLook},
+  montecarlo:{title:'Monte Carlo', form:'<div class="t-row"><input id="mctk" placeholder="Ticker e.g. NVDA" autocomplete="off"><select id="mcdays"><option value="21">1 month</option><option value="63" selected>3 months</option><option value="126">6 months</option><option value="252">1 year</option></select><select id="mcmethod"><option value="gbm">GBM (log-normal)</option><option value="bootstrap">Bootstrap (historical)</option></select><button class="tbtn add" onclick="runMC()">Run</button></div>', run:runMC},
+  holdings:{title:'Holdings', form:'', auto:true, run:runHoldings},
 };
 let curTool=null;
 function openTool(name){
@@ -657,31 +663,18 @@ function openTool(name){
   document.getElementById('toolmodal').classList.add('show');
   if(t.auto){ t.run(); } else { const i=document.querySelector('#tool-form input'); if(i) i.focus(); }
 }
-function runPulse(){ toolBusy('Reading the tape…');
-  fetch('/api/pulse').then(r=>r.json()).then(d=>{
-    let h='';
-    if(d.climate) h+=_row('Climate', d.climate.label+' <span class="muted">'+(d.climate.notes||'')+'</span>');
-    if(d.fear_greed) h+=_row('Fear &amp; Greed', d.fear_greed.value+' · '+d.fear_greed.label);
-    if(d.rotation) h+=_row('Rotation leader', d.rotation);
-    if(d.sectors_top&&d.sectors_top.length){ h+='<div class="t-h">Leading sectors</div>'+d.sectors_top.map(s=>_mrow(s.name,_ps(s.ret),_pc(s.ret))).join(''); }
-    if(d.sectors_bottom&&d.sectors_bottom.length){ h+='<div class="t-h">Lagging sectors</div>'+d.sectors_bottom.map(s=>_mrow(s.name,_ps(s.ret),_pc(s.ret))).join(''); }
-    document.getElementById('tool-out').innerHTML=h||'<div class="muted">no pulse data</div>';
-  }).catch(()=>toolErr('pulse failed'));
-}
-function runValue(){ const t=_tkv('valuetk'); if(!t){ toolErr('enter a ticker'); return; } toolBusy('Valuing '+t+'…');
-  fetch('/api/stock/'+encodeURIComponent(t)).then(r=>r.json()).then(d=>{
-    if(d.error){ toolErr(d.error); return; }
-    const v=d.valuation||{};
-    let h='<div class="t-kv"><span>'+(d.name||t)+'</span><b>'+_usd(d.price)+'</b></div>';
-    if(v.signal) h+=_row('Signal', v.signal);
-    if(v.margin_of_safety!=null) h+=_mrow('Margin of safety',_ps(v.margin_of_safety),_pc(v.margin_of_safety));
-    if(v.bear!=null||v.base!=null||v.bull!=null){ h+='<div class="t-h">Fair value</div>';
-      h+=_mrow('Bear',_usd(v.bear),'down'); h+=_row('Base',_usd(v.base)); h+=_mrow('Bull',_usd(v.bull),'up'); }
-    if(v.implied_market_growth!=null) h+=_row('Reverse-DCF growth',(v.implied_market_growth*100).toFixed(0)+'%');
-    if(d.consensus&&d.consensus.reco) h+=_row('Analyst consensus', d.consensus.reco+' · target '+_ps(d.consensus.target_vs_price));
-    if(v.note) h+='<div class="t-note">'+v.note+'</div>';
+function runHoldings(){ toolBusy('Loading holdings…');
+  fetch('/api/holdings').then(r=>r.json()).then(d=>{
+    let h='<div class="t-kv"><span>Total across accounts</span><b>'+_usd(d.grand_total)+'</b></div>';
+    h+=_row('Invested', _usd(d.grand_positions)); h+=_row('Cash', _usd(d.grand_cash));
+    (d.accounts||[]).forEach(a=>{
+      h+='<div class="t-h">'+a.label+' · '+_usd(a.total)+'</div>';
+      (a.positions||[]).forEach(p=>{ h+=_row(p.ticker, _usd(p.market_value)); });
+      h+='<div class="t-kv"><span class="muted">Cash</span><b class="muted">'+_usd(a.cash)+'</b></div>';
+    });
+    h+='<div class="t-note"><a href="/holdings">Manage holdings — record trades, deposit/withdraw →</a></div>';
     document.getElementById('tool-out').innerHTML=h;
-  }).catch(()=>toolErr('value failed'));
+  }).catch(()=>toolErr('could not load holdings'));
 }
 function runEval(){ const t=_tkv('evtk'); if(!t){ toolErr('enter a ticker'); return; }
   const act=document.getElementById('evact').value; let q='?action='+act;
@@ -745,12 +738,10 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
         '<div id="addsug" class="addsug"></div></div>'
         '<button class="tbtn add" onclick="addTicker()">+ Add</button>'
         '<span class="toolsbar">'
-        '<button class="tool-b" onclick="openTool(\'pulse\')">📊 Pulse</button>'
-        '<button class="tool-b" onclick="openTool(\'value\')">💰 Value</button>'
-        '<button class="tool-b" onclick="openTool(\'evaluate\')">✅ Evaluate</button>'
-        '<button class="tool-b" onclick="openTool(\'lookthrough\')">🔍 Look-through</button>'
-        '<button class="tool-b" onclick="openTool(\'montecarlo\')">🎲 Monte Carlo</button>'
-        '<a class="tool-b" href="/holdings">💼 Holdings</a>'
+        '<button class="tool-b" onclick="openTool(\'evaluate\')">Evaluate</button>'
+        '<button class="tool-b" onclick="openTool(\'lookthrough\')">Look-through</button>'
+        '<button class="tool-b" onclick="openTool(\'montecarlo\')">Monte Carlo</button>'
+        '<button class="tool-b" onclick="openTool(\'holdings\')">Holdings</button>'
         '</span>'
         '<span id="addmsg" class="muted"></span></div>'
     ) if served else ""
@@ -963,6 +954,10 @@ function sortBy(col){{
   const b=document.getElementById('banner');
   if(b && localStorage.getItem('wl_banner')===b.dataset.sig) b.style.display='none';
   setView(view);
+  document.querySelectorAll('.tablewrap').forEach(w=>{{
+    const upd=()=>w.classList.toggle('scrolled', w.scrollLeft>2);
+    w.addEventListener('scroll', upd, {{passive:true}}); upd();
+  }});
 }})();
 {js_served}
 </script>
