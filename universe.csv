@@ -1,7 +1,9 @@
-# Screening universe -- one ticker per line. Edit freely.
-# Mix of the mega-cap growth you already own (as un-leveraged underlyings),
-# plus quality/dividend/defensive names for contrast in the core lane.
+# Screening universe -- one ticker per line (comment lines & the header are skipped).
+# Broadened across sectors + themes. ETFs / pre-revenue names will show low
+# "coverage" in the fundamental screener -- that's expected.
 ticker
+
+# --- Mega-cap tech / growth ---
 AAPL
 MSFT
 GOOGL
@@ -10,23 +12,163 @@ META
 NVDA
 AVGO
 TSLA
-PLTR
-COIN
+AMD
 NFLX
 CRM
-AMD
 ADBE
 ORCL
 NOW
+PLTR
+COIN
 UBER
+
+# --- Consumer / quality / financials ---
 COST
 PEP
 KO
 PG
 WMT
-UNH
-LLY
+HD
+MCD
 V
 MA
 JPM
-HD
+
+# --- Healthcare ---
+LLY
+UNH
+JNJ
+ABBV
+MRK
+PFE
+TMO
+ABT
+DHR
+ISRG
+VRTX
+REGN
+AMGN
+BMY
+GILD
+MDT
+ELV
+ZTS
+SYK
+BSX
+VEEV
+DXCM
+IDXX
+HUM
+MCK
+IQV
+RMD
+MRNA
+HCA
+CI
+
+# --- Utilities ---
+NEE
+DUK
+SO
+D
+AEP
+EXC
+XEL
+SRE
+PEG
+ED
+WEC
+EIX
+
+# --- Energy ---
+XOM
+CVX
+COP
+SLB
+EOG
+MPC
+PSX
+VLO
+OXY
+WMB
+KMI
+FANG
+LNG
+
+# --- Photonics / optics ---
+COHR
+LITE
+IPGP
+MKSI
+VIAV
+FN
+AAOI
+
+# --- Quantum computing ---
+IONQ
+RGTI
+QBTS
+QUBT
+ARQQ
+
+# --- Semiconductors / chips ---
+ASML
+TSM
+MU
+QCOM
+TXN
+INTC
+ARM
+KLAC
+LRCX
+AMAT
+ADI
+NXPI
+MRVL
+ON
+MCHP
+TER
+
+# --- AI infrastructure / data centers ---
+NBIS
+EQIX
+DLR
+VRT
+ANET
+CIEN
+SNOW
+MDB
+CEG
+VST
+SMR
+OKLO
+TLN
+
+# --- Space / aerospace & defense ---
+RKLB
+LUNR
+ASTS
+RDW
+PL
+LMT
+RTX
+NOC
+BA
+
+# --- Industrials / materials ---
+GLW
+CMI
+CAT
+DE
+ETN
+HON
+
+# --- Safe / broad-market funds ---
+VOO
+QQQ
+VTI
+SPY
+SCHD
+VIG
+VYM
+DIA

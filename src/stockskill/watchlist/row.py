@@ -54,7 +54,22 @@ class TickerRow:
     sections: set = field(default_factory=set)
     # embedded stock-analyzer detail (valuation + consensus), for card expansion
     valuation: dict = field(default_factory=dict)
+    price_history: dict = field(default_factory=dict)   # {"d": [iso...], "c": [close...]}
     error: str | None = None
+
+
+def _downsample_history(dates, closes, n: int = 320) -> dict:
+    """Reduce a (dates, closes) series to ~n evenly-spaced points for charting."""
+    L = len(closes)
+    if L == 0:
+        return {}
+    if L <= n:
+        idx = range(L)
+    else:
+        step = L / n
+        idx = sorted({int(i * step) for i in range(n)} | {L - 1})
+    return {"d": [dates[i].isoformat() for i in idx],
+            "c": [round(float(closes[i]), 2) for i in idx]}
 
 
 def build_row(td: TickerData, cfg: SignalConfig | None = None,

@@ -28,6 +28,15 @@ def test_build_smart_universe():
     assert "EXPENSIVE" not in u["all"]                   # negative MoS, no growth
 
 
+def test_funds_section_always_present():
+    u = build_smart_universe(_cands(), ["XLK"], pinned=["AAPL"],
+                             funds=["FCNTX", "FDGRX"], n_growth=2, n_value=1)
+    assert u["sections"]["FUNDS"] == ["FCNTX", "FDGRX"]
+    assert "FCNTX" in u["all"] and "FDGRX" in u["all"]
+    # funds are pinned-like: never counted as growth/value picks
+    assert "FCNTX" not in u["sections"]["GROWTH"]
+
+
 def test_pinned_never_rotated_out():
     # AAPL scores low growth but is pinned -> always present, never a growth pick.
     u = build_smart_universe(_cands(), [], pinned=["AAPL"], n_growth=2, n_value=0)

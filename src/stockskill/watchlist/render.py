@@ -98,8 +98,11 @@ table.wl tr.item:hover td{background:var(--surface-2)}
 .modal-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;
   padding:18px 20px;max-width:460px;width:100%;height:max-content;position:relative;
   box-shadow:0 20px 60px rgba(0,0,0,.45)}
-.modal-x{position:absolute;top:10px;right:12px;border:none;background:none;color:var(--muted);
-  font-size:19px;cursor:pointer;line-height:1}
+.modal-x{position:absolute;top:10px;right:10px;width:36px;height:36px;z-index:2;
+  border:1px solid var(--border);border-radius:50%;background:var(--surface-2);
+  color:var(--ink);font-size:18px;cursor:pointer;line-height:1;display:flex;
+  align-items:center;justify-content:center}
+.modal-x:hover{background:var(--crit);color:#fff;border-color:transparent}
 #modal-body .card-detail{display:block}
 #modal-body .details-cta{display:none}
 #modal-body .card-item{cursor:default;border:none;padding:0}
@@ -122,6 +125,18 @@ details.sectors summary::-webkit-details-marker{display:none}
 .det-row{display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:1px 0}
 .det-row b{font-variant-numeric:tabular-nums;text-align:right}
 .det-note{font-size:11px;color:var(--muted);margin-top:4px;line-height:1.4}
+.ts-sub{font-size:10.5px;color:var(--muted);margin-bottom:4px}
+.stance{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;margin-left:6px;
+  text-transform:none;letter-spacing:0}
+.stance.pos{background:var(--good);color:#fff} .stance.neg{background:var(--crit);color:#fff}
+.stance.midtone{background:var(--warn);color:#111}
+.stance.mid{background:var(--surface-2);border:1px solid var(--border);color:var(--muted)}
+.fvtable{width:100%;border-collapse:collapse;font-size:12px;margin:4px 0}
+.fvtable th{text-align:left;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.04em;padding:2px 0}
+.fvtable td{padding:3px 0;font-variant-numeric:tabular-nums}
+.fvtable td.fl{font-weight:600} .fvtable td.fl.up{color:var(--up)} .fvtable td.fl.down{color:var(--down)}
+.fvtable td.fv{text-align:right;font-weight:700;padding-right:12px}
+.fvtable td:last-child{text-align:right;color:var(--muted)}
 /* heatmap */
 .heat{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
 .tile-item{border:1px solid var(--border);border-radius:10px;padding:10px 12px;text-align:center}
@@ -253,12 +268,18 @@ def _row_html(r):
 
 
 def _trade_setup_html(r):
-    if r.signal not in ("BUY", "SHORT") or not r.atr or not r.price:
+    if not r.atr or not r.price:
         return ""
-    direction = "LONG" if r.signal == "BUY" else "SHORT"
+    # Always show a setup. Direction from the signal, or the trend when HOLD.
+    if r.signal == "SHORT" or (r.signal == "HOLD" and r.trend_score < 0):
+        direction, cls = "SHORT", "short"
+    else:
+        direction, cls = "LONG", "buy"
     s = atr_trade_setup(r.price, r.atr, direction)
     if not s:
         return ""
+    illustrative = "" if r.signal in ("BUY", "SHORT") else \
+        '<div class="ts-sub">no active signal — illustrative ATR setup, direction from trend</div>'
     size_line = ""
     acct = os.environ.get("ACCOUNT_SIZE")
     if acct:
@@ -270,10 +291,9 @@ def _trade_setup_html(r):
                              f'${ps.dollars:,.0f} ({ps.pct_of_account:.0%}){cap}</b></div>')
         except ValueError:
             pass
-    cls = "buy" if r.signal == "BUY" else "short"
     return (
         f'<div class="tsetup {cls}"><div class="ts-h">Trade setup · {direction} '
-        f'({s.rr_ratio:.0f}:1 R:R)</div>'
+        f'({s.rr_ratio:.0f}:1 R:R)</div>{illustrative}'
         f'<div class="ts-row"><span>Entry</span><b>${s.entry:,.2f}</b></div>'
         f'<div class="ts-row"><span>Stop</span><b class="down">${s.stop:,.2f} (-{s.risk_pct*100:.1f}%)</b></div>'
         f'<div class="ts-row"><span>Target</span><b class="up">${s.target:,.2f} (+{s.reward_pct*100:.1f}%)</b></div>'
@@ -299,15 +319,36 @@ def _valuation_html(r):
     c = d.get("consensus") or {}
     if not v:
         return '<div class="det-sec"><div class="det-h">Stock analyzer</div><div class="muted">valuation n/a (ETF or no fundamentals)</div></div>'
-    rows = [f'<div class="det-row"><span>Valuation signal</span><b>{html.escape(v.get("signal") or "n/a")}</b></div>']
+
+    # Colored stance: undervalued=green, overvalued=red, fair=neutral.
+    mos = v.get("margin_of_safety")
+    if mos is None:
+        stance_cls, stance = "mid", "no reliable fair value"
+    elif mos >= 0.10:
+        stance_cls, stance = "pos", "Undervalued"
+    elif mos <= -0.10:
+        stance_cls, stance = "neg", "Overvalued"
+    else:
+        stance_cls, stance = "midtone", "Fairly valued"
+    header = (f'<div class="det-h">Stock analyzer — valuation '
+              f'<span class="stance {stance_cls}">{stance}'
+              + (f' {mos*100:+.0f}%' if mos is not None else '') + '</span></div>')
+
+    price = v.get("price") or r.price
     base, bear, bull = v.get("base"), v.get("bear"), v.get("bull")
+    body = ""
     if base is not None and bear is not None and bull is not None:
-        rows.append(f'<div class="det-row"><span>Fair value bear/base/bull</span>'
-                    f'<b>${bear:,.0f} / ${base:,.0f} / ${bull:,.0f}</b></div>')
-        mos = v.get("margin_of_safety")
-        if mos is not None:
-            rows.append(f'<div class="det-row"><span>Price vs fair value</span>'
-                        f'<b class="{"up" if mos>=0 else "down"}">{mos*100:+.0f}%</b></div>')
+        def frow(label, val, cls=""):
+            pv = ""
+            if price and val:
+                dv = val / price - 1.0
+                pv = f'<td class="{"up" if dv>=0 else "down"}">{dv*100:+.0f}% vs price</td>'
+            return f'<tr><td class="fl {cls}">{label}</td><td class="fv">${val:,.0f}</td>{pv or "<td></td>"}</tr>'
+        body += ('<table class="fvtable"><tr><th>Fair value</th><th></th><th></th></tr>'
+                 + frow("Bear", bear, "down") + frow("Base", base)
+                 + frow("Bull", bull, "up") + '</table>')
+
+    rows = []
     ig = v.get("implied_market_growth")
     if ig is not None:
         rows.append(f'<div class="det-row"><span>Reverse-DCF implied growth</span><b>{ig*100:.0f}%</b></div>')
@@ -320,7 +361,7 @@ def _valuation_html(r):
         rows.append(f'<div class="det-row"><span>Analyst consensus</span><b>{html.escape(reco)}{thtml}</b></div>')
     note = v.get("note")
     note_html = f'<div class="det-note">{html.escape(note)}</div>' if note else ""
-    return f'<div class="det-sec"><div class="det-h">Stock analyzer — valuation</div>{"".join(rows)}{note_html}</div>'
+    return f'<div class="det-sec">{header}{body}{"".join(rows)}{note_html}</div>'
 
 
 def _card_detail(r):

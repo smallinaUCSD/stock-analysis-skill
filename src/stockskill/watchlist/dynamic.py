@@ -28,16 +28,32 @@ SECTOR_LEVERAGED = {
     "XLY": "WANT", "XLU": "UTSL", "XLRE": "DRN",
 }
 
+# Funds that are always kept on the board (never rotated out).
+PINNED_FUNDS = ["FCNTX", "FDGRX", "WSMNX", "VOO", "QQQ", "SCHD"]
+
 # Curated candidate pool the rotating picks are drawn from.
 CANDIDATES = [
+    # mega-cap / software
     "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA", "AVGO", "AMD", "NFLX",
-    "CRM", "ORCL", "ADBE", "NOW", "PLTR", "SNOW", "UBER", "SHOP", "COIN", "MSTR",
+    "CRM", "ORCL", "ADBE", "NOW", "PLTR", "SNOW", "MDB", "UBER", "SHOP", "COIN", "MSTR",
+    # semiconductors / equipment
     "MU", "QCOM", "TXN", "INTC", "ARM", "SMCI", "DELL", "PANW", "CRWD", "DDOG",
+    "ASML", "TSM", "KLAC", "LRCX", "AMAT", "ADI", "NXPI", "MRVL", "ON", "MCHP",
+    # AI infrastructure / data centers / power
+    "NBIS", "EQIX", "DLR", "VRT", "ANET", "CIEN", "CEG", "VST", "SMR", "OKLO", "TLN", "BE",
+    # consumer / financials
     "COST", "WMT", "PEP", "KO", "PG", "MCD", "SBUX", "NKE", "HD", "LOW",
     "V", "MA", "JPM", "BAC", "GS", "MS", "BLK", "SCHW", "AXP", "PYPL",
+    # healthcare
     "UNH", "LLY", "JNJ", "ABBV", "MRK", "PFE", "TMO", "ISRG", "VRTX", "REGN",
-    "XOM", "CVX", "COP", "SLB", "CAT", "DE", "GE", "BA", "HON", "LMT",
-    "DIS", "CMCSA", "T", "VZ", "TMUS", "ABNB", "BKNG", "MAR", "LULU", "CMG",
+    "AMGN", "GILD", "BMY", "MDT", "ZTS", "SYK", "VEEV", "DXCM", "MCK", "MRNA",
+    # energy
+    "XOM", "CVX", "COP", "SLB", "EOG", "MPC", "PSX", "VLO", "OXY", "FANG",
+    # industrials / materials / space-defense
+    "CAT", "DE", "GE", "BA", "HON", "LMT", "RTX", "NOC", "ETN", "GLW", "CMI",
+    "RKLB", "LUNR", "ASTS", "PL",
+    # other
+    "DIS", "CMCSA", "TMUS", "ABNB", "BKNG", "MAR", "LULU", "CMG",
 ]
 
 
@@ -61,10 +77,11 @@ def _dedup(seq):
 def build_smart_universe(candidates: list[Candidate], sector_leaders: list[str],
                          pinned: list[str] | None = None,
                          n_growth: int = 10, n_value: int = 10,
-                         n_sectors: int = 3) -> dict:
+                         n_sectors: int = 3, funds: list[str] | None = None) -> dict:
     """Assemble the sectioned smart universe. Pure given scored candidates."""
     pinned = list(pinned if pinned is not None else PINNED)
-    pinned_set = set(pinned)
+    funds = list(funds if funds is not None else PINNED_FUNDS)
+    pinned_set = set(pinned) | set(funds)
 
     growth = sorted((c for c in candidates if c.growth is not None and c.ticker not in pinned_set),
                     key=lambda c: c.growth, reverse=True)
@@ -87,18 +104,19 @@ def build_smart_universe(candidates: list[Candidate], sector_leaders: list[str],
 
     sections = {
         "PINNED": _dedup(pinned),
+        "FUNDS": _dedup(funds),
         "LEVERAGED": lev_picks,
         "GROWTH": growth_picks,
         "VALUE": value_picks,
         "SECTOR": sector_syms,
     }
-    all_tickers = _dedup(pinned + lev_picks + growth_picks + value_picks + sector_syms)
+    all_tickers = _dedup(pinned + funds + lev_picks + growth_picks + value_picks + sector_syms)
     return {"sections": sections, "all": all_tickers}
 
 
 def write_sectioned(path, universe: dict) -> None:
     """Write the smart universe to a sectioned tickers.csv."""
-    order = ["PINNED", "LEVERAGED", "GROWTH", "VALUE", "SECTOR"]
+    order = ["PINNED", "FUNDS", "LEVERAGED", "GROWTH", "VALUE", "SECTOR"]
     lines = ["# Auto-generated smart watchlist. Regenerate with `stockskill smart-watchlist`.",
              "# Pinned staples are always kept; GROWTH/VALUE/SECTOR rotate.", ""]
     for sec in order:
