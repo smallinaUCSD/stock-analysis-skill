@@ -19,6 +19,7 @@ class HoldingRow:
     account: str
     shares: float | None
     market_value: float | None
+    cost_basis: float | None = None   # average price paid per share (optional)
 
 
 def _num(v):
@@ -39,20 +40,22 @@ def read_rows(path: str | Path) -> list[HoldingRow]:
         if not tk:
             continue
         rows.append(HoldingRow(tk, (r.get("account") or "").strip(),
-                               _num(r.get("shares")), _num(r.get("market_value"))))
+                               _num(r.get("shares")), _num(r.get("market_value")),
+                               _num(r.get("cost_basis"))))
     return rows
 
 
 def write_rows(path: str | Path, rows: list[HoldingRow]) -> None:
     with open(path, "w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["ticker", "market_value", "account", "shares"])
+        w.writerow(["ticker", "market_value", "account", "shares", "cost_basis"])
         for r in rows:
             w.writerow([
                 r.ticker,
                 "" if r.market_value is None else round(r.market_value, 2),
                 r.account,
                 "" if r.shares is None else round(r.shares, 4),
+                "" if r.cost_basis is None else round(r.cost_basis, 4),
             ])
 
 

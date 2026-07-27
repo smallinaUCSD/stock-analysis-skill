@@ -48,6 +48,7 @@ class TickerRow:
     week52_high: float | None = None
     week52_low: float | None = None
     week52_position: float | None = None                 # 0..1 within the 52w range
+    next_earnings: str | None = None                     # ISO date of next earnings
     # flags & tags
     flags: set = field(default_factory=set)
     categories: set = field(default_factory=set)
@@ -58,16 +59,19 @@ class TickerRow:
     error: str | None = None
 
 
-def _downsample_history(dates, closes, n: int = 320) -> dict:
-    """Reduce a (dates, closes) series to ~n evenly-spaced points for charting."""
+def _downsample_history(dates, closes, daily_bars: int = 130, older_step: int = 5) -> dict:
+    """Compact a (dates, closes) series for the card chart.
+
+    Keeps the most recent ``daily_bars`` (~6 months) at full daily resolution so
+    the short timeframes (1M/3M) are crisp, and samples older history every
+    ``older_step`` bars (~weekly) to keep the embedded payload small. The chart
+    slices by calendar date, so uneven spacing is fine.
+    """
     L = len(closes)
     if L == 0:
         return {}
-    if L <= n:
-        idx = range(L)
-    else:
-        step = L / n
-        idx = sorted({int(i * step) for i in range(n)} | {L - 1})
+    cut = max(0, L - daily_bars)
+    idx = sorted(set(range(0, cut, older_step)) | set(range(cut, L)))
     return {"d": [dates[i].isoformat() for i in idx],
             "c": [round(float(closes[i]), 2) for i in idx]}
 
@@ -100,6 +104,9 @@ def build_row(td: TickerData, cfg: SignalConfig | None = None,
         row.ichimoku = ich.price_vs_cloud if ich else None
         row.volume_bias = ta.volume_bias(closes, vols) if vols else None
         row.vol_spike = ta.volume_spike(vols)[0] if vols else False
+        dates = o.get("dates") or []
+        if dates and len(dates) == len(closes):
+            row.price_history = _downsample_history(dates, closes)
 
         # signals
         s = build_snapshot(highs, lows, closes, vols)
@@ -126,6 +133,7 @@ def build_row(td: TickerData, cfg: SignalConfig | None = None,
             rng = snap.fifty_two_week_high - snap.fifty_two_week_low
             if rng > 0:
                 row.week52_position = (row.price - snap.fifty_two_week_low) / rng
+        row.next_earnings = snap.next_earnings
         row.categories = detect_categories(td.ticker, snap.name, snap.sector,
                                             snap.quote_type, snap.dividend_annual)
         # Embed the analyzer valuation (reuses the fetched snapshot -- no network).
@@ -158,4 +166,19 @@ def _flags(r: TickerRow, cfg: SignalConfig) -> set:
         f.add("near_52w_high")
     if r.price and r.week52_low and r.price <= 1.01 * r.week52_low:
         f.add("near_52w_low")
+    if earnings_days(r.next_earnings) is not None and earnings_days(r.next_earnings) <= 7:
+        f.add("earnings_soon")
     return f
+
+
+def earnings_days(iso: str | None) -> int | None:
+    """Whole days from today until the ISO earnings date (None if unknown/past)."""
+    if not iso:
+        return None
+    try:
+        from datetime import date
+        y, m, d = (int(x) for x in iso.split("-"))
+        delta = (date(y, m, d) - date.today()).days
+        return delta if delta >= 0 else None
+    except Exception:
+        return None

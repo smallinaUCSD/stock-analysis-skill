@@ -12,8 +12,10 @@ from dataclasses import dataclass
 from ..technicals.changes import pct_change
 
 INDICES = {"^DJI": "Dow", "^GSPC": "S&P 500", "^IXIC": "Nasdaq"}
-COMMODITIES = {"GC=F": "Gold", "SI=F": "Silver", "HG=F": "Copper"}
-CRYPTO = {"BTC-USD": "Bitcoin"}
+COMMODITIES = {"GC=F": "Gold", "SI=F": "Silver", "HG=F": "Copper",
+               "CL=F": "Crude Oil", "NG=F": "Nat Gas", "PL=F": "Platinum",
+               "ZS=F": "Soybeans", "ZC=F": "Corn", "ZW=F": "Wheat"}
+CRYPTO = {"BTC-USD": "Bitcoin", "ETH-USD": "Ethereum"}
 # index ETFs used for rotation (liquid, clean intraday)
 ROTATION = {"SPY": "S&P 500", "QQQ": "Nasdaq 100", "IWM": "Small caps",
             "MDY": "Mid caps", "RSP": "Equal weight"}

@@ -15,36 +15,58 @@ feature reachable as a pop-up. The static HTML generators stay for cron/offline.
 - [x] Always show a **trade setup** when expanded (direction from trend on HOLD).
 - [x] Color the valuation: **green undervalued / red overvalued / neutral fair**.
 - [x] Render **fair value as a table** (bear/base/bull rows, each vs price).
-- [ ] **Interactive price chart** with timeframe toggle (1/3/6mo, 1/2/5/10y) and a
-      hover tooltip showing price at the hovered point. (Embed a downsampled series.)
+- [x] **Interactive price chart** with timeframe toggle (1/3/6mo, 1/2/5y, Max) and
+      a hover tooltip showing price + date at the hovered point. Slices by calendar
+      date; recent ~6mo kept daily (crisp short views), older sampled weekly.
 - [x] Make the **close (✕) button bigger / easier to hit**.
 
 ## 3. Layout (all views)
-- [ ] **Left panel**: condensed sector performance — always visible.
-- [ ] **Right panel**: commodities (indices/metals/crypto), live-updating like stocks.
-- [ ] Move the **filter chips below** the two panels.
+- [x] **Left panel**: condensed sector performance — always visible (no longer collapsible).
+- [x] **Right panel**: Markets — indices/metals/crypto, refreshed with the page like stocks.
+- [x] Move the **filter chips below** the two panels.
 
 ## 4. Serve the watchlist as THE live dashboard (architecture shift)
-- [ ] `serve` home = the watchlist (cards/table/heatmap), served from Flask.
-- [ ] Always live: server refreshes data on a market-aware cadence; page polls.
-      (No `--watch` flag needed; the input/static file goes away for the app.)
-- [ ] **Add-ticker** box with autocomplete (reuse `/api/search`) that adds a
-      ticker to the board live and fetches its data.
+- [x] `serve` home `/` = the live watchlist (cards/table/heatmap) from Flask;
+      analyzer moved to `/analyze`. Core build extracted to `watchlist/build.py`,
+      shared by the CLI (static file) and the server (live).
+- [x] Always live: `WatchlistService` caches the HTML with a market-aware TTL
+      (60s open / 5m ext / 30m closed); the page polls via meta-refresh.
+- [x] **Add-ticker** box with autocomplete (reuses `/api/search`): validates the
+      symbol has data, adds it live, rebuilds the board. `/api/watchlist/add`,
+      `/remove`, `/added`. Verified end-to-end (added TSLA + ORCL live).
 
 ## 5. Analysis tools as pop-ups on the dashboard
 Buttons that open a small modal which runs the feature live and shows the result:
-- [ ] Pulse · [ ] Evaluate trade · [ ] Value a stock · [ ] Look-through · [ ] Monte Carlo.
+- [x] Pulse · [x] Evaluate trade · [x] Value a stock · [x] Look-through · [x] Monte Carlo.
+      Toolbar in the add-bar (served mode); a shared #toolmodal fetches each tool
+      live. New endpoints: /api/pulse, /api/lookthrough/<t>, /api/montecarlo/<t>
+      (value/evaluate reuse /api/stock, /api/evaluate). All verified in-browser.
 
-## 6. Holdings dashboard (centralized, part of the app)
-- [ ] View holdings split by account: **brokerage / Roth IRA / 401k**.
-- [ ] **Execute trades** (buy/sell) that update internal values (reuse `holdings`).
-- [ ] **Deposit / withdraw cash** per account.
+## 6. Holdings dashboard (centralized, part of the app) — LOCAL ONLY
+- [x] View holdings split by account: **Brokerage / Roth IRA / 401(k)**, with
+      per-account + grand totals and stat tiles (total / invested / cash).
+- [x] **Record trades** (buy/sell, dollar-based) that update holdings.csv and
+      settle against the account's cash. Bookkeeping — never places a real order.
+- [x] **Deposit / withdraw cash** per account.
+- Served at `/holdings`; reachable from the board toolbar. holdings.csv stays
+  gitignored and is NEVER written to a static file or published to Pages.
+  Verified end-to-end against a copy (buy/sell/close/cash all reconcile).
 
 ## 7. Monte Carlo dashboard
-- [ ] A page/modal to simulate a stock: inputs (ticker, horizon, paths, method,
-      thresholds) → distribution + probability cone + up/down odds. (ML deep-dive later.)
+- [x] Delivered as the **Monte Carlo tool pop-up** (item 5): ticker + horizon
+      (1/3/6mo, 1y) + method (GBM/bootstrap) → E[r], P(up/gain/loss), VaR, and a
+      p5..p95 outcome cone. `/api/montecarlo/<ticker>`. (Deeper ML dive: future.)
 
 ## Notes
 - SpaceX / Oracle-2x handled via DXYZ / ORCX (verified live).
 - The `--watch` static generation stays available for the cron/Pages path;
   the interactive app is the served version.
+
+## 8. Alerts (next milestone)
+- [x] **Earnings flag on cards**: yfinance next-earnings date -> a colored flag
+      (today / tomorrow / in Nd / next week) on the card + an "Earnings ≤7d"
+      filter chip. (fundamentals.next_earnings -> row.next_earnings -> card.)
+- [ ] **News**: relevant recent headlines per ticker (yfinance `.news`) shown in
+      the expanded card / a News pop-up. (self-contained; per-ticker fetch.)
+- [ ] **Macro alerts**: Fed decisions, jobs reports, large layoffs, etc. Needs an
+      events/news source — pick one (econ calendar API or curated feed). Design TBD.

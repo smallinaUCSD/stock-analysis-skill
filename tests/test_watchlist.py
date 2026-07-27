@@ -1,9 +1,23 @@
 import pytest
 
-from stockskill.watchlist import parse_tickers, detect_categories, build_row
+from stockskill.watchlist import (parse_tickers, parse_tickers_text,
+                                  detect_categories, build_row)
 from stockskill.watchlist.pipeline import TickerData
 from stockskill.data.fundamentals import FundamentalSnapshot
 from stockskill.signals import SignalConfig
+
+
+def test_parse_tickers_text_matches_file(tmp_path):
+    text = "[M7]\nAAPL, MSFT\n\n[ADDED]\nNVDA, AAPL\n"
+    p = parse_tickers_text(text)
+    assert p["sections"]["M7"] == ["AAPL", "MSFT"]
+    assert p["sections"]["ADDED"] == ["NVDA", "AAPL"]
+    # dedup across sections, first-seen order
+    assert p["all"] == ["AAPL", "MSFT", "NVDA"]
+    # parse_tickers(file) is just parse_tickers_text(read())
+    f = tmp_path / "t.csv"
+    f.write_text(text)
+    assert parse_tickers(str(f)) == p
 
 
 def test_parse_tickers_sectioned(tmp_path):
