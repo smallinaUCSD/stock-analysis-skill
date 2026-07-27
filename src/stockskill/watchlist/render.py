@@ -81,8 +81,9 @@ table.wl tr.item:hover td:first-child{background:var(--surface-2)}
 /* cards */
 .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
 .card-item{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px}
-.card-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
-.card-price{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+.card-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:nowrap}
+.card-top>div:first-child{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.card-price{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;flex:0 0 auto}
 .card-row{display:flex;justify-content:space-between;font-size:12px;margin-top:3px;color:var(--muted)}
 .card-row b{color:var(--ink);font-variant-numeric:tabular-nums}
 .card-spark{margin:8px 0}
@@ -114,6 +115,8 @@ table.wl tr.item:hover td:first-child{background:var(--surface-2)}
 #modal-body .card-detail{display:block}
 #modal-body .details-cta{display:none}
 #modal-body .card-item{cursor:default;border:none;padding:0}
+/* keep the expanded price out from under the close button */
+#modal-body .card-top{padding-right:42px}
 /* add-ticker bar (served mode) */
 .addbar{display:flex;align-items:center;gap:8px;margin-bottom:12px}
 .addwrap{position:relative;flex:0 1 340px}
@@ -166,7 +169,7 @@ table.wl tr.item:hover td:first-child{background:var(--surface-2)}
 .panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 14px}
 .panel-h{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
   letter-spacing:.04em;margin-bottom:6px}
-.panel-body{max-height:230px;overflow:auto}
+.panel-body{overflow:visible}
 .mkgroup{font-size:9.5px;font-weight:700;color:var(--muted);text-transform:uppercase;
   letter-spacing:.05em;margin:6px 0 2px;opacity:.75}
 .mkgroup:first-child{margin-top:0}
@@ -207,8 +210,14 @@ table.wl tr.item:hover td:first-child{background:var(--surface-2)}
   background:var(--surface-2);border:1px solid var(--border);color:var(--muted)}
 .tfb:hover{color:var(--ink)}
 .tfb.on{background:var(--accent,#3b82f6);border-color:transparent;color:#fff}
-.pricechart{position:relative;width:100%;height:150px;touch-action:none}
-.pricechart svg{display:block;width:100%;height:150px;overflow:visible}
+.pricechart{position:relative;width:100%;touch-action:none}
+.pricechart svg{display:block;width:100%;height:auto;overflow:visible}
+.pricechart .axl{fill:var(--muted);font-size:9px;font-family:inherit}
+.chart-box{position:absolute;pointer-events:none;z-index:5;background:var(--surface);
+  border:1px solid var(--border);border-radius:7px;padding:3px 7px;font-size:11px;
+  line-height:1.35;box-shadow:0 4px 14px rgba(0,0,0,.3);white-space:nowrap}
+.chart-box .cb-d{color:var(--muted);font-size:10px}
+.chart-box .cb-p{font-weight:700;font-variant-numeric:tabular-nums}
 .chart-tip{font-size:11px;margin-top:4px;min-height:15px;font-variant-numeric:tabular-nums}
 .chart-tip b{color:var(--ink)}
 /* heatmap */
@@ -871,6 +880,11 @@ function chartTf(btn){{
   sec.querySelectorAll('.tfb').forEach(b=>b.classList.toggle('on', b===btn));
   renderChart(sec.querySelector('.pricechart'), btn.dataset.tf);
 }}
+function fmtUSD(v){{ return '$'+v.toLocaleString(undefined,{{minimumFractionDigits:2,maximumFractionDigits:2}}); }}
+function fmtAxisPrice(v){{ if(Math.abs(v)>=1000) return '$'+(v/1000).toFixed(1)+'k'; return '$'+(v<10?v.toFixed(2):v.toFixed(0)); }}
+function fmtDate(iso){{ const d=new Date(iso); return (d.getMonth()+1)+'/'+d.getDate()+'/'+String(d.getFullYear()).slice(2); }}
+function niceStep(range, target){{ const raw=(range||1)/Math.max(1,target); const p=Math.pow(10,Math.floor(Math.log10(raw)));
+  const nrm=raw/p; const s=nrm<1.5?1:(nrm<3?2:(nrm<7?5:10)); return s*p; }}
 function renderChart(el, tf){{
   const s=el._series; if(!s||!s.c||!s.c.length) return;
   const n=s.c.length;
@@ -879,45 +893,68 @@ function renderChart(el, tf){{
   let start=0; for(let i=0;i<n;i++){{ if(new Date(s.d[i]).getTime()>=cutoff){{ start=i; break; }} }}
   if(start>n-2) start=Math.max(0,n-2);
   const c=s.c.slice(start), d=s.d.slice(start);
-  const W=340, H=150, PADX=2, PADY=10;
-  let lo=Math.min.apply(null,c), hi=Math.max.apply(null,c); const rng=(hi-lo)||1;
-  const X=i=> PADX + (c.length<2?0:i/(c.length-1)*(W-2*PADX));
-  const Y=v=> PADY + (1-(v-lo)/rng)*(H-2*PADY);
+  const W=Math.max(280, Math.round(el.clientWidth||340)), H=176;
+  const ML=48, MR=10, MT=8, MB=22, x0=ML, x1=W-MR, y0=H-MB, y1=MT;
+  let lo=Math.min.apply(null,c), hi=Math.max.apply(null,c);
+  const dataLo=lo, pad=(hi-lo)*0.06||1; lo-=pad; hi+=pad; if(dataLo>=0 && lo<0) lo=0;
+  const rng=(hi-lo)||1;
+  const X=i=> x0 + (c.length<2?0:i/(c.length-1)*(x1-x0));
+  const Y=v=> y0 - (v-lo)/rng*(y0-y1);
   const up=c[c.length-1]>=c[0];
   const stroke=up?'var(--up)':'var(--down)';
   const line=c.map((v,i)=>X(i).toFixed(1)+','+Y(v).toFixed(1)).join(' ');
-  const area=`${{PADX}},${{H-PADY}} `+line+` ${{(W-PADX).toFixed(1)}},${{H-PADY}}`;
+  const area=x0.toFixed(1)+','+y0+' '+line+' '+x1.toFixed(1)+','+y0;
+  // y gridlines + labels (nice steps)
+  const step=niceStep(hi-lo,4); let grid='', ylab='';
+  for(let v=Math.ceil(lo/step)*step; v<=hi+1e-9; v+=step){{ const yy=Y(v).toFixed(1);
+    grid+='<line x1="'+x0+'" y1="'+yy+'" x2="'+x1+'" y2="'+yy+'" stroke="var(--border)" stroke-width="0.6" opacity="0.55"/>';
+    ylab+='<text x="'+(x0-5)+'" y="'+(parseFloat(yy)+3)+'" text-anchor="end" class="axl">'+fmtAxisPrice(v)+'</text>'; }}
+  // x labels: start / mid / end
+  let xlab=''; [[0,'start'],[Math.floor((c.length-1)/2),'middle'],[c.length-1,'end']].forEach(([idx,anc])=>{{
+    xlab+='<text x="'+X(idx).toFixed(1)+'" y="'+(H-7)+'" text-anchor="'+anc+'" class="axl">'+fmtDate(d[idx])+'</text>'; }});
+  const axes='<line x1="'+x0+'" y1="'+y1+'" x2="'+x0+'" y2="'+y0+'" stroke="var(--muted)" stroke-width="1"/>'
+            +'<line x1="'+x0+'" y1="'+y0+'" x2="'+x1+'" y2="'+y0+'" stroke="var(--muted)" stroke-width="1"/>';
   el.innerHTML=
-    '<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none">'
+    '<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'">'
+    +grid
     +'<polygon points="'+area+'" fill="'+stroke+'" opacity="0.08"/>'
-    +'<polyline points="'+line+'" fill="none" stroke="'+stroke+'" stroke-width="1.6" vector-effect="non-scaling-stroke"/>'
-    +'<line class="cx" x1="0" y1="'+PADY+'" x2="0" y2="'+(H-PADY)+'" stroke="var(--muted)" stroke-width="1" vector-effect="non-scaling-stroke" style="display:none"/>'
-    +'<circle class="cd" r="3.2" fill="'+stroke+'" style="display:none"/></svg>';
-  el._geom={{c,d,W,H,PADX,X,Y}};
+    +'<polyline points="'+line+'" fill="none" stroke="'+stroke+'" stroke-width="1.6"/>'
+    +axes+ylab+xlab
+    +'<line class="cx" x1="0" y1="'+y1+'" x2="0" y2="'+y0+'" stroke="var(--muted)" stroke-width="1" style="display:none"/>'
+    +'<circle class="cd" r="3.2" fill="'+stroke+'" style="display:none"/></svg>'
+    +'<div class="chart-box" style="display:none"></div>';
+  el._geom={{c,d,W,H,X,Y,x0,x1,y0,y1}};
   const tip=el.closest('.chart-sec').querySelector('.chart-tip');
-  const first=d[0], last=d[d.length-1];
   const pct=((c[c.length-1]-c[0])/c[0]*100);
-  const base='<b>'+fmtUSD(c[c.length-1])+'</b> · '+(pct>=0?'+':'')+pct.toFixed(1)+'% ('+first+' → '+last+')';
+  const base='<b>'+fmtUSD(c[c.length-1])+'</b> · '+(pct>=0?'+':'')+pct.toFixed(1)+'% ('+d[0]+' → '+d[d.length-1]+')';
   if(tip){{ tip.dataset.base=base; tip.innerHTML=base; }}
   el.onmousemove=chartHover; el.onmouseleave=chartLeave; el.ontouchmove=chartHover;
 }}
-function fmtUSD(v){{ return '$'+v.toLocaleString(undefined,{{minimumFractionDigits:2,maximumFractionDigits:2}}); }}
 function chartHover(e){{
   const el=e.currentTarget, g=el._geom; if(!g) return;
-  const r=el.getBoundingClientRect();
+  const r=el.getBoundingClientRect(), sx=r.width/g.W, sy=r.height/g.H;
   const cx=(e.touches?e.touches[0].clientX:e.clientX)-r.left;
-  const frac=Math.max(0,Math.min(1, cx/r.width));
+  const plotL=g.x0*sx, plotW=(g.x1-g.x0)*sx;
+  const frac=Math.max(0,Math.min(1,(cx-plotL)/(plotW||1)));
   let i=Math.round(frac*(g.c.length-1)); i=Math.max(0,Math.min(g.c.length-1,i));
   const svg=el.querySelector('svg'), cxl=svg.querySelector('.cx'), dot=svg.querySelector('.cd');
-  const x=g.X(i), y=g.Y(g.c[i]);
-  cxl.setAttribute('x1',x); cxl.setAttribute('x2',x); cxl.style.display='';
-  dot.setAttribute('cx',x); dot.setAttribute('cy',y); dot.style.display='';
+  const vx=g.X(i), vy=g.Y(g.c[i]);
+  cxl.setAttribute('x1',vx); cxl.setAttribute('x2',vx); cxl.style.display='';
+  dot.setAttribute('cx',vx); dot.setAttribute('cy',vy); dot.style.display='';
+  const box=el.querySelector('.chart-box');
+  box.innerHTML='<div class="cb-d">'+g.d[i]+'</div><div class="cb-p">'+fmtUSD(g.c[i])+'</div>';
+  box.style.display='';
+  const px=vx*sx, py=vy*sy, bw=box.offsetWidth||70, bh=box.offsetHeight||34;
+  let left=px+10; if(left+bw>r.width-2) left=px-bw-10; if(left<2) left=2;
+  let top=py-bh-8; if(top<2) top=py+10;
+  box.style.left=left+'px'; box.style.top=top+'px';
   const tip=el.closest('.chart-sec').querySelector('.chart-tip');
   if(tip) tip.innerHTML='<b>'+fmtUSD(g.c[i])+'</b> · '+g.d[i];
 }}
 function chartLeave(e){{
-  const el=e.currentTarget, svg=el.querySelector('svg');
+  const el=e.currentTarget, svg=el.querySelector('svg'), box=el.querySelector('.chart-box');
   if(svg){{ svg.querySelector('.cx').style.display='none'; svg.querySelector('.cd').style.display='none'; }}
+  if(box) box.style.display='none';
   const tip=el.closest('.chart-sec').querySelector('.chart-tip');
   if(tip&&tip.dataset.base) tip.innerHTML=tip.dataset.base;
 }}
