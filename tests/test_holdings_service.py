@@ -46,3 +46,24 @@ def test_deposit_and_withdraw_cash(tmp_path):
     svc, _ = _svc(tmp_path)
     assert svc.cash("roth", "deposit", 300)["balance"] == 300
     assert svc.cash("roth", "withdraw", 100)["balance"] == 200
+
+
+def test_priced_buy_sets_shares_and_cost_basis(tmp_path):
+    # a brand-new position with a price -> shares + cost basis recorded (no fetch)
+    svc, _ = _svc(tmp_path)
+    assert svc.trade("SOXL", "brokerage", "buy", 1000, settle_cash=False, price=25.0)["ok"]
+    from stockskill.portfolio.manage import read_rows
+    r = {(x.ticker, x.account): x for x in read_rows(svc._path)}[("SOXL", "brokerage")]
+    assert r.shares == 40.0            # 1000 / 25
+    assert r.cost_basis == 25.0
+    assert r.market_value == 1000.0
+
+
+def test_priced_buy_blends_cost_basis(tmp_path):
+    svc, _ = _svc(tmp_path)
+    svc.trade("SOXL", "brokerage", "buy", 1000, settle_cash=False, price=25.0)   # 40 sh @ 25
+    svc.trade("SOXL", "brokerage", "buy", 1000, settle_cash=False, price=50.0)   # +20 sh @ 50
+    from stockskill.portfolio.manage import read_rows
+    r = {(x.ticker, x.account): x for x in read_rows(svc._path)}[("SOXL", "brokerage")]
+    assert r.shares == 60.0
+    assert abs(r.cost_basis - 2000 / 60) < 1e-3   # blended avg (persisted at 4dp)

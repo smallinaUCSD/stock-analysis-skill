@@ -661,7 +661,6 @@ const TOOLS = {
   evaluate:{title:'Evaluate a trade', form:'<div class="t-row"><input id="evtk" placeholder="Ticker e.g. NVDA" autocomplete="off"><select id="evact"><option value="buy">Buy</option><option value="sell">Sell</option><option value="short">Short</option></select></div><div class="t-row"><input id="evprice" placeholder="Price (opt)" inputmode="decimal"><input id="evstop" placeholder="Stop (opt)" inputmode="decimal"><input id="evtarget" placeholder="Target (opt)" inputmode="decimal"><button class="tbtn add" onclick="runEval()">Run</button></div>', run:runEval},
   lookthrough:{title:'Leverage look-through', form:'<div class="t-row"><input id="ltk" placeholder="Leveraged ETF e.g. FNGU" autocomplete="off" onkeydown="if(event.key===&quot;Enter&quot;)runLook()"><button class="tbtn add" onclick="runLook()">Run</button></div>', run:runLook},
   montecarlo:{title:'Monte Carlo', form:'<div class="t-row"><input id="mctk" placeholder="Ticker e.g. NVDA" autocomplete="off"><select id="mcdays"><option value="21">1 month</option><option value="63" selected>3 months</option><option value="126">6 months</option><option value="252">1 year</option></select><select id="mcmethod"><option value="gbm">GBM (log-normal)</option><option value="bootstrap">Bootstrap (historical)</option></select><button class="tbtn add" onclick="runMC()">Run</button></div>', run:runMC},
-  holdings:{title:'Holdings', form:'', auto:true, run:runHoldings},
 };
 let curTool=null;
 function openTool(name){
@@ -671,19 +670,6 @@ function openTool(name){
   document.getElementById('tool-out').innerHTML='';
   document.getElementById('toolmodal').classList.add('show');
   if(t.auto){ t.run(); } else { const i=document.querySelector('#tool-form input'); if(i) i.focus(); }
-}
-function runHoldings(){ toolBusy('Loading holdings…');
-  fetch('/api/holdings').then(r=>r.json()).then(d=>{
-    let h='<div class="t-kv"><span>Total across accounts</span><b>'+_usd(d.grand_total)+'</b></div>';
-    h+=_row('Invested', _usd(d.grand_positions)); h+=_row('Cash', _usd(d.grand_cash));
-    (d.accounts||[]).forEach(a=>{
-      h+='<div class="t-h">'+a.label+' · '+_usd(a.total)+'</div>';
-      (a.positions||[]).forEach(p=>{ h+=_row(p.ticker, _usd(p.market_value)); });
-      h+='<div class="t-kv"><span class="muted">Cash</span><b class="muted">'+_usd(a.cash)+'</b></div>';
-    });
-    h+='<div class="t-note"><a href="/holdings">Manage holdings — record trades, deposit/withdraw →</a></div>';
-    document.getElementById('tool-out').innerHTML=h;
-  }).catch(()=>toolErr('could not load holdings'));
 }
 function runEval(){ const t=_tkv('evtk'); if(!t){ toolErr('enter a ticker'); return; }
   const act=document.getElementById('evact').value; let q='?action='+act;
@@ -750,7 +736,7 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
         '<button class="tool-b" onclick="openTool(\'evaluate\')">Evaluate</button>'
         '<button class="tool-b" onclick="openTool(\'lookthrough\')">Look-through</button>'
         '<button class="tool-b" onclick="openTool(\'montecarlo\')">Monte Carlo</button>'
-        '<button class="tool-b" onclick="openTool(\'holdings\')">Holdings</button>'
+        '<button class="tool-b" onclick="window.open(\'/holdings\',\'_blank\')">Holdings</button>'
         '</span>'
         '<span id="addmsg" class="muted"></span></div>'
     ) if served else ""

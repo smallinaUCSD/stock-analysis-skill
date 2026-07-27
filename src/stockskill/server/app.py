@@ -57,9 +57,11 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
     @app.post("/api/holdings/trade")
     def holdings_trade():
         amt = request.args.get("amount", type=float)
+        price = request.args.get("price", type=float)
         settle = request.args.get("settle", "1") not in ("0", "false", "no")
         res = holdings.trade(request.args.get("ticker", ""), request.args.get("account", ""),
-                             request.args.get("side", ""), amt or 0.0, settle_cash=settle)
+                             request.args.get("side", ""), amt or 0.0,
+                             settle_cash=settle, price=price)
         return jsonify(res), (200 if res.get("ok") else 400)
 
     @app.post("/api/holdings/cash")

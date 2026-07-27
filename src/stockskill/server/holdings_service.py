@@ -5,24 +5,28 @@ ever served by the local `serve` app — it is NEVER written to a static file an
 NEVER published to GitHub Pages. Trades here are BOOKKEEPING to mirror what the
 user already did in their brokerage; nothing is sent to any broker.
 
-Holdings here are dollar-based (market_value), matching the CSV. A buy adds
-dollars to a position and (optionally) debits that account's cash; a sell does
-the reverse. Deposit/withdraw adjust an account's CASH row.
+Positions carry a dollar market_value (from the CSV) plus optional shares and
+cost_basis. The snapshot enriches each position with a live price and previous
+close (cached briefly) to derive current value, today's gain and net gain.
+Shares are inferred from market_value / price when not stored. Cash is a money-
+market balance shown as Fidelity SPAXX.
 """
 
 from __future__ import annotations
 
 import re
 import threading
+import time
 
 from ..portfolio.manage import read_rows, write_rows, HoldingRow
 
 _TICKER_RE = re.compile(r"^[A-Za-z0-9.\-\^]{1,12}$")
 CASH = "CASH"
+SPAXX = "SPAXX"   # Fidelity money-market fund used to hold cash
 
-# display labels for the known account keys (free-form otherwise)
 ACCOUNT_LABELS = {"brokerage": "Brokerage", "roth": "Roth IRA", "401k": "401(k)"}
 ACCOUNT_ORDER = ["brokerage", "roth", "401k"]
+_PRICE_TTL = 60.0   # seconds to reuse a fetched price map
 
 
 def account_label(key: str) -> str:
@@ -33,6 +37,8 @@ class HoldingsService:
     def __init__(self, path: str = "holdings.csv"):
         self._path = path
         self._lock = threading.Lock()
+        self._px_cache: dict[str, tuple[float | None, float | None]] = {}
+        self._px_ts = 0.0
 
     # --- read ----------------------------------------------------------
     def _rows(self) -> list[HoldingRow]:
@@ -41,39 +47,87 @@ class HoldingsService:
         except OSError:
             return []
 
+    def _prices(self, tickers: list[str]) -> dict[str, tuple[float | None, float | None]]:
+        """Map ticker -> (last_price, prev_close), cached for _PRICE_TTL seconds."""
+        now = time.time()
+        need = [t for t in tickers if t not in self._px_cache]
+        if need or now - self._px_ts > _PRICE_TTL:
+            try:
+                from ..data.prices import price_map
+                pm = price_map(tickers, period="5d")
+            except Exception:  # noqa: BLE001
+                pm = {}
+            cache: dict[str, tuple[float | None, float | None]] = {}
+            for t in tickers:
+                cl = pm.get(t) or []
+                last = cl[-1] if cl else None
+                prev = cl[-2] if len(cl) >= 2 else None
+                cache[t] = (last, prev)
+            self._px_cache = cache
+            self._px_ts = now
+        return self._px_cache
+
     def snapshot(self) -> dict:
         rows = self._rows()
+        tickers = sorted({r.ticker for r in rows if r.ticker != CASH})
+        px = self._prices(tickers) if tickers else {}
         accounts: dict[str, dict] = {}
         for r in rows:
             acct = r.account or "(unlabeled)"
             a = accounts.setdefault(acct, {"key": acct, "label": account_label(acct),
                                            "positions": [], "cash": 0.0})
-            mv = r.market_value or 0.0
             if r.ticker == CASH:
-                a["cash"] += mv
-            else:
-                a["positions"].append({"ticker": r.ticker, "market_value": mv,
-                                       "shares": r.shares})
-        # order + totals
+                a["cash"] += r.market_value or 0.0
+                continue
+            price, prev = px.get(r.ticker, (None, None))
+            shares = r.shares
+            if shares is None and price and r.market_value:
+                shares = r.market_value / price
+            value = (shares * price) if (shares is not None and price) else (r.market_value or 0.0)
+            today_pct = (price / prev - 1) if (price and prev) else None
+            today_dollar = (shares * (price - prev)) if (shares is not None and price and prev) else None
+            cost = r.cost_basis
+            net_pct = (price / cost - 1) if (price and cost) else None
+            net_dollar = (shares * (price - cost)) if (shares is not None and price and cost) else None
+            a["positions"].append({
+                "ticker": r.ticker, "shares": shares, "price": price,
+                "cost_basis": cost, "market_value": value,
+                "today_pct": today_pct, "today_dollar": today_dollar,
+                "net_pct": net_pct, "net_dollar": net_dollar,
+            })
+
         def akey(k):
             return (ACCOUNT_ORDER.index(k) if k in ACCOUNT_ORDER else 99, k)
-        out_accounts = []
-        grand_pos = grand_cash = 0.0
+        out_accounts, grand_pos, grand_cash, grand_today = [], 0.0, 0.0, 0.0
         for k in sorted(accounts, key=akey):
             a = accounts[k]
             a["positions"].sort(key=lambda p: p["market_value"], reverse=True)
             pos_total = sum(p["market_value"] for p in a["positions"])
             a["positions_total"] = pos_total
             a["total"] = pos_total + a["cash"]
+            a["today_dollar"] = sum(p["today_dollar"] or 0.0 for p in a["positions"])
+            for p in a["positions"]:
+                p["pct_of_account"] = (p["market_value"] / a["total"]) if a["total"] else 0.0
             grand_pos += pos_total
             grand_cash += a["cash"]
+            grand_today += a["today_dollar"]
             out_accounts.append(a)
         return {
             "accounts": out_accounts,
             "grand_total": grand_pos + grand_cash,
             "grand_positions": grand_pos,
             "grand_cash": grand_cash,
+            "grand_today_dollar": grand_today,
+            "cash_symbol": SPAXX,
         }
+
+    def _current_price(self, ticker: str) -> float | None:
+        try:
+            from ..data.prices import closing_prices
+            cl = closing_prices(ticker, "5d")
+            return cl[-1] if cl else None
+        except Exception:  # noqa: BLE001
+            return None
 
     # --- write helpers -------------------------------------------------
     def _find(self, rows, ticker, account):
@@ -93,7 +147,7 @@ class HoldingsService:
 
     # --- mutations -----------------------------------------------------
     def trade(self, ticker: str, account: str, side: str, amount: float,
-              settle_cash: bool = True) -> dict:
+              settle_cash: bool = True, price: float | None = None) -> dict:
         ticker = (ticker or "").strip().upper()
         account = (account or "").strip()
         if not _TICKER_RE.match(ticker) or ticker == CASH:
@@ -104,6 +158,8 @@ class HoldingsService:
             return {"ok": False, "error": "side must be buy|sell"}
         if not amount or amount <= 0:
             return {"ok": False, "error": "amount must be a positive dollar value"}
+        if price is not None and price <= 0:
+            price = None
         with self._lock:
             rows = self._rows()
             pos = self._find(rows, ticker, account)
@@ -111,11 +167,28 @@ class HoldingsService:
                 if pos is None:
                     pos = HoldingRow(ticker, account, None, 0.0)
                     rows.append(pos)
+                if price:
+                    # reconcile a legacy dollar-only position into shares first,
+                    # so an added priced lot doesn't drop the existing value
+                    if pos.shares is None and (pos.market_value or 0) > 0:
+                        cur = self._current_price(ticker)
+                        if cur:
+                            pos.shares = (pos.market_value or 0.0) / cur
+                            if pos.cost_basis is None:
+                                pos.cost_basis = cur
+                    add_sh = amount / price
+                    old_sh = pos.shares or 0.0
+                    old_cost = pos.cost_basis or price
+                    new_sh = old_sh + add_sh
+                    pos.cost_basis = (old_sh * old_cost + amount) / new_sh if new_sh else price
+                    pos.shares = new_sh
                 pos.market_value = (pos.market_value or 0.0) + amount
             else:  # sell
                 if pos is None or (pos.market_value or 0.0) <= 0:
                     return {"ok": False, "error": f"no {ticker} position in {account_label(account)} to sell"}
                 pos.market_value = (pos.market_value or 0.0) - amount
+                if price and pos.shares:
+                    pos.shares = max(0.0, pos.shares - amount / price)
                 if pos.market_value <= 1e-6:
                     rows.remove(pos)
             note = ""
@@ -125,6 +198,7 @@ class HoldingsService:
                 if cash.market_value < 0:
                     note = "cash is now negative — deposit to reconcile"
             write_rows(self._path, rows)
+        self._px_ts = 0.0   # force a price refresh on next snapshot
         return {"ok": True, "ticker": ticker, "account": account, "side": side,
                 "amount": amount, "note": note}
 
@@ -140,9 +214,7 @@ class HoldingsService:
             rows = self._rows()
             cash = self._cash_row(rows, account)
             cash.market_value += amount if direction == "deposit" else -amount
-            note = ""
-            if cash.market_value < 0:
-                note = "cash is now negative"
+            note = "cash is now negative" if cash.market_value < 0 else ""
             write_rows(self._path, rows)
         return {"ok": True, "account": account, "direction": direction,
                 "amount": amount, "balance": cash.market_value, "note": note}

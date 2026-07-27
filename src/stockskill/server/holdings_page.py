@@ -1,8 +1,9 @@
 """Render the holdings dashboard (served locally only — never published).
 
-Shows positions split by account (brokerage / Roth IRA / 401k) with per-account
-and grand totals, plus forms to record trades (bookkeeping) and deposit/withdraw
-cash. All numbers come from holdings.csv; this only lays them out.
+Accounts are stacked vertically; each position shows shares, live price, today's
+gain, net gain, cost basis, value and % of account. Cash is shown as Fidelity
+SPAXX. Forms record trades (bookkeeping) and deposit/withdraw cash. All numbers
+come from holdings.csv enriched with live prices; this only lays them out.
 """
 
 from __future__ import annotations
@@ -14,10 +15,32 @@ from ..dashboard.render import _CSS
 _ACCOUNTS = [("brokerage", "Brokerage"), ("roth", "Roth IRA"), ("401k", "401(k)")]
 
 
-def _usd(x: float | None) -> str:
+def _money(x):
+    return "—" if x is None else "${:,.0f}".format(x)
+
+
+def _price(x):
+    return "—" if x is None else "${:,.2f}".format(x)
+
+
+def _shares(x):
     if x is None:
         return "—"
-    return "${:,.0f}".format(x)
+    return f"{x:,.2f}" if x < 1000 else f"{x:,.0f}"
+
+
+def _pct(x):
+    if x is None:
+        return '<span class="muted">—</span>'
+    cls = "up" if x >= 0 else "down"
+    return f'<span class="{cls}">{x*100:+.2f}%</span>'
+
+
+def _sign_money(x):
+    if x is None:
+        return '<span class="muted">—</span>'
+    cls = "up" if x >= 0 else "down"
+    return f'<span class="{cls}">{"+" if x >= 0 else "-"}${abs(x):,.0f}</span>'
 
 
 def _account_options(selected: str = "") -> str:
@@ -26,54 +49,64 @@ def _account_options(selected: str = "") -> str:
         for k, v in _ACCOUNTS)
 
 
-def _positions_table(acct: dict) -> str:
-    total = acct["total"] or 1.0
+def _positions_table(acct: dict, cash_symbol: str) -> str:
     rows = []
     for p in acct["positions"]:
-        share = p["market_value"] / total if total else 0.0
         rows.append(
-            f'<tr><td class="h-tk">{html.escape(p["ticker"])}</td>'
-            f'<td class="h-mv">{_usd(p["market_value"])}</td>'
-            f'<td class="h-pct">{share*100:.1f}%</td></tr>')
-    cash_share = acct["cash"] / total if total else 0.0
+            "<tr>"
+            f'<td class="h-tk">{html.escape(p["ticker"])}</td>'
+            f'<td>{_shares(p["shares"])}</td>'
+            f'<td>{_price(p["price"])}</td>'
+            f'<td>{_pct(p["today_pct"])}</td>'
+            f'<td>{_pct(p["net_pct"])}</td>'
+            f'<td>{_price(p["cost_basis"])}</td>'
+            f'<td class="h-mv">{_money(p["market_value"])}</td>'
+            f'<td class="h-pct">{p["pct_of_account"]*100:.1f}%</td>'
+            "</tr>")
+    cash_pct = (acct["cash"] / acct["total"]) if acct["total"] else 0.0
     rows.append(
-        f'<tr class="h-cash"><td class="h-tk">Cash</td>'
-        f'<td class="h-mv">{_usd(acct["cash"])}</td>'
-        f'<td class="h-pct">{cash_share*100:.1f}%</td></tr>')
-    return ('<table class="htable"><thead><tr><th>Position</th><th>Value</th>'
-            '<th>% acct</th></tr></thead><tbody>' + "".join(rows) + '</tbody></table>')
+        '<tr class="h-cash">'
+        f'<td class="h-tk">{html.escape(cash_symbol)} <span class="muted">cash</span></td>'
+        '<td>—</td><td>—</td><td>—</td><td>—</td><td>—</td>'
+        f'<td class="h-mv">{_money(acct["cash"])}</td>'
+        f'<td class="h-pct">{cash_pct*100:.1f}%</td></tr>')
+    return ('<table class="htable"><thead><tr>'
+            '<th>Position</th><th>Shares</th><th>Price</th><th>Today</th>'
+            '<th>Net</th><th>Cost</th><th>Value</th><th>% acct</th>'
+            '</tr></thead><tbody>' + "".join(rows) + '</tbody></table>')
 
 
-def _account_card(acct: dict) -> str:
+def _account_card(acct: dict, cash_symbol: str) -> str:
     return (
         f'<section class="h-acct"><div class="h-acct-h">'
         f'<span class="h-acct-name">{html.escape(acct["label"])}</span>'
-        f'<span class="h-acct-total">{_usd(acct["total"])}</span></div>'
-        f'{_positions_table(acct)}</section>')
+        f'<span class="h-acct-meta">today {_sign_money(acct.get("today_dollar"))} '
+        f'&nbsp; <b class="h-acct-total">{_money(acct["total"])}</b></span></div>'
+        f'<div class="htable-wrap">{_positions_table(acct, cash_symbol)}</div></section>')
 
 
 def holdings_html(snap: dict, updated: str = "") -> str:
     accounts = snap.get("accounts", [])
-    cards = "".join(_account_card(a) for a in accounts) or \
+    cash_symbol = snap.get("cash_symbol", "SPAXX")
+    cards = "".join(_account_card(a, cash_symbol) for a in accounts) or \
         '<p class="muted">No holdings found. Add a trade below to start.</p>'
-    grand = _usd(snap.get("grand_total"))
-    gpos = _usd(snap.get("grand_positions"))
-    gcash = _usd(snap.get("grand_cash"))
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Holdings</title><style>{_CSS}{_EXTRA_CSS}</style></head>
 <body><div class="wrap">
 <header><h1>Holdings</h1>
   <span class="status closed">LOCAL ONLY</span>
-  <span class="sub" style="margin:0">Updated {html.escape(updated)}</span></header>
+  <span class="sub" style="margin:0">Updated {html.escape(updated)}</span>
+  <button class="tbtn" onclick="window.close()" style="margin-left:auto">✕ Close tab</button></header>
 <p class="muted" style="font-size:12px;margin:-6px 0 14px">
   <a href="/">← back to watchlist</a> &nbsp;·&nbsp; Private &amp; local — never published.
   Trades here are bookkeeping to mirror your brokerage; nothing is sent to a broker.</p>
 
 <div class="h-tiles">
-  <div class="h-tile"><span>Total</span><b>{grand}</b></div>
-  <div class="h-tile"><span>Invested</span><b>{gpos}</b></div>
-  <div class="h-tile"><span>Cash</span><b>{gcash}</b></div>
+  <div class="h-tile"><span>Total</span><b>{_money(snap.get("grand_total"))}</b></div>
+  <div class="h-tile"><span>Invested</span><b>{_money(snap.get("grand_positions"))}</b></div>
+  <div class="h-tile"><span>Cash ({html.escape(cash_symbol)})</span><b>{_money(snap.get("grand_cash"))}</b></div>
+  <div class="h-tile"><span>Today</span><b>{_sign_money(snap.get("grand_today_dollar"))}</b></div>
 </div>
 
 <div class="h-accounts">{cards}</div>
@@ -88,9 +121,11 @@ def holdings_html(snap: dict, updated: str = "") -> str:
     </div>
     <div class="t-row">
       <input id="amt" placeholder="Amount $" inputmode="decimal">
-      <label class="h-chk"><input type="checkbox" id="settle" checked> settle with cash</label>
+      <input id="tprice" placeholder="Price/share (opt)" inputmode="decimal">
+      <label class="h-chk"><input type="checkbox" id="settle" checked> settle w/ cash</label>
       <button class="tbtn add" onclick="doTrade()">Record</button>
     </div>
+    <div class="h-hint muted">Add price/share to track shares &amp; cost basis (net gain).</div>
     <div id="tmsg" class="h-msg"></div>
   </section>
   <section class="h-form">
@@ -107,17 +142,19 @@ def holdings_html(snap: dict, updated: str = "") -> str:
 
 <p class="muted" style="font-size:11.5px;margin-top:14px">
 Bookkeeping only — records what you did elsewhere; it does not place orders.
-Values are what you enter; positions are not repriced automatically.</p>
+Prices are live (yfinance, may be delayed); shares are inferred from value when
+not recorded with a price. Net gain needs a cost basis.</p>
 </div>
 <script>
 function _v(id){{ return (document.getElementById(id).value||'').trim(); }}
 function _msg(id,t,ok){{ const m=document.getElementById(id); m.textContent=t; m.className='h-msg '+(ok?'ok':'bad'); }}
 function doTrade(){{
-  const tk=_v('tk').toUpperCase(), acct=_v('acct'), side=_v('side'), amt=_v('amt');
+  const tk=_v('tk').toUpperCase(), acct=_v('acct'), side=_v('side'), amt=_v('amt'), price=_v('tprice');
   const settle=document.getElementById('settle').checked;
   if(!tk||!amt){{ _msg('tmsg','enter a ticker and amount',false); return; }}
-  const q='?ticker='+encodeURIComponent(tk)+'&account='+encodeURIComponent(acct)
+  let q='?ticker='+encodeURIComponent(tk)+'&account='+encodeURIComponent(acct)
     +'&side='+side+'&amount='+encodeURIComponent(amt)+'&settle='+(settle?'1':'0');
+  if(price) q+='&price='+encodeURIComponent(price);
   fetch('/api/holdings/trade'+q,{{method:'POST'}}).then(r=>r.json()).then(d=>{{
     if(d.ok){{ _msg('tmsg',(side==='buy'?'Bought ':'Sold ')+'$'+amt+' '+tk+(d.note?' — '+d.note:''),true);
       setTimeout(()=>location.reload(),650); }}
@@ -144,18 +181,24 @@ _EXTRA_CSS = """
 .h-tile{flex:1 1 140px;background:var(--surface);border:1px solid var(--border);
   border-radius:12px;padding:12px 16px}
 .h-tile span{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
-.h-tile b{font-size:24px;font-variant-numeric:tabular-nums}
-.h-accounts{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-bottom:18px}
+.h-tile b{font-size:23px;font-variant-numeric:tabular-nums}
+/* accounts stacked vertically */
+.h-accounts{display:flex;flex-direction:column;gap:12px;margin-bottom:18px}
 .h-acct{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 16px}
-.h-acct-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.h-acct-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;gap:10px;flex-wrap:wrap}
 .h-acct-name{font-weight:650;font-size:15px}
-.h-acct-total{font-variant-numeric:tabular-nums;font-weight:700;color:var(--accent)}
-.htable{width:100%;border-collapse:collapse;font-size:13px}
-.htable th{text-align:left;color:var(--muted);font-size:10px;text-transform:uppercase;
-  letter-spacing:.04em;padding:2px 0;border-bottom:1px solid var(--border)}
-.htable td{padding:4px 0;font-variant-numeric:tabular-nums;border-bottom:1px dashed var(--border)}
-.htable td.h-tk{font-weight:600} .htable td.h-mv{text-align:right} .htable td.h-pct{text-align:right;color:var(--muted);width:56px}
+.h-acct-meta{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.h-acct-total{font-size:15px;color:var(--accent)}
+.htable-wrap{overflow-x:auto}
+.htable{width:100%;border-collapse:collapse;font-size:13px;min-width:560px}
+.htable th{text-align:right;color:var(--muted);font-size:10px;text-transform:uppercase;
+  letter-spacing:.04em;padding:3px 8px;border-bottom:1px solid var(--border)}
+.htable th:first-child{text-align:left}
+.htable td{padding:5px 8px;text-align:right;font-variant-numeric:tabular-nums;border-bottom:1px dashed var(--border)}
+.htable td.h-tk{text-align:left;font-weight:600}
+.htable td.h-mv{font-weight:600} .htable td.h-pct{color:var(--muted);width:56px}
 .htable tr.h-cash td{color:var(--muted)}
+.up{color:var(--up)} .down{color:var(--down)}
 .h-forms{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media (max-width:640px){.h-forms{grid-template-columns:1fr}}
 .h-form{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 16px}
@@ -163,9 +206,10 @@ _EXTRA_CSS = """
 .t-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;align-items:center}
 .t-row input,.t-row select{padding:8px 10px;border-radius:8px;border:1px solid var(--border);
   background:var(--bg);color:var(--ink);font-size:13px}
-.t-row input{flex:1 1 110px;min-width:80px}
+.t-row input{flex:1 1 100px;min-width:80px}
 .t-row input:focus,.t-row select:focus{outline:none;border-color:var(--accent)}
 .h-chk{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px}
+.h-hint{font-size:11px;margin:2px 0}
 .tbtn.add{background:var(--accent);color:#fff;border:none;font-weight:650;padding:8px 14px;border-radius:8px;cursor:pointer}
 .h-msg{font-size:12px;min-height:16px;margin-top:2px}
 .h-msg.ok{color:var(--up)} .h-msg.bad{color:var(--down)}
