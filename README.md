@@ -68,17 +68,18 @@ everything from the tested indicator + signal libraries.
 - **Three views** — Table (sortable, sparklines, a frozen Ticker column when you
   scroll sideways), **Cards**, and a **Heatmap grouped by sector** (each group
   headed by its average day move + count) — with live search and light/dark theme.
-- **Two always-on panels** — sector performance (left) and a live Markets panel
-  (right: indices, metals/energy/ag commodities, crypto) — **filter chips** below.
+- **Three always-on panels** — sector performance, a live Markets panel (indices,
+  metals/energy/ag commodities, crypto), and a **Macro** panel (VIX, 10Y yield,
+  the dollar, the next Fed decision countdown, and scanned market-event headlines)
+  — with the **filter chips** below.
 - **Add-ticker box** with live autocomplete (name or symbol) that fetches and
   adds a ticker to the board on the fly.
 - **Faceted filter chips** — signal / condition (oversold, squeeze, earnings…)
   / category / section.
-- **Alert banner** — a sliding marquee that cycles through *every* alert: a **Fed
-  decision (FOMC) countdown** and **market-event headlines** (layoffs / Fed / jobs
-  / inflation / tariffs, scanned from the news feed), then 52w highs/lows,
-  surges/crashes, volume spikes, squeezes, active signals, and your custom
-  `data/alerts.json`. Pauses on hover; dismissible.
+- **Alert banner** — a sliding marquee that cycles through *every* ticker alert
+  (52w highs/lows, surges/crashes, volume spikes, squeezes, active signals, and
+  your custom `data/alerts.json`); pauses on hover, dismissible. (Macro events
+  live in the Macro panel, not the marquee.)
 - **Earnings flag** on each card — today / tomorrow / in N days / next week — plus
   a **pre/after-hours** price line when an extended session is live.
 - **Click a card → a modal** with the full detail: an **interactive price chart**
