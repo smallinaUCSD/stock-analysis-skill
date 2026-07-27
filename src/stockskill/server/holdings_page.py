@@ -103,7 +103,7 @@ def holdings_html(snap: dict, updated: str = "") -> str:
   <span class="sub" style="margin:0">Updated {html.escape(updated)}</span>
   <button class="h-close" onclick="window.close()" title="Close tab" style="margin-left:auto">✕</button></header>
 <p style="font-size:12px;margin:-6px 0 14px">
-  <a class="h-back" href="/">← back to watchlist</a></p>
+  <a class="h-back" href="/" onclick="return goBack(event)">← back to watchlist</a></p>
 
 <div class="h-tiles">
   <div class="h-tile"><span>Total</span><b>{_money(snap.get("grand_total"))}</b></div>
@@ -150,6 +150,11 @@ Prices are live (yfinance, may be delayed); shares are inferred from value when
 not recorded with a price. Net gain needs a cost basis.</p>
 </div>
 <script>
+// Return to the watchlist tab this was opened from (don't spawn a 2nd watchlist).
+function goBack(e){{ if(e) e.preventDefault();
+  if(window.opener && !window.opener.closed){{ try{{ window.opener.focus(); }}catch(_){{}} window.close(); }}
+  else {{ location.href='/'; }}
+  return false; }}
 function _v(id){{ return (document.getElementById(id).value||'').trim(); }}
 function _msg(id,t,ok){{ const m=document.getElementById(id); m.textContent=t; m.className='h-msg '+(ok?'ok':'bad'); }}
 function doTrade(){{

@@ -21,7 +21,7 @@ _FLAG_LABEL = {
     "oversold": "Oversold", "overbought": "Overbought", "surge": "Surge",
     "crash": "Crash", "squeeze": "Squeeze", "vol_spike": "Vol spike",
     "near_52w_high": "52w High", "near_52w_low": "52w Low",
-    "earnings_soon": "Earnings ≤7d",
+    "earnings_soon": "Earnings soon",
 }
 _CAT_LABEL = {"tech": "Tech", "leveraged": "Leveraged", "etf": "ETF", "dividend": "Dividend"}
 _EXT_LINKS = [
@@ -40,7 +40,7 @@ _CSS_EXTRA = """
   --ink:#e8eaed;--muted:#9aa4af;--up:#3ecf8e;--down:#f2748a;--accent:#6ea8dc;
   --good:#3ecf8e;--warn:#e0b74a;--crit:#f2748a;--axis:#3a424b;}
 .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0}
-.bar input{flex:0 0 220px;font-size:14px;padding:8px 11px;border-radius:9px;
+.bar input{flex:0 0 220px;font-size:12.5px;padding:7px 11px;border-radius:9px;line-height:1.15;
   border:1px solid var(--border);background:var(--surface);color:var(--ink)}
 .count{color:var(--muted);font-size:12.5px}
 .seg{display:inline-flex;border:1px solid var(--border);border-radius:9px;overflow:hidden}
@@ -138,7 +138,8 @@ table.wl tr.item:hover td:first-child{background:var(--surface-2)}
 #addmsg.ok{color:var(--up)} #addmsg.bad{color:var(--down)}
 /* tools bar + tool modal */
 .toolsbar{display:flex;flex-wrap:wrap;gap:6px;margin-left:6px}
-.tool-b{font:600 12px inherit;padding:6px 11px;border-radius:9px;cursor:pointer;
+.tool-b{font-family:inherit;font-size:12px;font-weight:600;line-height:1;box-sizing:border-box;
+  padding:7px 11px;border-radius:9px;cursor:pointer;
   background:var(--surface);border:1px solid var(--border);color:var(--ink);
   text-decoration:none;display:inline-flex;align-items:center}
 .tool-b:hover{border-color:var(--accent);color:var(--accent)}
