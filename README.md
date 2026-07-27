@@ -66,25 +66,30 @@ everything from the tested indicator + signal libraries.
 
 **The board (`/`)**
 - **Three views** — Table (sortable, sparklines, a frozen Ticker column when you
-  scroll sideways), **Cards**, Heatmap — with live search and light/dark theme.
+  scroll sideways), **Cards**, and a **Heatmap grouped by sector** (each group
+  headed by its average day move + count) — with live search and light/dark theme.
 - **Two always-on panels** — sector performance (left) and a live Markets panel
-  (right: indices, commodities, crypto) — with the **filter chips** below them.
+  (right: indices, metals/energy/ag commodities, crypto) — **filter chips** below.
 - **Add-ticker box** with live autocomplete (name or symbol) that fetches and
   adds a ticker to the board on the fly.
-- **Faceted filter chips** — signal / condition (oversold, squeeze, earnings ≤7d…)
+- **Faceted filter chips** — signal / condition (oversold, squeeze, earnings…)
   / category / section.
-- **Alert banner** — 52w highs/lows, surges/crashes, volume spikes, squeezes,
-  active signals, and your custom `data/alerts.json`. Dismissible.
-- **Earnings flag** on each card — today / tomorrow / in N days / next week.
+- **Alert banner** — a sliding marquee that cycles through *every* alert (52w
+  highs/lows, surges/crashes, volume spikes, squeezes, active signals, and your
+  custom `data/alerts.json`); pauses on hover. Dismissible.
+- **Earnings flag** on each card — today / tomorrow / in N days / next week — plus
+  a **pre/after-hours** price line when an extended session is live.
 - **Click a card → a modal** with the full detail: an **interactive price chart**
   (1M–5Y/Max, real axes, hover shows date + price), the trade setup (ATR
   entry/stop/target + position sizing), options ideas, and the **stock-analyzer
   valuation** (fair value bear/base/bull, signal, reverse-DCF growth, consensus).
 - **Live** — the server caches on a market-aware cadence (~60s open, 5m extended,
-  30m closed); the page refreshes to match.
+  30m closed); the page refreshes to match and shows the update time in **your
+  local timezone**.
 
-**Tool pop-ups** — Evaluate a trade, leverage Look-through, and Monte Carlo run
-live in a modal (`/api/evaluate`, `/api/lookthrough`, `/api/montecarlo`).
+**Tool pop-ups** — Evaluate a trade, leverage Look-through (basket constituents ×
+multiplier, with the verified as-of date), and Monte Carlo run live in a modal
+(`/api/evaluate`, `/api/lookthrough`, `/api/montecarlo`).
 
 **Holdings dashboard (`/holdings`, local only)** — opens in a new tab; positions
 split by account (Brokerage / Roth IRA / 401(k)) with shares, live price,
