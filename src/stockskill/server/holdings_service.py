@@ -89,16 +89,17 @@ class HoldingsService:
             cost = r.cost_basis
             net_pct = (price / cost - 1) if (price and cost) else None
             net_dollar = (shares * (price - cost)) if (shares is not None and price and cost) else None
+            cost_total = (shares * cost) if (shares is not None and cost) else None
             a["positions"].append({
                 "ticker": r.ticker, "shares": shares, "price": price,
-                "cost_basis": cost, "market_value": value,
+                "cost_basis": cost, "cost_total": cost_total, "market_value": value,
                 "today_pct": today_pct, "today_dollar": today_dollar,
                 "net_pct": net_pct, "net_dollar": net_dollar,
             })
 
         def akey(k):
             return (ACCOUNT_ORDER.index(k) if k in ACCOUNT_ORDER else 99, k)
-        out_accounts, grand_pos, grand_cash, grand_today = [], 0.0, 0.0, 0.0
+        out_accounts, grand_pos, grand_cash, grand_today, grand_cost = [], 0.0, 0.0, 0.0, 0.0
         for k in sorted(accounts, key=akey):
             a = accounts[k]
             a["positions"].sort(key=lambda p: p["market_value"], reverse=True)
@@ -106,11 +107,13 @@ class HoldingsService:
             a["positions_total"] = pos_total
             a["total"] = pos_total + a["cash"]
             a["today_dollar"] = sum(p["today_dollar"] or 0.0 for p in a["positions"])
+            a["cost_total"] = sum(p["cost_total"] or 0.0 for p in a["positions"])
             for p in a["positions"]:
                 p["pct_of_account"] = (p["market_value"] / a["total"]) if a["total"] else 0.0
             grand_pos += pos_total
             grand_cash += a["cash"]
             grand_today += a["today_dollar"]
+            grand_cost += a["cost_total"]
             out_accounts.append(a)
         return {
             "accounts": out_accounts,
@@ -118,6 +121,7 @@ class HoldingsService:
             "grand_positions": grand_pos,
             "grand_cash": grand_cash,
             "grand_today_dollar": grand_today,
+            "grand_cost_basis": grand_cost,
             "cash_symbol": SPAXX,
         }
 

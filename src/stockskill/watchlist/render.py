@@ -759,7 +759,7 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
         '<button class="tool-b" onclick="openTool(\'evaluate\')">Evaluate</button>'
         '<button class="tool-b" onclick="openTool(\'lookthrough\')">Look-through</button>'
         '<button class="tool-b" onclick="openTool(\'montecarlo\')">Monte Carlo</button>'
-        '<button class="tool-b" onclick="window.open(\'/holdings\',\'_blank\')">Holdings</button>'
+        '<a class="tool-b" href="/holdings" target="_blank">Holdings</a>'
         '</span>'
         '<span id="addmsg" class="muted"></span></div>'
     ) if served else ""

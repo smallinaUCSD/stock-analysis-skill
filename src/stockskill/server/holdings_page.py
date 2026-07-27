@@ -58,8 +58,10 @@ def _positions_table(acct: dict, cash_symbol: str) -> str:
             f'<td>{_shares(p["shares"])}</td>'
             f'<td>{_price(p["price"])}</td>'
             f'<td>{_pct(p["today_pct"])}</td>'
-            f'<td>{_pct(p["net_pct"])}</td>'
+            f'<td>{_sign_money(p["today_dollar"])}</td>'
             f'<td>{_price(p["cost_basis"])}</td>'
+            f'<td>{_money(p["cost_total"])}</td>'
+            f'<td>{_pct(p["net_pct"])}</td>'
             f'<td class="h-mv">{_money(p["market_value"])}</td>'
             f'<td class="h-pct">{p["pct_of_account"]*100:.1f}%</td>'
             "</tr>")
@@ -67,12 +69,13 @@ def _positions_table(acct: dict, cash_symbol: str) -> str:
     rows.append(
         '<tr class="h-cash">'
         f'<td class="h-tk">{html.escape(cash_symbol)} <span class="muted">cash</span></td>'
-        '<td>—</td><td>—</td><td>—</td><td>—</td><td>—</td>'
+        '<td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td>'
         f'<td class="h-mv">{_money(acct["cash"])}</td>'
         f'<td class="h-pct">{cash_pct*100:.1f}%</td></tr>')
     return ('<table class="htable"><thead><tr>'
             '<th>Position</th><th>Shares</th><th>Price</th><th>Today</th>'
-            '<th>Net</th><th>Cost</th><th>Value</th><th>% acct</th>'
+            '<th>Day $</th><th>Cost</th><th>Cost tot</th><th>Net</th>'
+            '<th>Value</th><th>% acct</th>'
             '</tr></thead><tbody>' + "".join(rows) + '</tbody></table>')
 
 
@@ -80,7 +83,8 @@ def _account_card(acct: dict, cash_symbol: str) -> str:
     return (
         f'<section class="h-acct"><div class="h-acct-h">'
         f'<span class="h-acct-name">{html.escape(acct["label"])}</span>'
-        f'<span class="h-acct-meta">today {_sign_money(acct.get("today_dollar"))} '
+        f'<span class="h-acct-meta">day {_sign_money(acct.get("today_dollar"))} &nbsp;·&nbsp; '
+        f'cost {_money(acct.get("cost_total"))} &nbsp;·&nbsp; value {_money(acct["positions_total"])} '
         f'&nbsp; <b class="h-acct-total">{_money(acct["total"])}</b></span></div>'
         f'<div class="htable-wrap">{_positions_table(acct, cash_symbol)}</div></section>')
 
@@ -104,9 +108,10 @@ def holdings_html(snap: dict, updated: str = "") -> str:
 
 <div class="h-tiles">
   <div class="h-tile"><span>Total</span><b>{_money(snap.get("grand_total"))}</b></div>
-  <div class="h-tile"><span>Invested</span><b>{_money(snap.get("grand_positions"))}</b></div>
+  <div class="h-tile"><span>Current value</span><b>{_money(snap.get("grand_positions"))}</b></div>
+  <div class="h-tile"><span>Cost basis</span><b>{_money(snap.get("grand_cost_basis"))}</b></div>
   <div class="h-tile"><span>Cash ({html.escape(cash_symbol)})</span><b>{_money(snap.get("grand_cash"))}</b></div>
-  <div class="h-tile"><span>Today</span><b>{_sign_money(snap.get("grand_today_dollar"))}</b></div>
+  <div class="h-tile"><span>Day change</span><b>{_sign_money(snap.get("grand_today_dollar"))}</b></div>
 </div>
 
 <div class="h-accounts">{cards}</div>
@@ -190,7 +195,7 @@ _EXTRA_CSS = """
 .h-acct-meta{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
 .h-acct-total{font-size:15px;color:var(--accent)}
 .htable-wrap{overflow-x:auto}
-.htable{width:100%;border-collapse:collapse;font-size:13px;min-width:560px}
+.htable{width:100%;border-collapse:collapse;font-size:12.5px;min-width:720px}
 .htable th{text-align:right;color:var(--muted);font-size:10px;text-transform:uppercase;
   letter-spacing:.04em;padding:3px 8px;border-bottom:1px solid var(--border)}
 .htable th:first-child{text-align:left}
