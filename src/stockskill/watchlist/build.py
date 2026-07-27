@@ -11,7 +11,8 @@ from datetime import datetime
 
 
 # rate / volatility gauges shown in the Macro panel
-_MACRO_INDICATORS = [("^VIX", "VIX"), ("^TNX", "10Y Yield"), ("DX-Y.NYB", "Dollar (DXY)")]
+_MACRO_INDICATORS = [("^VIX", "VIX (CBOE)"), ("^VVIX", "VVIX (vol of vol)"),
+                     ("^TNX", "10Y Yield"), ("DX-Y.NYB", "Dollar (DXY)")]
 
 
 def _fmt_macro(ticker: str, value: float | None) -> str:
@@ -56,7 +57,17 @@ def _macro_panel() -> dict:
         events.append({"kind": a.kind, "emoji": a.emoji, "title": a.message,
                        "url": url_by_title.get(a.message.strip(), "")})
 
-    return {"indicators": indicators, "fomc": next_fomc(), "events": events}
+    fear_greed = None
+    try:
+        from ..pulse import fetch_fear_greed
+        fg = fetch_fear_greed()
+        if fg:
+            fear_greed = {"score": fg.score, "rating": fg.rating}
+    except Exception:  # noqa: BLE001
+        fear_greed = None
+
+    return {"indicators": indicators, "fomc": next_fomc(), "events": events,
+            "fear_greed": fear_greed}
 
 
 def build_watchlist_html(tickers_spec, *, period: str = "5y", workers: int = 5,

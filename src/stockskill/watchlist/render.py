@@ -179,6 +179,9 @@ table.wl th:nth-child(15),table.wl td:nth-child(15){text-align:left}
 .panels{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px}
 @media (max-width:980px){.panels{grid-template-columns:1fr 1fr}}
 @media (max-width:640px){.panels{grid-template-columns:1fr}}
+.macro-fg{display:flex;justify-content:space-between;align-items:baseline;gap:8px;
+  font-size:12.5px;padding:2px 0}
+.macro-fg b{font-variant-numeric:tabular-nums}
 .macro-fomc{font-size:12.5px;padding:2px 0}
 .macro-fomc b{font-weight:700}
 .macro-ev{display:block;text-decoration:none;color:var(--ink);font-size:12px;
@@ -722,6 +725,16 @@ def _macro_html(macro):
                 f'<span class="mkpx">{html.escape(str(i["display"]))}</span>'
                 f'<span class="mkchg {ccls}">{chg_txt}</span></div>')
         body += '<div class="mkgroup">Rates &amp; vol</div>' + "".join(rows)
+
+    fg = macro.get("fear_greed")
+    if fg and fg.get("score") is not None:
+        score = fg["score"]
+        fcls = "down" if score < 45 else ("up" if score > 55 else "muted")
+        body += ('<div class="mkgroup">Sentiment</div>'
+                 '<div class="macro-fg"><span class="mkname">Fear &amp; Greed</span>'
+                 f'<span><b class="{fcls}">{score:.0f}</b> '
+                 f'<span class="{fcls}" style="font-size:11px">{html.escape(str(fg.get("rating","")))}</span>'
+                 '</span></div>')
 
     fomc = macro.get("fomc")
     if fomc:
