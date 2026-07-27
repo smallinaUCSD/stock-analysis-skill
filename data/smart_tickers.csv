@@ -1,0 +1,20 @@
+# Auto-generated smart watchlist. Regenerate with `stockskill smart-watchlist`.
+# Pinned staples are always kept; GROWTH/VALUE/SECTOR rotate.
+
+[PINNED]
+COST, AAPL, META, MSFT, GOOGL, AMZN, NVDA, PEP, WMT, V, LLY
+
+[FUNDS]
+FCNTX, FDGRX, WSMNX, VOO, QQQ, SCHD
+
+[LEVERAGED]
+AAPU, METU, MSFU, GGLL, AMZU, NVDU, PTIR, NFXL
+
+[GROWTH]
+ASTS, NBIS, MU, MRNA, LUNR, BE, SMCI, TLN, DELL, PLTR
+
+[VALUE]
+NOW, MS, REGN, SCHW, DLR, CRM, ADBE, VEEV, NFLX, BKNG
+
+[SECTOR]
+XLE, ERX, XLF, FAS, XLV, CURE
