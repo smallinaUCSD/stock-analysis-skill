@@ -21,7 +21,7 @@ _FLAG_LABEL = {
     "oversold": "Oversold", "overbought": "Overbought", "surge": "Surge",
     "crash": "Crash", "squeeze": "Squeeze", "vol_spike": "Vol spike",
     "near_52w_high": "52w High", "near_52w_low": "52w Low",
-    "earnings_soon": "Earnings ≤7d",
+    "earnings_soon": "Earnings soon",
 }
 _CAT_LABEL = {"tech": "Tech", "leveraged": "Leveraged", "etf": "ETF", "dividend": "Dividend"}
 _EXT_LINKS = [
@@ -40,7 +40,7 @@ _CSS_EXTRA = """
   --ink:#e8eaed;--muted:#9aa4af;--up:#3ecf8e;--down:#f2748a;--accent:#6ea8dc;
   --good:#3ecf8e;--warn:#e0b74a;--crit:#f2748a;--axis:#3a424b;}
 .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0}
-.bar input{flex:0 0 220px;font-size:14px;padding:8px 11px;border-radius:9px;
+.bar input{flex:0 0 220px;font-size:12.5px;padding:7px 11px;border-radius:9px;line-height:1.15;
   border:1px solid var(--border);background:var(--surface);color:var(--ink)}
 .count{color:var(--muted);font-size:12.5px}
 .seg{display:inline-flex;border:1px solid var(--border);border-radius:9px;overflow:hidden}
@@ -69,6 +69,10 @@ table.wl th:first-child{z-index:3}
   box-shadow:6px 0 8px -4px rgba(0,0,0,.35)}
 table.wl tr.item:hover td{background:var(--surface-2)}
 table.wl tr.item:hover td:first-child{background:var(--surface-2)}
+/* left-align Sector (9), Conf (14), Indicators (15) */
+table.wl th:nth-child(9),table.wl td:nth-child(9),
+table.wl th:nth-child(14),table.wl td:nth-child(14),
+table.wl th:nth-child(15),table.wl td:nth-child(15){text-align:left}
 .tk{font-weight:700}.nm{color:var(--muted);font-size:11px;font-weight:400}
 .badge{font-weight:700;font-size:11px;padding:2px 7px;border-radius:6px}
 .badge.buy{background:var(--good);color:#fff}.badge.short{background:var(--crit);color:#fff}
@@ -98,6 +102,8 @@ table.wl tr.item:hover td:first-child{background:var(--surface-2)}
 .card-item{cursor:pointer;position:relative;transition:border-color .12s}
 .card-item:hover{border-color:var(--accent)}
 .trendline{font-size:12.5px;font-weight:650;margin:1px 0 6px}
+.exthrs{font-size:11.5px;color:var(--muted);margin:1px 0 5px;font-variant-numeric:tabular-nums}
+.exthrs b{color:var(--ink);font-weight:700}
 .erflag{display:inline-block;font-size:10.5px;font-weight:650;padding:2px 7px;border-radius:6px;margin:0 0 6px}
 .erflag.er-now{background:var(--crit);color:#fff}
 .erflag.er-soon{background:var(--warn);color:#111}
@@ -138,7 +144,8 @@ table.wl tr.item:hover td:first-child{background:var(--surface-2)}
 #addmsg.ok{color:var(--up)} #addmsg.bad{color:var(--down)}
 /* tools bar + tool modal */
 .toolsbar{display:flex;flex-wrap:wrap;gap:6px;margin-left:6px}
-.tool-b{font:600 12px inherit;padding:6px 11px;border-radius:9px;cursor:pointer;
+.tool-b{font-family:inherit;font-size:12px;font-weight:600;line-height:1;box-sizing:border-box;
+  padding:7px 11px;border-radius:9px;cursor:pointer;
   background:var(--surface);border:1px solid var(--border);color:var(--ink);
   text-decoration:none;display:inline-flex;align-items:center}
 .tool-b:hover{border-color:var(--accent);color:var(--accent)}
@@ -168,9 +175,19 @@ table.wl tr.item:hover td:first-child{background:var(--surface-2)}
 .mc-row b.up{color:var(--up)} .mc-row b.down{color:var(--down)}
 .mc-bar{height:9px;background:var(--surface-2);border-radius:5px;overflow:hidden}
 .mc-fill{height:9px;border-radius:5px} .mc-fill.up{background:var(--up)} .mc-fill.down{background:var(--down)}
-/* left/right panels (sectors + markets), always visible */
-.panels{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
-@media (max-width:720px){.panels{grid-template-columns:1fr}}
+/* panels (sectors + markets + macro), always visible */
+.panels{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px}
+@media (max-width:980px){.panels{grid-template-columns:1fr 1fr}}
+@media (max-width:640px){.panels{grid-template-columns:1fr}}
+.macro-fg{display:flex;justify-content:space-between;align-items:baseline;gap:8px;
+  font-size:12.5px;padding:2px 0}
+.macro-fg b{font-variant-numeric:tabular-nums}
+.macro-fomc{font-size:12.5px;padding:2px 0}
+.macro-fomc b{font-weight:700}
+.macro-ev{display:block;text-decoration:none;color:var(--ink);font-size:12px;
+  line-height:1.35;padding:3px 0;border-bottom:1px dashed var(--border)}
+.macro-ev:last-child{border-bottom:none}
+a.macro-ev:hover{color:var(--accent)}
 .panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 14px}
 .panel-h{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
   letter-spacing:.04em;margin-bottom:6px}
@@ -225,17 +242,32 @@ table.wl tr.item:hover td:first-child{background:var(--surface-2)}
 .chart-box .cb-p{font-weight:700;font-variant-numeric:tabular-nums}
 .chart-tip{font-size:11px;margin-top:4px;min-height:15px;font-variant-numeric:tabular-nums}
 .chart-tip b{color:var(--ink)}
+/* recent news list (card modal) */
+.nw{display:block;text-decoration:none;padding:6px 0;border-bottom:1px dashed var(--border)}
+.nw:last-child{border-bottom:none}
+a.nw:hover .nw-t{color:var(--accent)}
+.nw-t{font-size:12.5px;color:var(--ink);line-height:1.35}
+.nw-m{font-size:10.5px;color:var(--muted);margin-top:2px}
 /* heatmap */
 .heat{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
+.heat-group{margin-bottom:16px}
+.heat-h{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.03em;margin:0 0 7px;padding-bottom:4px;border-bottom:1px solid var(--border)}
 .tile-item{border:1px solid var(--border);border-radius:10px;padding:10px 12px;text-align:center}
 .tile-item .t{font-weight:700;font-size:13px}
 .tile-item .c{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
 .tile-item .s{font-size:10px;color:var(--muted)}
 .view{display:none}.view.active{display:block}
-.banner{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;padding:9px 14px;
+.banner{display:flex;align-items:center;gap:12px;padding:9px 14px;
   margin:10px 0;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;font-size:12.5px}
+.banner-vp{flex:1;overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent,#000 3%,#000 97%,transparent);
+  mask-image:linear-gradient(90deg,transparent,#000 3%,#000 97%,transparent)}
+.banner-track{display:inline-flex;gap:26px;white-space:nowrap;animation:marquee 45s linear infinite;will-change:transform}
+.banner:hover .banner-track{animation-play-state:paused}
+@keyframes marquee{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 .banner .a{white-space:nowrap}
-.banner .x{margin-left:auto;cursor:pointer;color:var(--muted);border:none;background:none;font-size:15px}
+.banner .x{cursor:pointer;color:var(--muted);border:none;background:none;font-size:15px;flex:0 0 auto}
+@media (prefers-reduced-motion:reduce){.banner-track{animation:none}}
 """
 
 
@@ -477,7 +509,8 @@ def _card_detail(r):
     ts = _trade_setup_html(r)
     ts_sec = f'<div class="det-sec">{ts}</div>' if ts else ""
     return (f'<div class="card-detail" onclick="event.stopPropagation()">'
-            f'{_chart_html(r)}{ts_sec}{_options_html(r)}{_valuation_html(r)}</div>')
+            f'{_chart_html(r)}{ts_sec}{_options_html(r)}{_valuation_html(r)}'
+            f'<div class="cardnews" data-ticker="{html.escape(r.ticker)}"></div></div>')
 
 
 def _earnings_badge(r):
@@ -495,6 +528,17 @@ def _earnings_badge(r):
     else:
         txt, cls = "Earnings next week", "er-wk"
     return f'<span class="erflag {cls}">📅 {txt}</span>'
+
+
+def _ext_html(r):
+    """Pre/after-hours price line, shown only when an extended session is active."""
+    if getattr(r, "ext_price", None) is None:
+        return ""
+    st = (r.market_state or "").upper()
+    label = "Pre-market" if st.startswith("PRE") else "After hours"
+    cls, txt = _pct(r.ext_change)
+    return (f'<div class="exthrs">{label} <b>${r.ext_price:,.2f}</b> '
+            f'<span class="{cls}">{txt}</span></div>')
 
 
 def _card_html(r):
@@ -517,6 +561,7 @@ def _card_html(r):
         f'<span class="badge {sig_cls}">{r.signal}</span></div>'
         f'<span class="card-price">${r.price:,.2f} <span class="{dcls}" style="font-size:13px">{dtxt}</span></span></div>'
         f'<div class="nm">{html.escape((r.name or "")[:34])}</div>'
+        f'{_ext_html(r)}'
         f'<div class="trendline {tcls}">{html.escape(trend_word)} <span class="muted">· trend {r.trend_score:+.0f}</span></div>'
         f'{_earnings_badge(r)}'
         f'<div class="card-spark">{_spark(r.sparkline, w=222, h=34)}</div>'
@@ -540,6 +585,36 @@ def _tile_html(r):
         f'<div class="c">{dtxt}</div>'
         f'<div class="s">{r.signal} {r.trend_arrow}</div></div>'
     )
+
+
+def _heatmap_html(rows):
+    """Heatmap grouped by sector, sectors ordered by average day change."""
+    def day(r):
+        d = r.changes.get("1d") if not (r.error or r.price is None) else None
+        return d
+
+    groups: dict[str, list] = {}
+    for r in rows:
+        sec = (r.sector or "Other") if not (r.error or r.price is None) else "No data"
+        groups.setdefault(sec, []).append(r)
+
+    def avg(rs):
+        vals = [day(r) for r in rs if day(r) is not None]
+        return sum(vals) / len(vals) if vals else -99
+
+    out = []
+    for sec, rs in sorted(groups.items(), key=lambda kv: avg(kv[1]), reverse=True):
+        a = avg(rs)
+        cls, atxt = _pct(a if a != -99 else None)
+        rs_sorted = sorted(rs, key=lambda r: (day(r) if day(r) is not None else -99), reverse=True)
+        tiles = "".join(_tile_html(r) for r in rs_sorted)
+        avg_html = f'<span class="{cls}">{atxt}</span>' if a != -99 else ""
+        out.append(
+            f'<div class="heat-group" data-sector="{html.escape(sec)}">'
+            f'<div class="heat-h">{html.escape(sec)} {avg_html} '
+            f'<span class="muted">· {len(rs)}</span></div>'
+            f'<div class="heat">{tiles}</div></div>')
+    return "".join(out)
 
 
 def _chip_bar(rows):
@@ -570,17 +645,19 @@ def _chip_bar(rows):
     return "".join(out)
 
 
-def _banner(alerts, cap=14):
+def _banner(alerts):
+    """A single-line marquee that slides through every alert (no truncation)."""
     if not alerts:
         return "", ""
-    shown = alerts[:cap]
-    extra = len(alerts) - len(shown)
     items = "".join(f'<span class="a">{html.escape(a.emoji)} {html.escape(a.message)}</span>'
-                    for a in shown)
-    if extra > 0:
-        items += f'<span class="a muted">+{extra} more</span>'
-    sig = f"{len(alerts)}:" + ",".join(a.kind for a in shown[:5])
-    banner = (f'<div class="banner" id="banner" data-sig="{html.escape(sig)}">{items}'
+                    for a in alerts)
+    # scale the loop duration with the amount of text so it reads at a steady pace
+    dur = max(20, min(150, len(alerts) * 3))
+    sig = f"{len(alerts)}:" + ",".join(a.kind for a in alerts[:5])
+    track = (f'<div class="banner-track" style="animation-duration:{dur}s">'
+             f'{items}{items}</div>')
+    banner = (f'<div class="banner" id="banner" data-sig="{html.escape(sig)}">'
+              f'<div class="banner-vp">{track}</div>'
               f'<button class="x" onclick="dismissBanner()" title="Dismiss">✕</button></div>')
     return banner, sig
 
@@ -632,6 +709,57 @@ def _markets_html(markets):
             '<div class="panel-body">' + "".join(rows) + '</div></section>')
 
 
+def _macro_html(macro):
+    """Macro-trends panel: rate/vol gauges, next Fed decision, event headlines."""
+    macro = macro or {}
+    body = ""
+    inds = [i for i in macro.get("indicators", []) if i.get("display") not in (None, "—")]
+    if inds:
+        rows = []
+        for i in inds:
+            chg = i.get("change")
+            ccls = "up" if (chg or 0) >= 0 else "down"
+            chg_txt = f"{chg*100:+.2f}%" if chg is not None else "—"
+            rows.append(
+                f'<div class="mkrow"><span class="mkname">{html.escape(i["name"])}</span>'
+                f'<span class="mkpx">{html.escape(str(i["display"]))}</span>'
+                f'<span class="mkchg {ccls}">{chg_txt}</span></div>')
+        body += '<div class="mkgroup">Rates &amp; vol</div>' + "".join(rows)
+
+    fg = macro.get("fear_greed")
+    if fg and fg.get("score") is not None:
+        score = fg["score"]
+        fcls = "down" if score < 45 else ("up" if score > 55 else "muted")
+        body += ('<div class="mkgroup">Sentiment</div>'
+                 '<div class="macro-fg"><span class="mkname">Fear &amp; Greed</span>'
+                 f'<span><b class="{fcls}">{score:.0f}</b> '
+                 f'<span class="{fcls}" style="font-size:11px">{html.escape(str(fg.get("rating","")))}</span>'
+                 '</span></div>')
+
+    fomc = macro.get("fomc")
+    if fomc:
+        iso, days = fomc
+        when = "today" if days == 0 else ("tomorrow" if days == 1 else f"in {days}d")
+        body += ('<div class="mkgroup">Fed</div>'
+                 f'<div class="macro-fomc">🏛️ Fed decision (FOMC) <b>{when}</b> '
+                 f'<span class="muted">· {html.escape(iso)}</span></div>')
+
+    events = macro.get("events", [])
+    if events:
+        ev = []
+        for e in events:
+            inner = f'{e.get("emoji","")} {html.escape(e.get("title",""))}'
+            url = e.get("url") or ""
+            ev.append(f'<a class="macro-ev" href="{html.escape(url)}" target="_blank" rel="noopener">{inner}</a>'
+                      if url else f'<div class="macro-ev">{inner}</div>')
+        body += '<div class="mkgroup">Market events</div>' + "".join(ev)
+
+    if not body:
+        body = '<div class="muted" style="font-size:12px">no macro data</div>'
+    return ('<section class="panel"><div class="panel-h">Macro</div>'
+            '<div class="panel-body">' + body + '</div></section>')
+
+
 _SERVED_JS = r"""
 let _addResults=[], _addTimer=null;
 function addMsg(t,cls){ const m=document.getElementById('addmsg'); if(m){ m.textContent=t||''; m.className=(cls||'muted'); } }
@@ -667,6 +795,24 @@ document.addEventListener('click', e=>{
   if(!e.target.closest('.addwrap')){ const s=document.getElementById('addsug'); if(s) s.style.display='none'; }
 });
 
+// ---- recent news in the expanded card (served) ----
+function _esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function loadNews(root){
+  const el=root.querySelector('.cardnews'); if(!el) return;
+  const t=el.dataset.ticker; if(!t) return;
+  el.innerHTML='<div class="det-sec"><div class="det-h">Recent news</div><div class="muted" style="font-size:12px">loading…</div></div>';
+  fetch('/api/news/'+encodeURIComponent(t)).then(r=>r.json()).then(d=>{
+    const items=(d.items||[]);
+    if(!items.length){ el.innerHTML=''; return; }
+    const rows=items.map(n=>{
+      const meta=[n.publisher, n.age].filter(Boolean).join(' · ');
+      const inner='<div class="nw-t">'+_esc(n.title)+'</div>'+(meta?'<div class="nw-m">'+_esc(meta)+'</div>':'');
+      return n.url ? '<a class="nw" href="'+_esc(n.url)+'" target="_blank" rel="noopener">'+inner+'</a>'
+                   : '<div class="nw">'+inner+'</div>';
+    }).join('');
+    el.innerHTML='<div class="det-sec"><div class="det-h">Recent news</div>'+rows+'</div>';
+  }).catch(()=>{ el.innerHTML=''; });
+}
 // ---- analysis tool pop-ups ----
 function closeTool(e){ if(e&&e.target&&e.target.id!=='toolmodal'&&e.type==='click') return;
   document.getElementById('toolmodal').classList.remove('show'); }
@@ -714,7 +860,7 @@ function runLook(){ const t=_tkv('ltk'); if(!t){ toolErr('enter a ticker'); retu
     h+=_row('Type', d.kind==='single'?'single-stock':'basket');
     h+='<div class="t-h">Underlying exposure</div><table class="fvtable"><tbody>'+
       d.constituents.map(c=>'<tr><td class="fl">'+c.underlying+'</td><td class="fv">'+(c.weight*100).toFixed(1)+'%</td><td>'+(c.weight*d.multiplier*100).toFixed(0)+'% notional</td></tr>').join('')+'</tbody></table>';
-    if(d.verify) h+='<div class="t-note">Basket is a dated snapshot — verify vs issuer holdings.</div>';
+    if(d.kind==='basket') h+='<div class="t-note">Basket as of '+(d.as_of||'—')+'. Indices rebalance quarterly — confirm current weights with the issuer.'+(d.verify?' (unverified snapshot)':'')+'</div>';
     document.getElementById('tool-out').innerHTML=h;
   }).catch(()=>toolErr('look-through failed'));
 }
@@ -745,10 +891,11 @@ function _mcCone(p){ const keys=['p95','p75','p50','p25','p5']; const vals=keys.
 
 def render_watchlist(rows, title="Watchlist", updated="", status_badge="", status_label="",
                      alerts=None, sectors=None, markets=None, refresh_seconds=1800,
-                     served=False):
+                     served=False, updated_ts=None, macro=None):
     banner, _sig = _banner(alerts or [])
     sector_html = _sector_html(sectors)
     markets_html = _markets_html(markets)
+    macro_html = _macro_html(macro)
     add_html = (
         '<div class="addbar"><div class="addwrap">'
         '<input id="addq" placeholder="Add ticker (e.g. NVDA or &quot;oracle&quot;)…" '
@@ -775,7 +922,7 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
     js_served = _SERVED_JS if served else ""
     table = "".join(_row_html(r) for r in rows)
     cards = "".join(_card_html(r) for r in rows)
-    tiles = "".join(_tile_html(r) for r in rows)
+    tiles = _heatmap_html(rows)
     heads = "".join(f'<th onclick="sortBy({i})">{h}</th>' for i, h in enumerate(_HEADERS))
     chips = _chip_bar(rows)
     ok = sum(1 for r in rows if r.price is not None)
@@ -787,7 +934,7 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
 <title>{html.escape(title)}</title><style>{_CSS}{_CSS_EXTRA}</style></head>
 <body><div class="wrap">
 <header><h1>{html.escape(title)}</h1>{badge}
-  <span class="sub" style="margin:0">Updated {html.escape(updated)}</span></header>
+  <span class="sub" style="margin:0">Updated <span id="updated" data-ts="{int(updated_ts) if updated_ts else ''}">{html.escape(updated)}</span></span></header>
 {banner}
 <div class="bar">
   <div class="seg">
@@ -800,12 +947,12 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
   <button class="tbtn" onclick="toggleTheme()" style="margin-left:auto">◐ Theme</button>
 </div>
 {add_html}
-<div class="panels">{sector_html}{markets_html}</div>
+<div class="panels">{sector_html}{markets_html}{macro_html}</div>
 <div class="chips">{chips}<button class="chip-f" onclick="clearChips()">Clear</button></div>
 <div id="view-table" class="view active"><div class="tablewrap"><table class="wl" id="wl">
 <thead><tr>{heads}</tr></thead><tbody>{table}</tbody></table></div></div>
 <div id="view-card" class="view"><div class="cards">{cards}</div></div>
-<div id="view-heatmap" class="view"><div class="heat">{tiles}</div></div>
+<div id="view-heatmap" class="view">{tiles}</div>
 
 <div id="modal" class="modal" onclick="closeModal(event)">
   <div class="modal-card" onclick="event.stopPropagation()">
@@ -849,6 +996,11 @@ function applyFilter(){{
     if(show) n++;
   }});
   document.getElementById('count').textContent = n+' of '+tot+' tickers';
+  // hide heatmap sector groups that have no visible tiles
+  document.querySelectorAll('#view-heatmap .heat-group').forEach(g=>{{
+    const any=[...g.querySelectorAll('.item')].some(el=>el.style.display!=='none');
+    g.style.display = any?'':'none';
+  }});
 }}
 function toggleChip(btn){{
   const g=btn.dataset.group, m=btn.dataset.match;
@@ -874,6 +1026,7 @@ function openCard(card){{
   body.innerHTML='<div class="card-item">'+card.innerHTML+'</div>';
   document.getElementById('modal').classList.add('show');
   drawCharts(body);
+  if(typeof loadNews==='function') loadNews(body);
 }}
 const TF_DAYS={{'1mo':31,'3mo':92,'6mo':183,'1y':366,'2y':731,'5y':1827,'max':1e9}};
 function drawCharts(root){{
@@ -1000,6 +1153,13 @@ function sortBy(col){{
   const b=document.getElementById('banner');
   if(b && localStorage.getItem('wl_banner')===b.dataset.sig) b.style.display='none';
   setView(view);
+  const up=document.getElementById('updated');
+  if(up && up.dataset.ts){{
+    const d=new Date(parseInt(up.dataset.ts,10));
+    if(!isNaN(d)) up.textContent=d.toLocaleString(undefined,
+      {{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}})
+      +' '+(Intl.DateTimeFormat().resolvedOptions().timeZone||'local');
+  }}
   document.querySelectorAll('.tablewrap').forEach(w=>{{
     const upd=()=>w.classList.toggle('scrolled', w.scrollLeft>2);
     w.addEventListener('scroll', upd, {{passive:true}}); upd();

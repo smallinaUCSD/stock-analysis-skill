@@ -66,7 +66,11 @@ Buttons that open a small modal which runs the feature live and shows the result
 - [x] **Earnings flag on cards**: yfinance next-earnings date -> a colored flag
       (today / tomorrow / in Nd / next week) on the card + an "Earnings ≤7d"
       filter chip. (fundamentals.next_earnings -> row.next_earnings -> card.)
-- [ ] **News**: relevant recent headlines per ticker (yfinance `.news`) shown in
-      the expanded card / a News pop-up. (self-contained; per-ticker fetch.)
-- [ ] **Macro alerts**: Fed decisions, jobs reports, large layoffs, etc. Needs an
-      events/news source — pick one (econ calendar API or curated feed). Design TBD.
+- [x] **News (A1)**: recent per-ticker headlines (yfinance `.news`) in the
+      expanded card — clickable, publisher · age. `GET /api/news/<ticker>`.
+- [x] **Macro alerts (A2)**: a dedicated **Macro panel** (3rd panel, not the
+      sliding marquee): Rates & vol (VIX, 10Y yield, DXY), the next Fed decision
+      (verified 2026 FOMC calendar), and scanned market-event headlines (layoffs /
+      Fed / jobs / inflation / tariffs). `data/macro.py` + build `_macro_panel`.
+      (CPI/jobs exact release dates intentionally not hardcoded — the news scan
+      catches them when topical, avoiding wrong dates.)

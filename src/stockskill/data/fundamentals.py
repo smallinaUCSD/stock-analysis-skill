@@ -52,6 +52,10 @@ class FundamentalSnapshot:
     fifty_two_week_low: float | None = None
     avg_volume: float | None = None
     next_earnings: str | None = None     # ISO date if known
+    # extended-hours (pre/post-market) — populated when the session is active
+    market_state: str | None = None      # REGULAR | PRE | POST | CLOSED | PREPRE | POSTPOST
+    ext_price: float | None = None       # pre- or post-market last price
+    ext_change: float | None = None      # extended-hours change (decimal)
 
     def to_json(self, path: str | Path) -> None:
         Path(path).write_text(json.dumps(asdict(self), indent=2))
@@ -116,6 +120,21 @@ def fetch_snapshot(ticker: str) -> FundamentalSnapshot:
 
     dividend = _first(info.get("dividendRate"), info.get("trailingAnnualDividendRate"))
 
+    # Extended-hours (pre/post-market). yfinance exposes these on `info`.
+    market_state = info.get("marketState")
+    ext_price = ext_change = None
+    if market_state in ("PRE", "PREPRE"):
+        ext_price = info.get("preMarketPrice")
+        pmc = info.get("preMarketChangePercent")
+        ext_change = (pmc / 100.0) if pmc is not None else None
+    elif market_state in ("POST", "POSTPOST", "CLOSED"):
+        ext_price = info.get("postMarketPrice")
+        pmc = info.get("postMarketChangePercent")
+        ext_change = (pmc / 100.0) if pmc is not None else None
+    # some payloads give the change fraction already; guard against absurd values
+    if ext_change is not None and abs(ext_change) > 2:
+        ext_change = ext_change / 100.0
+
     # Next earnings date (upcoming only). yfinance gives unix timestamps in info;
     # keep it only if it's today or later (else it's the last report).
     next_earnings = None
@@ -159,4 +178,7 @@ def fetch_snapshot(ticker: str) -> FundamentalSnapshot:
         fifty_two_week_low=info.get("fiftyTwoWeekLow"),
         avg_volume=info.get("averageVolume"),
         next_earnings=next_earnings,
+        market_state=market_state,
+        ext_price=ext_price,
+        ext_change=ext_change,
     )
