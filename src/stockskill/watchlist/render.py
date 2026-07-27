@@ -232,6 +232,12 @@ table.wl th:nth-child(15),table.wl td:nth-child(15){text-align:left}
 .chart-box .cb-p{font-weight:700;font-variant-numeric:tabular-nums}
 .chart-tip{font-size:11px;margin-top:4px;min-height:15px;font-variant-numeric:tabular-nums}
 .chart-tip b{color:var(--ink)}
+/* recent news list (card modal) */
+.nw{display:block;text-decoration:none;padding:6px 0;border-bottom:1px dashed var(--border)}
+.nw:last-child{border-bottom:none}
+a.nw:hover .nw-t{color:var(--accent)}
+.nw-t{font-size:12.5px;color:var(--ink);line-height:1.35}
+.nw-m{font-size:10.5px;color:var(--muted);margin-top:2px}
 /* heatmap */
 .heat{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
 .heat-group{margin-bottom:16px}
@@ -493,7 +499,8 @@ def _card_detail(r):
     ts = _trade_setup_html(r)
     ts_sec = f'<div class="det-sec">{ts}</div>' if ts else ""
     return (f'<div class="card-detail" onclick="event.stopPropagation()">'
-            f'{_chart_html(r)}{ts_sec}{_options_html(r)}{_valuation_html(r)}</div>')
+            f'{_chart_html(r)}{ts_sec}{_options_html(r)}{_valuation_html(r)}'
+            f'<div class="cardnews" data-ticker="{html.escape(r.ticker)}"></div></div>')
 
 
 def _earnings_badge(r):
@@ -727,6 +734,24 @@ document.addEventListener('click', e=>{
   if(!e.target.closest('.addwrap')){ const s=document.getElementById('addsug'); if(s) s.style.display='none'; }
 });
 
+// ---- recent news in the expanded card (served) ----
+function _esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function loadNews(root){
+  const el=root.querySelector('.cardnews'); if(!el) return;
+  const t=el.dataset.ticker; if(!t) return;
+  el.innerHTML='<div class="det-sec"><div class="det-h">Recent news</div><div class="muted" style="font-size:12px">loading…</div></div>';
+  fetch('/api/news/'+encodeURIComponent(t)).then(r=>r.json()).then(d=>{
+    const items=(d.items||[]);
+    if(!items.length){ el.innerHTML=''; return; }
+    const rows=items.map(n=>{
+      const meta=[n.publisher, n.age].filter(Boolean).join(' · ');
+      const inner='<div class="nw-t">'+_esc(n.title)+'</div>'+(meta?'<div class="nw-m">'+_esc(meta)+'</div>':'');
+      return n.url ? '<a class="nw" href="'+_esc(n.url)+'" target="_blank" rel="noopener">'+inner+'</a>'
+                   : '<div class="nw">'+inner+'</div>';
+    }).join('');
+    el.innerHTML='<div class="det-sec"><div class="det-h">Recent news</div>'+rows+'</div>';
+  }).catch(()=>{ el.innerHTML=''; });
+}
 // ---- analysis tool pop-ups ----
 function closeTool(e){ if(e&&e.target&&e.target.id!=='toolmodal'&&e.type==='click') return;
   document.getElementById('toolmodal').classList.remove('show'); }
@@ -939,6 +964,7 @@ function openCard(card){{
   body.innerHTML='<div class="card-item">'+card.innerHTML+'</div>';
   document.getElementById('modal').classList.add('show');
   drawCharts(body);
+  if(typeof loadNews==='function') loadNews(body);
 }}
 const TF_DAYS={{'1mo':31,'3mo':92,'6mo':183,'1y':366,'2y':731,'5y':1827,'max':1e9}};
 function drawCharts(root){{

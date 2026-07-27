@@ -94,6 +94,15 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
         from ..data.search import search_symbols
         return jsonify({"results": search_symbols(request.args.get("q", ""))})
 
+    @app.get("/api/news/<ticker>")
+    def news(ticker: str):
+        if not _TICKER_RE.match(ticker):
+            return jsonify({"error": "invalid ticker"}), 400
+        from ..data.news import fetch_news
+        limit = request.args.get("limit", default=6, type=int) or 6
+        return jsonify({"ticker": ticker.upper(),
+                        "items": fetch_news(ticker.upper(), limit=max(1, min(12, limit)))})
+
     @app.get("/api/climate")
     def climate():
         from ..data.prices import closing_prices
