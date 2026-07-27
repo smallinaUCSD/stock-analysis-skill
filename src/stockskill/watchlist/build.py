@@ -10,6 +10,30 @@ from __future__ import annotations
 from datetime import datetime
 
 
+def _macro_alerts() -> list:
+    """FOMC countdown + a scan of market-news headlines (layoffs/Fed/tariffs…).
+
+    Best-effort and never fatal — returns [] if the news fetch fails.
+    """
+    from ..data.macro import fomc_alert, scan_headlines
+    from ..data.news import fetch_news
+
+    out: list = []
+    fa = fomc_alert()
+    if fa:
+        out.append(fa)
+    titles: list[str] = []
+    for tk in ("^GSPC", "SPY"):
+        try:
+            titles = [i["title"] for i in fetch_news(tk, limit=20)]
+        except Exception:  # noqa: BLE001
+            titles = []
+        if titles:
+            break
+    out += scan_headlines(titles, limit=5)
+    return out
+
+
 def build_watchlist_html(tickers_spec, *, period: str = "5y", workers: int = 5,
                          cache_dir: str | None = None, alerts_path: str | None = None,
                          interval: float | None = None, served: bool = False,
@@ -44,7 +68,7 @@ def build_watchlist_html(tickers_spec, *, period: str = "5y", workers: int = 5,
     cfg = SignalConfig.from_env()
     rows = [build_row(data[t], cfg, tag_map.get(t)) for t in tickers if t in data]
     custom = load_custom_alerts(alerts_path) if alerts_path else []
-    alerts = all_alerts(rows, custom)
+    alerts = _macro_alerts() + all_alerts(rows, custom)
 
     sec_pm = price_map(list(SECTOR_ETFS), period="3mo")
     sectors = [(r.name, r.ticker, r.returns.get("1m")) for r in sector_table(sec_pm, "1m")]
