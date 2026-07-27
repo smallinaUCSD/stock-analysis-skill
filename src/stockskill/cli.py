@@ -461,9 +461,9 @@ def cmd_serve(args: argparse.Namespace) -> int:
     import os
     from .server import create_app
 
-    app = create_app()
+    app = create_app(tickers_path=args.tickers, cache_dir=args.cache_dir)
     url = f"http://{args.host}:{args.port}"
-    print(f"Stock Analyzer at {url}  (Ctrl-C to stop)")
+    print(f"Live dashboard at {url}  (board at /, analyzer at /analyze; Ctrl-C to stop)")
     if args.open:
         os.system(f"open {url!r}" if sys.platform == "darwin" else f"xdg-open {url!r}")
     app.run(host=args.host, port=args.port, debug=False)
@@ -472,56 +472,20 @@ def cmd_serve(args: argparse.Namespace) -> int:
 
 def _refresh_seconds_for(status, base_interval: float | None) -> int:
     """Page auto-refresh cadence: fast when the market is open, slow when closed."""
-    if base_interval:
-        return max(15, int(base_interval * 60))
-    if status.is_open:
-        return 60           # ~realtime during regular hours
-    if status.label in ("pre-market", "after-hours"):
-        return 300
-    return 1800             # closed / weekend
+    from .marketclock import refresh_seconds_for
+    return refresh_seconds_for(status, base_interval)
 
 
 def _generate_watchlist(args) -> str:
-    from datetime import datetime
-    from .marketclock import market_status, ET
-    from .signals import SignalConfig
-    from .watchlist import parse_tickers, fetch_all, build_row, render_watchlist
-    from .alerts import all_alerts, load_custom_alerts
-    from .pulse import SECTOR_ETFS, sector_table
-    from .data.prices import price_map
+    from .watchlist import build_watchlist_html
 
-    parsed = parse_tickers(args.tickers)
-    tickers = parsed["all"]
-    tag_map: dict[str, set] = {}
-    for sec, tks in parsed["sections"].items():
-        for t in tks:
-            tag_map.setdefault(t, set()).add(sec)
-
-    data = fetch_all(tickers, period=args.period, workers=args.workers, cache_dir=args.cache_dir)
-    cfg = SignalConfig.from_env()
-    rows = [build_row(data[t], cfg, tag_map.get(t)) for t in tickers if t in data]
-    alerts = all_alerts(rows, load_custom_alerts(args.alerts))
-
-    # sector performance strip
-    sec_pm = price_map(list(SECTOR_ETFS), period="3mo")
-    sectors = [(r.name, r.ticker, r.returns.get("1m")) for r in sector_table(sec_pm, "1m")]
-
-    # markets panel (indices / commodities / crypto) — live like the stocks
-    from .pulse import market_quotes, all_market_tickers
-    mkt_pm = price_map(all_market_tickers(), period="5d")
-    markets = market_quotes(mkt_pm)
-
-    status = market_status()
-    refresh = _refresh_seconds_for(status, getattr(args, "interval", None))
-    now = datetime.now(ET)
-    html_out = render_watchlist(
-        rows, title="Watchlist", updated=now.strftime("%a %b %d, %I:%M %p") + " ET",
-        status_badge=status.badge, status_label=status.label, alerts=alerts,
-        sectors=sectors, markets=markets, refresh_seconds=refresh)
+    html_out, meta = build_watchlist_html(
+        args.tickers, period=args.period, workers=args.workers,
+        cache_dir=args.cache_dir, alerts_path=args.alerts,
+        interval=getattr(args, "interval", None))
     with open(args.out, "w") as f:
         f.write(html_out)
-    ok = sum(1 for r in rows if r.price is not None)
-    return f"[{status.badge}] {args.out} ({ok}/{len(rows)} tickers), reload {refresh}s"
+    return f"[{meta['status'].badge}] {args.out} ({meta['ok']}/{meta['n']} tickers), reload {meta['refresh']}s"
 
 
 def cmd_watchlist(args: argparse.Namespace) -> int:
@@ -769,9 +733,11 @@ def build_parser() -> argparse.ArgumentParser:
     db.add_argument("--open", action="store_true", help="open the file in the browser after writing")
     db.set_defaults(func=cmd_dashboard)
 
-    sv = sub.add_parser("serve", help="run the interactive stock analyzer (search any ticker)")
+    sv = sub.add_parser("serve", help="run the live dashboard: watchlist board + analyzer")
     sv.add_argument("--host", default="127.0.0.1")
     sv.add_argument("--port", type=int, default=8787)
+    sv.add_argument("--tickers", default="data/tickers.csv", help="watchlist ticker file")
+    sv.add_argument("--cache-dir", help="per-ticker cache dir (e.g. .cache/stock_cache)")
     sv.add_argument("--open", action="store_true", help="open the browser after starting")
     sv.set_defaults(func=cmd_serve)
 

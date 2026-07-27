@@ -1,10 +1,13 @@
-"""Flask app for the interactive analyzer.
+"""Flask app for the live dashboard.
 
 Routes:
-  GET /                     -> the analyzer page (search UI)
-  GET /api/stock/<ticker>   -> JSON analysis (price, valuation, scenarios,
-                               consensus, options) from analyze_ticker
-  GET /healthz              -> liveness
+  GET  /                       -> the live watchlist board (cards/table/heatmap)
+  GET  /analyze                -> the analyzer page (search any ticker)
+  POST /api/watchlist/add      -> add a ticker to the board, live
+  POST /api/watchlist/remove   -> remove a user-added ticker
+  GET  /api/stock/<ticker>     -> JSON analysis from analyze_ticker
+  GET  /api/search             -> symbol search (autocomplete)
+  GET  /healthz                -> liveness
 
 The server only exposes the tested analysis engine over HTTP; it computes no
 numbers of its own, and emits analysis, not buy/sell/hold advice.
@@ -18,16 +21,36 @@ from flask import Flask, jsonify, request
 
 from ..analyze import analyze_ticker
 from .page import analyzer_html
+from .watchlist_service import WatchlistService
 
 _TICKER_RE = re.compile(r"^[A-Za-z0-9.\-\^]{1,12}$")
 
 
-def create_app() -> Flask:
+def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = None) -> Flask:
     app = Flask(__name__)
+    board = WatchlistService(tickers_path=tickers_path, cache_dir=cache_dir)
 
     @app.get("/")
     def index():
+        return board.html()
+
+    @app.get("/analyze")
+    def analyze():
         return analyzer_html()
+
+    @app.post("/api/watchlist/add")
+    def watchlist_add():
+        res = board.add(request.args.get("ticker", ""))
+        return jsonify(res), (200 if res.get("ok") else 400)
+
+    @app.post("/api/watchlist/remove")
+    def watchlist_remove():
+        res = board.remove(request.args.get("ticker", ""))
+        return jsonify(res), (200 if res.get("ok") else 400)
+
+    @app.get("/api/watchlist/added")
+    def watchlist_added():
+        return jsonify({"added": board.added()})
 
     @app.get("/healthz")
     def healthz():

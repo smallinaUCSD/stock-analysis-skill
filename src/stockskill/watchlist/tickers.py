@@ -19,32 +19,37 @@ _LEVERAGED_WORDS = ("2x", "3x", "bull", "bear", "leveraged", "ultra", "ultrapro"
                     "inverse", "-1x", "1.5x", "daily")
 
 
-def parse_tickers(path: str) -> dict:
-    """Return {'sections': {NAME: [tickers]}, 'all': [deduped, ordered]}."""
+def parse_tickers_text(text: str) -> dict:
+    """Parse sectioned ticker text -> {'sections': {NAME: [tickers]}, 'all': [...]}."""
     sections: dict[str, list[str]] = {}
     order: list[str] = []
     seen: set[str] = set()
     current = "TICKERS"
-    with open(path) as f:
-        for raw in f:
-            line = raw.strip()
-            if not line or line.startswith("#"):
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            current = line[1:-1].strip().upper()
+            sections.setdefault(current, [])
+            continue
+        for tok in line.replace(",", " ").split():
+            t = tok.strip().upper()
+            if not t:
                 continue
-            if line.startswith("[") and line.endswith("]"):
-                current = line[1:-1].strip().upper()
-                sections.setdefault(current, [])
-                continue
-            for tok in line.replace(",", " ").split():
-                t = tok.strip().upper()
-                if not t:
-                    continue
-                sections.setdefault(current, [])
-                if t not in sections[current]:
-                    sections[current].append(t)
-                if t not in seen:
-                    seen.add(t)
-                    order.append(t)
+            sections.setdefault(current, [])
+            if t not in sections[current]:
+                sections[current].append(t)
+            if t not in seen:
+                seen.add(t)
+                order.append(t)
     return {"sections": sections, "all": order}
+
+
+def parse_tickers(path: str) -> dict:
+    """Return {'sections': {NAME: [tickers]}, 'all': [deduped, ordered]} from a file."""
+    with open(path) as f:
+        return parse_tickers_text(f.read())
 
 
 def detect_categories(ticker: str, name: str | None = None,

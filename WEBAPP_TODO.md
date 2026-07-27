@@ -26,11 +26,14 @@ feature reachable as a pop-up. The static HTML generators stay for cron/offline.
 - [x] Move the **filter chips below** the two panels.
 
 ## 4. Serve the watchlist as THE live dashboard (architecture shift)
-- [ ] `serve` home = the watchlist (cards/table/heatmap), served from Flask.
-- [ ] Always live: server refreshes data on a market-aware cadence; page polls.
-      (No `--watch` flag needed; the input/static file goes away for the app.)
-- [ ] **Add-ticker** box with autocomplete (reuse `/api/search`) that adds a
-      ticker to the board live and fetches its data.
+- [x] `serve` home `/` = the live watchlist (cards/table/heatmap) from Flask;
+      analyzer moved to `/analyze`. Core build extracted to `watchlist/build.py`,
+      shared by the CLI (static file) and the server (live).
+- [x] Always live: `WatchlistService` caches the HTML with a market-aware TTL
+      (60s open / 5m ext / 30m closed); the page polls via meta-refresh.
+- [x] **Add-ticker** box with autocomplete (reuses `/api/search`): validates the
+      symbol has data, adds it live, rebuilds the board. `/api/watchlist/add`,
+      `/remove`, `/added`. Verified end-to-end (added TSLA + ORCL live).
 
 ## 5. Analysis tools as pop-ups on the dashboard
 Buttons that open a small modal which runs the feature live and shows the result:

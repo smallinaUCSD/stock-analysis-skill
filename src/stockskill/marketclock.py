@@ -61,3 +61,17 @@ def market_status(now: datetime | None = None) -> MarketStatus:
     if REGULAR_CLOSE <= t < AFTER_CLOSE:
         return MarketStatus("after-hours", False, True, et)
     return MarketStatus("closed", False, True, et)
+
+
+def refresh_seconds_for(status: "MarketStatus", base_interval: float | None = None) -> int:
+    """Auto-refresh cadence: fast when the market is open, slow when closed.
+
+    ``base_interval`` (minutes) overrides the adaptive schedule when given.
+    """
+    if base_interval:
+        return max(15, int(base_interval * 60))
+    if status.is_open:
+        return 60           # ~realtime during regular hours
+    if status.label in ("pre-market", "after-hours"):
+        return 300
+    return 1800             # closed / weekend

@@ -107,6 +107,20 @@ table.wl tr.item:hover td{background:var(--surface-2)}
 #modal-body .card-detail{display:block}
 #modal-body .details-cta{display:none}
 #modal-body .card-item{cursor:default;border:none;padding:0}
+/* add-ticker bar (served mode) */
+.addbar{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.addwrap{position:relative;flex:0 1 340px}
+#addq{width:100%;padding:8px 11px;border-radius:9px;border:1px solid var(--border);
+  background:var(--surface);color:var(--ink);font-size:13px}
+#addq:focus{outline:none;border-color:var(--accent)}
+.addsug{display:none;position:absolute;z-index:60;left:0;right:0;top:calc(100% + 4px);
+  background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;
+  box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.sug{padding:7px 11px;font-size:13px;cursor:pointer;display:flex;gap:8px;align-items:baseline}
+.sug:hover{background:var(--surface-2)} .sug b{color:var(--ink)} .sug span{color:var(--muted);font-size:11.5px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tbtn.add{background:var(--accent);color:#fff;border-color:transparent;font-weight:650}
+#addmsg.ok{color:var(--up)} #addmsg.bad{color:var(--down)}
 /* left/right panels (sectors + markets), always visible */
 .panels{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
 @media (max-width:720px){.panels{grid-template-columns:1fr}}
@@ -547,11 +561,58 @@ def _markets_html(markets):
             '<div class="panel-body">' + "".join(rows) + '</div></section>')
 
 
+_SERVED_JS = r"""
+let _addResults=[], _addTimer=null;
+function addMsg(t,cls){ const m=document.getElementById('addmsg'); if(m){ m.textContent=t||''; m.className=(cls||'muted'); } }
+function addSearch(){
+  clearTimeout(_addTimer);
+  const q=document.getElementById('addq').value.trim();
+  const sug=document.getElementById('addsug');
+  if(q.length<1){ sug.innerHTML=''; sug.style.display='none'; return; }
+  _addTimer=setTimeout(()=>{
+    fetch('/api/search?q='+encodeURIComponent(q)).then(r=>r.json()).then(d=>{
+      _addResults=(d.results||[]).slice(0,8);
+      if(!_addResults.length){ sug.innerHTML=''; sug.style.display='none'; return; }
+      sug.innerHTML=_addResults.map((x,i)=>
+        '<div class="sug" onclick="pickAdd('+i+')"><b>'+x.symbol+'</b> <span>'+
+        (x.name||'').replace(/</g,'&lt;')+'</span></div>').join('');
+      sug.style.display='block';
+    }).catch(()=>{ sug.style.display='none'; });
+  },180);
+}
+function pickAdd(i){ const x=_addResults[i]; if(x){ document.getElementById('addq').value=x.symbol; doAdd(x.symbol); } }
+function addTicker(){ const q=document.getElementById('addq').value.trim().toUpperCase(); if(q) doAdd(q); }
+function addKey(e){ if(e.key==='Enter'){ e.preventDefault(); addTicker(); } if(e.key==='Escape'){ document.getElementById('addsug').style.display='none'; } }
+function doAdd(sym){
+  document.getElementById('addsug').style.display='none';
+  addMsg('adding '+sym+'…','muted');
+  fetch('/api/watchlist/add?ticker='+encodeURIComponent(sym),{method:'POST'})
+    .then(r=>r.json()).then(d=>{
+      if(d.ok){ addMsg(sym+' added','ok'); location.reload(); }
+      else{ addMsg(d.error||('could not add '+sym),'bad'); }
+    }).catch(()=>addMsg('network error','bad'));
+}
+document.addEventListener('click', e=>{
+  if(!e.target.closest('.addwrap')){ const s=document.getElementById('addsug'); if(s) s.style.display='none'; }
+});
+"""
+
+
 def render_watchlist(rows, title="Watchlist", updated="", status_badge="", status_label="",
-                     alerts=None, sectors=None, markets=None, refresh_seconds=1800):
+                     alerts=None, sectors=None, markets=None, refresh_seconds=1800,
+                     served=False):
     banner, _sig = _banner(alerts or [])
     sector_html = _sector_html(sectors)
     markets_html = _markets_html(markets)
+    add_html = (
+        '<div class="addbar"><div class="addwrap">'
+        '<input id="addq" placeholder="Add ticker (e.g. NVDA or &quot;oracle&quot;)…" '
+        'autocomplete="off" oninput="addSearch()" onkeydown="addKey(event)">'
+        '<div id="addsug" class="addsug"></div></div>'
+        '<button class="tbtn add" onclick="addTicker()">+ Add</button>'
+        '<span id="addmsg" class="muted"></span></div>'
+    ) if served else ""
+    js_served = _SERVED_JS if served else ""
     table = "".join(_row_html(r) for r in rows)
     cards = "".join(_card_html(r) for r in rows)
     tiles = "".join(_tile_html(r) for r in rows)
@@ -578,6 +639,7 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
   <span class="count" id="count">{ok} of {len(rows)} tickers</span>
   <button class="tbtn" onclick="toggleTheme()" style="margin-left:auto">◐ Theme</button>
 </div>
+{add_html}
 <div class="panels">{sector_html}{markets_html}</div>
 <div class="chips">{chips}<button class="chip-f" onclick="clearChips()">Clear</button></div>
 <div id="view-table" class="view active"><div class="tablewrap"><table class="wl" id="wl">
@@ -750,5 +812,6 @@ function sortBy(col){{
   if(b && localStorage.getItem('wl_banner')===b.dataset.sig) b.style.display='none';
   setView(view);
 }})();
+{js_served}
 </script>
 </body></html>"""
