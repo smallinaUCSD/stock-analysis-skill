@@ -37,7 +37,10 @@ feature reachable as a pop-up. The static HTML generators stay for cron/offline.
 
 ## 5. Analysis tools as pop-ups on the dashboard
 Buttons that open a small modal which runs the feature live and shows the result:
-- [ ] Pulse · [ ] Evaluate trade · [ ] Value a stock · [ ] Look-through · [ ] Monte Carlo.
+- [x] Pulse · [x] Evaluate trade · [x] Value a stock · [x] Look-through · [x] Monte Carlo.
+      Toolbar in the add-bar (served mode); a shared #toolmodal fetches each tool
+      live. New endpoints: /api/pulse, /api/lookthrough/<t>, /api/montecarlo/<t>
+      (value/evaluate reuse /api/stock, /api/evaluate). All verified in-browser.
 
 ## 6. Holdings dashboard (centralized, part of the app)
 - [ ] View holdings split by account: **brokerage / Roth IRA / 401k**.

@@ -121,6 +121,37 @@ table.wl tr.item:hover td{background:var(--surface-2)}
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tbtn.add{background:var(--accent);color:#fff;border-color:transparent;font-weight:650}
 #addmsg.ok{color:var(--up)} #addmsg.bad{color:var(--down)}
+/* tools bar + tool modal */
+.toolsbar{display:flex;flex-wrap:wrap;gap:6px;margin-left:6px}
+.tool-b{font:600 12px inherit;padding:6px 11px;border-radius:9px;cursor:pointer;
+  background:var(--surface);border:1px solid var(--border);color:var(--ink)}
+.tool-b:hover{border-color:var(--accent);color:var(--accent)}
+.tool-head h3{margin:0 34px 10px 0;font-size:17px}
+.tool-form{margin-bottom:10px}
+.t-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
+.t-row input,.t-row select{padding:8px 10px;border-radius:8px;border:1px solid var(--border);
+  background:var(--surface);color:var(--ink);font-size:13px}
+.t-row input{flex:1 1 120px;min-width:90px} .t-row input:focus,.t-row select:focus{outline:none;border-color:var(--accent)}
+.tool-out{min-height:20px}
+.t-kv{display:flex;justify-content:space-between;gap:12px;padding:3px 0;font-size:13px;
+  border-bottom:1px dashed var(--border)}
+.t-kv span{color:var(--muted)} .t-kv b{font-variant-numeric:tabular-nums;text-align:right}
+.t-kv b.up{color:var(--up)} .t-kv b.down{color:var(--down)}
+.t-h{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.04em;margin:10px 0 3px}
+.t-note{font-size:11px;color:var(--muted);margin-top:8px;line-height:1.45}
+.t-err{color:var(--down);font-size:13px;padding:6px 0}
+.t-fac{font-size:12px;padding:4px 0;border-bottom:1px dashed var(--border)}
+.t-fac b{text-transform:capitalize;font-size:10px;padding:1px 6px;border-radius:6px;margin-right:5px}
+.t-fac.support b{background:var(--good,#16794a);color:#fff}
+.t-fac.against b{background:var(--crit,#b42318);color:#fff}
+.t-fac.neutral b{background:var(--surface-2);color:var(--muted)}
+.mc-row{display:grid;grid-template-columns:34px 1fr 62px;align-items:center;gap:8px;
+  font-size:12px;padding:2px 0}
+.mc-row span{color:var(--muted)} .mc-row b{text-align:right;font-variant-numeric:tabular-nums}
+.mc-row b.up{color:var(--up)} .mc-row b.down{color:var(--down)}
+.mc-bar{height:9px;background:var(--surface-2);border-radius:5px;overflow:hidden}
+.mc-fill{height:9px;border-radius:5px} .mc-fill.up{background:var(--up)} .mc-fill.down{background:var(--down)}
 /* left/right panels (sectors + markets), always visible */
 .panels{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
 @media (max-width:720px){.panels{grid-template-columns:1fr}}
@@ -595,6 +626,108 @@ function doAdd(sym){
 document.addEventListener('click', e=>{
   if(!e.target.closest('.addwrap')){ const s=document.getElementById('addsug'); if(s) s.style.display='none'; }
 });
+
+// ---- analysis tool pop-ups ----
+function closeTool(e){ if(e&&e.target&&e.target.id!=='toolmodal'&&e.type==='click') return;
+  document.getElementById('toolmodal').classList.remove('show'); }
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeTool(); });
+function _tkv(id){ const el=document.getElementById(id); return el?(el.value||'').trim().toUpperCase():''; }
+function toolBusy(m){ document.getElementById('tool-out').innerHTML='<div class="muted">'+(m||'Running…')+'</div>'; }
+function toolErr(m){ document.getElementById('tool-out').innerHTML='<div class="t-err">'+m+'</div>'; }
+function _pc(x){ return x>=0?'up':'down'; }
+function _ps(x){ return x==null?'—':(x>=0?'+':'')+(x*100).toFixed(1)+'%'; }
+function _usd(x){ return x==null?'—':'$'+Number(x).toLocaleString(undefined,{maximumFractionDigits:2}); }
+function _row(l,v){ return '<div class="t-kv"><span>'+l+'</span><b>'+v+'</b></div>'; }
+function _mrow(l,v,c){ return '<div class="t-kv"><span>'+l+'</span><b class="'+c+'">'+v+'</b></div>'; }
+
+const TOOLS = {
+  pulse:{title:'📊 Market pulse', form:'', auto:true, run:runPulse},
+  value:{title:'💰 Value a stock', form:'<div class="t-row"><input id="valuetk" placeholder="Ticker e.g. AAPL" autocomplete="off" onkeydown="if(event.key===&quot;Enter&quot;)runValue()"><button class="tbtn add" onclick="runValue()">Run</button></div>', run:runValue},
+  evaluate:{title:'✅ Evaluate a trade', form:'<div class="t-row"><input id="evtk" placeholder="Ticker e.g. NVDA" autocomplete="off"><select id="evact"><option value="buy">Buy</option><option value="sell">Sell</option><option value="short">Short</option></select></div><div class="t-row"><input id="evprice" placeholder="Price (opt)" inputmode="decimal"><input id="evstop" placeholder="Stop (opt)" inputmode="decimal"><input id="evtarget" placeholder="Target (opt)" inputmode="decimal"><button class="tbtn add" onclick="runEval()">Run</button></div>', run:runEval},
+  lookthrough:{title:'🔍 Leverage look-through', form:'<div class="t-row"><input id="ltk" placeholder="Leveraged ETF e.g. FNGU" autocomplete="off" onkeydown="if(event.key===&quot;Enter&quot;)runLook()"><button class="tbtn add" onclick="runLook()">Run</button></div>', run:runLook},
+  montecarlo:{title:'🎲 Monte Carlo', form:'<div class="t-row"><input id="mctk" placeholder="Ticker e.g. NVDA" autocomplete="off"><select id="mcdays"><option value="21">1 month</option><option value="63" selected>3 months</option><option value="126">6 months</option><option value="252">1 year</option></select><select id="mcmethod"><option value="gbm">GBM (log-normal)</option><option value="bootstrap">Bootstrap (historical)</option></select><button class="tbtn add" onclick="runMC()">Run</button></div>', run:runMC},
+};
+let curTool=null;
+function openTool(name){
+  const t=TOOLS[name]; if(!t) return; curTool=name;
+  document.getElementById('tool-head').innerHTML='<h3>'+t.title+'</h3>';
+  document.getElementById('tool-form').innerHTML=t.form;
+  document.getElementById('tool-out').innerHTML='';
+  document.getElementById('toolmodal').classList.add('show');
+  if(t.auto){ t.run(); } else { const i=document.querySelector('#tool-form input'); if(i) i.focus(); }
+}
+function runPulse(){ toolBusy('Reading the tape…');
+  fetch('/api/pulse').then(r=>r.json()).then(d=>{
+    let h='';
+    if(d.climate) h+=_row('Climate', d.climate.label+' <span class="muted">'+(d.climate.notes||'')+'</span>');
+    if(d.fear_greed) h+=_row('Fear &amp; Greed', d.fear_greed.value+' · '+d.fear_greed.label);
+    if(d.rotation) h+=_row('Rotation leader', d.rotation);
+    if(d.sectors_top&&d.sectors_top.length){ h+='<div class="t-h">Leading sectors</div>'+d.sectors_top.map(s=>_mrow(s.name,_ps(s.ret),_pc(s.ret))).join(''); }
+    if(d.sectors_bottom&&d.sectors_bottom.length){ h+='<div class="t-h">Lagging sectors</div>'+d.sectors_bottom.map(s=>_mrow(s.name,_ps(s.ret),_pc(s.ret))).join(''); }
+    document.getElementById('tool-out').innerHTML=h||'<div class="muted">no pulse data</div>';
+  }).catch(()=>toolErr('pulse failed'));
+}
+function runValue(){ const t=_tkv('valuetk'); if(!t){ toolErr('enter a ticker'); return; } toolBusy('Valuing '+t+'…');
+  fetch('/api/stock/'+encodeURIComponent(t)).then(r=>r.json()).then(d=>{
+    if(d.error){ toolErr(d.error); return; }
+    const v=d.valuation||{};
+    let h='<div class="t-kv"><span>'+(d.name||t)+'</span><b>'+_usd(d.price)+'</b></div>';
+    if(v.signal) h+=_row('Signal', v.signal);
+    if(v.margin_of_safety!=null) h+=_mrow('Margin of safety',_ps(v.margin_of_safety),_pc(v.margin_of_safety));
+    if(v.bear!=null||v.base!=null||v.bull!=null){ h+='<div class="t-h">Fair value</div>';
+      h+=_mrow('Bear',_usd(v.bear),'down'); h+=_row('Base',_usd(v.base)); h+=_mrow('Bull',_usd(v.bull),'up'); }
+    if(v.implied_market_growth!=null) h+=_row('Reverse-DCF growth',(v.implied_market_growth*100).toFixed(0)+'%');
+    if(d.consensus&&d.consensus.reco) h+=_row('Analyst consensus', d.consensus.reco+' · target '+_ps(d.consensus.target_vs_price));
+    if(v.note) h+='<div class="t-note">'+v.note+'</div>';
+    document.getElementById('tool-out').innerHTML=h;
+  }).catch(()=>toolErr('value failed'));
+}
+function runEval(){ const t=_tkv('evtk'); if(!t){ toolErr('enter a ticker'); return; }
+  const act=document.getElementById('evact').value; let q='?action='+act;
+  ['price','stop','target'].forEach(k=>{ const el=document.getElementById('ev'+k); if(el&&el.value.trim()) q+='&'+k+'='+encodeURIComponent(el.value.trim()); });
+  toolBusy('Evaluating '+t+'…');
+  fetch('/api/evaluate/'+encodeURIComponent(t)+q).then(r=>r.json()).then(d=>{
+    if(d.error){ toolErr(d.error); return; }
+    let h='<div class="t-kv"><span>'+t+' · '+d.action+'</span><b>'+_usd(d.price)+'</b></div>';
+    h+=_row('Alignment', d.alignment+' <span class="muted">('+d.n_support+' for / '+d.n_against+' against)</span>');
+    if(d.rr!=null) h+=_row('Risk / reward', d.rr.toFixed(2)+' : 1');
+    h+='<div class="t-h">Factors</div>'+(d.factors||[]).map(f=>'<div class="t-fac '+f.stance+'"><b>'+f.stance+'</b> '+f.name+' <span class="muted">'+f.detail+'</span></div>').join('');
+    document.getElementById('tool-out').innerHTML=h;
+  }).catch(()=>toolErr('evaluate failed'));
+}
+function runLook(){ const t=_tkv('ltk'); if(!t){ toolErr('enter a ticker'); return; } toolBusy('Expanding '+t+'…');
+  fetch('/api/lookthrough/'+encodeURIComponent(t)).then(r=>r.json()).then(d=>{
+    if(!d.ok){ toolErr((d.error||'not a leveraged product')+(d.note?'<div class="muted" style="margin-top:6px">'+d.note+'</div>':'')); return; }
+    let h='<div class="t-kv"><span>'+d.name+'</span><b>'+d.multiplier+'x</b></div>';
+    h+=_row('Type', d.kind==='single'?'single-stock':'basket');
+    h+='<div class="t-h">Underlying exposure</div><table class="fvtable"><tbody>'+
+      d.constituents.map(c=>'<tr><td class="fl">'+c.underlying+'</td><td class="fv">'+(c.weight*100).toFixed(1)+'%</td><td>'+(c.weight*d.multiplier*100).toFixed(0)+'% notional</td></tr>').join('')+'</tbody></table>';
+    if(d.verify) h+='<div class="t-note">Basket is a dated snapshot — verify vs issuer holdings.</div>';
+    document.getElementById('tool-out').innerHTML=h;
+  }).catch(()=>toolErr('look-through failed'));
+}
+function runMC(){ const t=_tkv('mctk'); if(!t){ toolErr('enter a ticker'); return; }
+  const days=document.getElementById('mcdays').value, method=document.getElementById('mcmethod').value;
+  const label=document.getElementById('mcdays').selectedOptions[0].text;
+  toolBusy('Simulating '+t+' ('+label+')…');
+  fetch('/api/montecarlo/'+encodeURIComponent(t)+'?days='+days+'&method='+method).then(r=>r.json()).then(d=>{
+    if(d.error){ toolErr(d.error); return; }
+    let h='<div class="t-kv"><span>'+d.ticker+' · '+d.days+'d · '+d.method+'</span><b>'+_usd(d.spot)+'</b></div>';
+    h+=_mrow('Expected return',_ps(d.expected_return),_pc(d.expected_return));
+    h+=_row('P(up)', (d.prob_up*100).toFixed(0)+'%');
+    h+=_mrow('P(gain ≥ '+(d.gain_threshold*100).toFixed(0)+'%)', (d.prob_gain*100).toFixed(0)+'%','up');
+    h+=_mrow('P(loss ≥ '+(d.loss_threshold*100).toFixed(0)+'%)', (d.prob_loss*100).toFixed(0)+'%','down');
+    h+=_mrow('VaR (95%)', _ps(d.var_95),'down');
+    h+='<div class="t-h">Outcome range ('+d.days+'-day return)</div>'+_mcCone(d.pctiles||{});
+    h+='<div class="t-note">drift '+(d.drift_annual*100).toFixed(0)+'%/yr · vol '+(d.vol_annual*100).toFixed(0)+'%/yr · '+d.n_paths.toLocaleString()+' paths. A simulation from history, not a forecast.</div>';
+    document.getElementById('tool-out').innerHTML=h;
+  }).catch(()=>toolErr('montecarlo failed'));
+}
+function _mcCone(p){ const keys=['p95','p75','p50','p25','p5']; const vals=keys.map(k=>p[k]).filter(v=>v!=null);
+  if(!vals.length) return ''; const mag=Math.max.apply(null,vals.map(Math.abs))||1;
+  return keys.map(k=>{ const v=p[k]; if(v==null) return '';
+    return '<div class="mc-row"><span>'+k+'</span><div class="mc-bar"><div class="mc-fill '+(v>=0?'up':'down')+'" style="width:'+Math.max(3,Math.abs(v)/mag*100)+'%"></div></div><b class="'+(v>=0?'up':'down')+'">'+_ps(v)+'</b></div>'; }).join('');
+}
 """
 
 
@@ -610,7 +743,23 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
         'autocomplete="off" oninput="addSearch()" onkeydown="addKey(event)">'
         '<div id="addsug" class="addsug"></div></div>'
         '<button class="tbtn add" onclick="addTicker()">+ Add</button>'
+        '<span class="toolsbar">'
+        '<button class="tool-b" onclick="openTool(\'pulse\')">📊 Pulse</button>'
+        '<button class="tool-b" onclick="openTool(\'value\')">💰 Value</button>'
+        '<button class="tool-b" onclick="openTool(\'evaluate\')">✅ Evaluate</button>'
+        '<button class="tool-b" onclick="openTool(\'lookthrough\')">🔍 Look-through</button>'
+        '<button class="tool-b" onclick="openTool(\'montecarlo\')">🎲 Monte Carlo</button>'
+        '</span>'
         '<span id="addmsg" class="muted"></span></div>'
+    ) if served else ""
+    tool_modal = (
+        '<div id="toolmodal" class="modal" onclick="closeTool(event)">'
+        '<div class="modal-card" onclick="event.stopPropagation()">'
+        '<button class="modal-x" onclick="closeTool()">✕</button>'
+        '<div id="tool-head" class="tool-head"></div>'
+        '<div id="tool-form" class="tool-form"></div>'
+        '<div id="tool-out" class="tool-out"></div>'
+        '</div></div>'
     ) if served else ""
     js_served = _SERVED_JS if served else ""
     table = "".join(_row_html(r) for r in rows)
@@ -653,6 +802,7 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
     <div id="modal-body"></div>
   </div>
 </div>
+{tool_modal}
 
 <p class="muted" style="font-size:11.5px;margin-top:14px">
 Signals are rule-based indicator states, not investment advice. Free data (yfinance)
