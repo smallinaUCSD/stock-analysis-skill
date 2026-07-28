@@ -31,8 +31,17 @@ def _cache_path(cache_dir: str, ticker: str) -> str:
 
 
 def _is_good(td: "TickerData | None") -> bool:
-    """A usable fetch: no error and an actual price series."""
-    return bool(td and not td.error and (td.ohlcv or {}).get("close"))
+    """A fully usable fetch: no error, a price series, AND loaded fundamentals.
+
+    Requiring the snapshot (name present) matters because yfinance can return
+    good OHLCV while its `.info` is momentarily rate-limited — caching that would
+    leave the ticker with no valuation (no bear/base/bull). Withholding it here
+    means we keep/refetch until the fundamentals load too.
+    """
+    if not (td and not td.error and (td.ohlcv or {}).get("close")):
+        return False
+    snap = td.snapshot
+    return bool(snap and getattr(snap, "name", None))
 
 
 def _load_cached(cache_dir: str, ticker: str) -> "TickerData | None":

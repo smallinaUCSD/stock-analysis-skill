@@ -72,12 +72,15 @@ class WatchlistService:
         if t in self._current_tickers():
             return {"ok": True, "already": True, "ticker": t}
         # verify it actually has data before committing it to the board
-        from ..data.prices import closing_prices
+        # Pre-fetch this ONE ticker fully (OHLCV + fundamentals) and cache it, so
+        # it isn't starved of fundamentals by rate-limiting during the full-board
+        # rebuild — otherwise the new card can land with no valuation (bear/bull).
+        from ..watchlist.pipeline import fetch_one
         try:
-            closes = closing_prices(t, "1mo")
+            td = fetch_one(t, period="5y", cache_dir=self._cache_dir, ttl=0.0)
         except Exception:  # noqa: BLE001
-            closes = []
-        if not closes:
+            td = None
+        if not (td and (td.ohlcv or {}).get("close")):
             return {"ok": False, "error": f"no data for {t} (unknown ticker?)"}
         with self._lock:
             if t not in self._added:
