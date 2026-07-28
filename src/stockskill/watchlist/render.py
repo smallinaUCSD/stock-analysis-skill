@@ -24,6 +24,24 @@ _FLAG_LABEL = {
     "earnings_soon": "Earnings soon",
 }
 _CAT_LABEL = {"tech": "Tech", "leveraged": "Leveraged", "etf": "ETF", "dividend": "Dividend"}
+# short sector labels (covers both yfinance and SPDR sector naming)
+_SECTOR_ABBR = {
+    "technology": "Tech", "information technology": "Tech",
+    "consumer discretionary": "Cons Disc", "consumer cyclical": "Cons Cyc",
+    "consumer staples": "Cons Staples", "consumer defensive": "Cons Def",
+    "communication services": "Comm Svcs", "communication svcs": "Comm Svcs",
+    "financial services": "Financials", "financials": "Financials",
+    "health care": "Health", "healthcare": "Health",
+    "industrials": "Industrials", "energy": "Energy", "utilities": "Utilities",
+    "basic materials": "Materials", "materials": "Materials",
+    "real estate": "Real Estate",
+}
+
+
+def _abbr_sector(name):
+    if not name:
+        return name
+    return _SECTOR_ABBR.get(str(name).strip().lower(), name)
 _EXT_LINKS = [
     ("Yahoo", "https://finance.yahoo.com/quote/{t}"),
     ("Finviz", "https://finviz.com/quote.ashx?t={t}"),
@@ -369,7 +387,7 @@ def _row_html(r):
     rsi_cls = "up" if (r.rsi or 50) >= 70 else ("down" if (r.rsi or 50) <= 30 else "")
     conf = (f'<span class="conf-{r.confidence}">{r.confidence}</span>'
             if r.confidence else '<span class="muted">—</span>')
-    sector = html.escape((r.sector or "—")[:16])
+    sector = html.escape((_abbr_sector(r.sector) or "—")[:16])
     return (
         f'<tr class="item" {_data_attrs(r)}>'
         f'<td><span class="tk">{html.escape(r.ticker)}</span></td>'
@@ -619,7 +637,7 @@ def _heatmap_html(rows):
         avg_html = f'<span class="{cls}">{atxt}</span>' if a != -99 else ""
         out.append(
             f'<div class="heat-group" data-sector="{html.escape(sec)}">'
-            f'<div class="heat-h">{html.escape(sec)} {avg_html} '
+            f'<div class="heat-h">{html.escape(_abbr_sector(sec))} {avg_html} '
             f'<span class="muted">· {len(rs)}</span></div>'
             f'<div class="heat">{tiles}</div></div>')
     return "".join(out)
@@ -683,7 +701,7 @@ def _sector_html(sectors):
         neg = f'<div class="fill-down" style="width:{w:.0f}%"></div>' if r < 0 else ""
         pos = f'<div class="fill-up" style="width:{w:.0f}%"></div>' if r >= 0 else ""
         rows.append(
-            f'<div class="secrow"><div class="secname">{html.escape(name)}</div>'
+            f'<div class="secrow"><div class="secname">{html.escape(_abbr_sector(name))}</div>'
             f'<div class="secbar"><div class="sechalf neg">{neg}</div>'
             f'<div class="secaxis"></div><div class="sechalf pos">{pos}</div></div>'
             f'<div class="secval {cls}">{r*100:+.1f}%</div></div>')
@@ -1215,7 +1233,10 @@ const SERVED = {"true" if served else "false"};
   setView(view);
   fmtUpdated();
   wireTableScroll();
-  if(SERVED && typeof refreshData==='function') setInterval(refreshData, Math.max(30000, REFRESH_MS));
+  // poll only while a session is active (short interval); no updates when the
+  // market is closed after 8pm ET or on weekends (long interval).
+  if(SERVED && typeof refreshData==='function' && REFRESH_MS>0 && REFRESH_MS<=3600000)
+    setInterval(refreshData, Math.max(30000, REFRESH_MS));
 }})();
 {js_served}
 </script>

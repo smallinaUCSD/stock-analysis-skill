@@ -73,8 +73,8 @@ def refresh_seconds_for(status: "MarketStatus", base_interval: float | None = No
     """
     if base_interval:
         return max(60, int(base_interval * 60))
-    if status.is_open:
-        return 600          # 10 min during regular hours
-    if status.label in ("pre-market", "after-hours"):
-        return 900          # 15 min in extended hours
-    return 1800             # 30 min closed / weekend
+    # 15 min whenever a trading session is active (pre-market 4:00 ET -> after-
+    # hours close 8:00 PM ET); effectively no updates overnight or on weekends.
+    if status.label in ("open", "pre-market", "after-hours"):
+        return 900          # 15 min
+    return 21600            # 6h (closed after 8pm ET / weekend -> no live updates)
