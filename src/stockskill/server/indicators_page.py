@@ -61,9 +61,14 @@ _EXTRA_CSS = """
 .ind-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
 .ind-bar #itk{width:100%;padding:8px 11px;border-radius:9px;border:1px solid var(--border);
   background:var(--surface);color:var(--ink);font-size:13px}
-.ind-bar .seg button{font-size:12px;padding:6px 11px;border:none;background:var(--surface);
+.ind-bar .seg{display:inline-flex;border:1px solid var(--border);border-radius:9px;overflow:hidden}
+.ind-bar .seg button{font:600 12px inherit;padding:7px 12px;border:none;background:var(--surface);
   color:var(--muted);cursor:pointer}
-.ind-bar .seg button.on{background:var(--accent);color:#fff;font-weight:650}
+.ind-bar .seg button:hover{color:var(--ink)}
+.ind-bar .seg button.on{background:var(--accent);color:#fff}
+.ind-bar .tbtn{font:650 12.5px inherit;line-height:1;padding:8px 15px;border-radius:9px;cursor:pointer;
+  background:var(--accent);color:#fff;border:1px solid transparent}
+.ind-bar .tbtn:hover{filter:brightness(1.08)}
 .ind-chk{font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:4px}
 .h-back{color:var(--muted);text-decoration:none}.h-back:hover{color:var(--ink);text-decoration:underline}
 .h-close{width:34px;height:34px;border:1px solid var(--border);border-radius:50%;background:var(--surface-2);

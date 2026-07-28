@@ -851,6 +851,9 @@ function refreshData(){
     wireTableScroll(); _resort(); applyFilter();
   }).catch(()=>{}).finally(()=>{ _refreshing=false; });
 }
+// Open a page in a new, SCRIPT-opened tab so it can close itself (window.close)
+// and return here. Falls back to same-tab nav only if a popup blocker intervenes.
+function openTab(url){ var w=window.open(url,'_blank'); if(!w) location.href=url; }
 // ---- recent news in the expanded card (served) ----
 function _esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function _newsSec(inner){ return '<div class="det-sec"><div class="det-h">Recent news</div>'+inner+'</div>'; }
@@ -971,8 +974,8 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
         '<button class="tool-b" onclick="openTool(\'evaluate\')">Evaluate</button>'
         '<button class="tool-b" onclick="openTool(\'lookthrough\')">Look-through</button>'
         '<button class="tool-b" onclick="openTool(\'montecarlo\')">Monte Carlo</button>'
-        '<a class="tool-b" href="/indicators" target="_blank">Indicators</a>'
-        '<a class="tool-b" href="/holdings" target="_blank">Holdings</a>'
+        '<button class="tool-b" onclick="openTab(\'/indicators\')">Indicators</button>'
+        '<button class="tool-b" onclick="openTab(\'/holdings\')">Holdings</button>'
         '</span>'
         '<span id="addmsg" class="muted"></span></div>'
     ) if served else ""
