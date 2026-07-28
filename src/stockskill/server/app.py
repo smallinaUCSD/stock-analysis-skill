@@ -159,17 +159,30 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
             return jsonify({"error": "invalid ticker"}), 400
         from ..leverage import registry
         p = registry.get(ticker.upper())
-        if p is None:
-            return jsonify({"ok": False,
-                            "error": f"{ticker.upper()} isn't a tracked leveraged product",
-                            "note": "Look-through applies to leveraged ETFs/ETNs "
-                                    "(e.g. FNGU, BULZ, AAPU, TSLL, SOXL, ORCX)."}), 404
-        con = sorted(p.constituents.items(), key=lambda kv: kv[1], reverse=True)
-        return jsonify({
-            "ok": True, "ticker": p.ticker, "name": p.name, "kind": p.kind,
-            "multiplier": p.multiplier, "verify": p.verify, "as_of": p.as_of,
-            "constituents": [{"underlying": u, "weight": w} for u, w in con],
-        })
+        if p is not None:
+            con = sorted(p.constituents.items(), key=lambda kv: kv[1], reverse=True)
+            return jsonify({
+                "ok": True, "ticker": p.ticker, "name": p.name, "kind": p.kind,
+                "multiplier": p.multiplier, "verify": p.verify, "as_of": p.as_of,
+                "constituents": [{"underlying": u, "weight": w} for u, w in con],
+            })
+        # Not a leveraged product — try a plain ETF/fund (VOO, QQQ, XLK…).
+        from ..data.funds import etf_holdings
+        eh = etf_holdings(ticker.upper())
+        if eh and eh.get("holdings"):
+            return jsonify({
+                "ok": True, "ticker": ticker.upper(),
+                "name": eh.get("name") or ticker.upper(), "kind": "etf",
+                "multiplier": 1.0, "verify": False, "as_of": None,
+                "constituents": [{"underlying": h["underlying"], "weight": h["weight"]}
+                                 for h in eh["holdings"]],
+                "sectors": eh.get("sectors"),
+                "note": "Top holdings (not the full basket); live from the fund.",
+            })
+        return jsonify({"ok": False,
+                        "error": f"{ticker.upper()} isn't a tracked product",
+                        "note": "Look-through works for leveraged ETFs/ETNs "
+                                "(FNGU, BULZ, AAPU…) and index/sector ETFs (VOO, QQQ, XLK…)."}), 404
 
     @app.get("/api/montecarlo/<ticker>")
     def montecarlo_route(ticker: str):

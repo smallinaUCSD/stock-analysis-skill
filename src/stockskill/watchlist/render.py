@@ -886,7 +886,7 @@ function _mrow(l,v,c){ return '<div class="t-kv"><span>'+l+'</span><b class="'+c
 
 const TOOLS = {
   evaluate:{title:'Evaluate a trade', form:'<div class="t-row"><input id="evtk" placeholder="Ticker e.g. NVDA" autocomplete="off"><select id="evact"><option value="buy">Buy</option><option value="sell">Sell</option><option value="short">Short</option></select></div><div class="t-row"><input id="evprice" placeholder="Price (opt)" inputmode="decimal"><input id="evstop" placeholder="Stop (opt)" inputmode="decimal"><input id="evtarget" placeholder="Target (opt)" inputmode="decimal"><button class="tbtn add" onclick="runEval()">Run</button></div>', run:runEval},
-  lookthrough:{title:'Leverage look-through', form:'<div class="t-row"><input id="ltk" placeholder="Leveraged ETF e.g. FNGU" autocomplete="off" onkeydown="if(event.key===&quot;Enter&quot;)runLook()"><button class="tbtn add" onclick="runLook()">Run</button></div>', run:runLook},
+  lookthrough:{title:'Fund look-through', form:'<div class="t-row"><input id="ltk" placeholder="ETF e.g. VOO, QQQ, FNGU" autocomplete="off" onkeydown="if(event.key===&quot;Enter&quot;)runLook()"><button class="tbtn add" onclick="runLook()">Run</button></div>', run:runLook},
   montecarlo:{title:'Monte Carlo', form:'<div class="t-row"><input id="mctk" placeholder="Ticker e.g. NVDA" autocomplete="off"><select id="mcdays"><option value="21">1 month</option><option value="63" selected>3 months</option><option value="126">6 months</option><option value="252">1 year</option></select><select id="mcmethod"><option value="gbm">GBM (log-normal)</option><option value="bootstrap">Bootstrap (historical)</option></select><button class="tbtn add" onclick="runMC()">Run</button></div>', run:runMC},
 };
 let curTool=null;
@@ -913,12 +913,19 @@ function runEval(){ const t=_tkv('evtk'); if(!t){ toolErr('enter a ticker'); ret
 }
 function runLook(){ const t=_tkv('ltk'); if(!t){ toolErr('enter a ticker'); return; } toolBusy('Expanding '+t+'…');
   fetch('/api/lookthrough/'+encodeURIComponent(t)).then(r=>r.json()).then(d=>{
-    if(!d.ok){ toolErr((d.error||'not a leveraged product')+(d.note?'<div class="muted" style="margin-top:6px">'+d.note+'</div>':'')); return; }
-    let h='<div class="t-kv"><span>'+d.name+'</span><b>'+d.multiplier+'x</b></div>';
-    h+=_row('Type', d.kind==='single'?'single-stock':'basket');
-    h+='<div class="t-h">Underlying exposure</div><table class="fvtable"><tbody>'+
-      d.constituents.map(c=>'<tr><td class="fl">'+c.underlying+'</td><td class="fv">'+(c.weight*100).toFixed(1)+'%</td><td>'+(c.weight*d.multiplier*100).toFixed(0)+'% notional</td></tr>').join('')+'</tbody></table>';
+    if(!d.ok){ toolErr((d.error||'not a tracked product')+(d.note?'<div class="muted" style="margin-top:6px">'+d.note+'</div>':'')); return; }
+    const isEtf = d.kind==='etf';
+    let h='<div class="t-kv"><span>'+d.name+'</span><b>'+(isEtf?'ETF':(d.multiplier+'x'))+'</b></div>';
+    h+=_row('Type', d.kind==='single'?'single-stock leveraged':(d.kind==='basket'?'leveraged basket':'index / sector ETF'));
+    h+='<div class="t-h">'+(isEtf?'Top holdings':'Underlying exposure')+'</div><table class="fvtable"><tbody>'+
+      d.constituents.map(c=>'<tr><td class="fl">'+c.underlying+'</td><td class="fv">'+(c.weight*100).toFixed(1)+'%</td><td>'+
+        (isEtf?'':(c.weight*d.multiplier*100).toFixed(0)+'% notional')+'</td></tr>').join('')+'</tbody></table>';
+    if(isEtf && d.sectors){
+      const se=Object.entries(d.sectors).sort((a,b)=>b[1]-a[1]);
+      h+='<div class="t-h">Sector weights</div>'+se.map(([k,v])=>_mrow(k.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()), (v*100).toFixed(1)+'%','')).join('');
+    }
     if(d.kind==='basket') h+='<div class="t-note">Basket as of '+(d.as_of||'—')+'. Indices rebalance quarterly — confirm current weights with the issuer.'+(d.verify?' (unverified snapshot)':'')+'</div>';
+    if(isEtf) h+='<div class="t-note">'+(d.note||'Top holdings, live from the fund.')+'</div>';
     document.getElementById('tool-out').innerHTML=h;
   }).catch(()=>toolErr('look-through failed'));
 }
