@@ -227,24 +227,33 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
         if period not in ("3mo", "6mo", "1y", "2y", "5y"):
             period = "1y"
         from ..data.prices import ohlcv
-        from ..technicals.series import (sma_series, bollinger_series,
-                                         rsi_series, macd_series)
+        from ..technicals import series as S
         try:
             o = ohlcv(ticker.upper(), period)
         except Exception as e:  # noqa: BLE001
             return jsonify({"error": str(e)}), 502
         closes = o.get("close") or []
+        highs, lows = o.get("high") or [], o.get("low") or []
+        vols = o.get("volume") or []
         if len(closes) < 30:
             return jsonify({"error": f"not enough history for {ticker.upper()}"}), 404
-        mid, up, lo = bollinger_series(closes)
-        macd_line, sig, hist = macd_series(closes)
+        mid, up, lo = S.bollinger_series(closes)
+        macd_line, sig, hist = S.macd_series(closes)
+        k, dk = S.stochastic_series(highs, lows, closes)
+        adx, plus_di, minus_di = S.adx_series(highs, lows, closes)
+        ich = S.ichimoku_series(highs, lows, closes)
         return jsonify({
             "ticker": ticker.upper(), "period": period,
             "dates": [d.isoformat() for d in o.get("dates", [])],
             "close": [round(c, 4) for c in closes],
-            "sma20": sma_series(closes, 20), "sma50": sma_series(closes, 50),
+            "sma20": S.sma_series(closes, 20), "sma50": S.sma_series(closes, 50),
             "bb_upper": up, "bb_mid": mid, "bb_lower": lo,
-            "rsi": rsi_series(closes), "macd": macd_line, "signal": sig, "hist": hist,
+            "rsi": S.rsi_series(closes), "macd": macd_line, "signal": sig, "hist": hist,
+            "atr": S.atr_series(highs, lows, closes),
+            "stoch_k": k, "stoch_d": dk,
+            "adx": adx, "plus_di": plus_di, "minus_di": minus_di,
+            "obv": S.obv_series(closes, vols),
+            "ichimoku": ich,
         })
 
     @app.get("/api/pulse")
