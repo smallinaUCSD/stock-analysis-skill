@@ -26,7 +26,8 @@ SPAXX = "SPAXX"   # Fidelity money-market fund used to hold cash
 
 ACCOUNT_LABELS = {"brokerage": "Brokerage", "roth": "Roth IRA", "401k": "401(k)"}
 ACCOUNT_ORDER = ["brokerage", "roth", "401k"]
-_PRICE_TTL = 60.0   # seconds to reuse a fetched price map
+_PRICE_TTL = 60.0     # seconds to reuse a fetched price map
+_DIV_TTL = 3600.0     # dividends change rarely -> cache for an hour
 
 
 def account_label(key: str) -> str:
@@ -39,6 +40,8 @@ class HoldingsService:
         self._lock = threading.Lock()
         self._px_cache: dict[str, tuple[float | None, float | None]] = {}
         self._px_ts = 0.0
+        self._div_cache: dict[str, float | None] = {}
+        self._div_ts = 0.0
 
     # --- read ----------------------------------------------------------
     def _rows(self) -> list[HoldingRow]:
@@ -67,10 +70,39 @@ class HoldingsService:
             self._px_ts = now
         return self._px_cache
 
+    def _dividends(self, tickers: list[str]) -> dict[str, float | None]:
+        """Map ticker -> annual dividend per share, cached for _DIV_TTL (they
+        rarely change). Fetched in parallel to keep the page responsive."""
+        now = time.time()
+        fresh = (self._div_cache and now - self._div_ts < _DIV_TTL
+                 and all(t in self._div_cache for t in tickers))
+        if fresh:
+            return self._div_cache
+        import yfinance as yf
+        from concurrent.futures import ThreadPoolExecutor
+
+        def one(t):
+            try:
+                info = yf.Ticker(t).info or {}
+                return t, (info.get("dividendRate") or info.get("trailingAnnualDividendRate"))
+            except Exception:  # noqa: BLE001
+                return t, None
+        cache: dict[str, float | None] = {}
+        try:
+            with ThreadPoolExecutor(max_workers=6) as ex:
+                for t, d in ex.map(one, tickers):
+                    cache[t] = d
+        except Exception:  # noqa: BLE001
+            cache = {t: None for t in tickers}
+        self._div_cache = cache
+        self._div_ts = now
+        return self._div_cache
+
     def snapshot(self) -> dict:
         rows = self._rows()
         tickers = sorted({r.ticker for r in rows if r.ticker != CASH})
         px = self._prices(tickers) if tickers else {}
+        div = self._dividends(tickers) if tickers else {}
         accounts: dict[str, dict] = {}
         for r in rows:
             acct = r.account or "(unlabeled)"
@@ -91,16 +123,26 @@ class HoldingsService:
             net_pct = (price / cost - 1) if (price and cost) else None
             net_dollar = round(shares * (price - cost), 2) if (shares is not None and price and cost) else None
             cost_total = round(shares * cost, 2) if (shares is not None and cost) else None
+            div_ps = div.get(r.ticker)            # annual dividend per share
+            div_yield = (div_ps / price) if (div_ps and price) else None
+            if shares is not None and div_ps:
+                div_income = round(shares * div_ps, 2)
+            elif div_yield and value:
+                div_income = round(value * div_yield, 2)
+            else:
+                div_income = None
             a["positions"].append({
                 "ticker": r.ticker, "shares": shares, "price": price,
                 "cost_basis": cost, "cost_total": cost_total, "market_value": value,
                 "today_pct": today_pct, "today_dollar": today_dollar,
                 "net_pct": net_pct, "net_dollar": net_dollar,
+                "div_yield": div_yield, "div_income": div_income,
             })
 
         def akey(k):
             return (ACCOUNT_ORDER.index(k) if k in ACCOUNT_ORDER else 99, k)
-        out_accounts, grand_pos, grand_cash, grand_today, grand_cost = [], 0.0, 0.0, 0.0, 0.0
+        out_accounts, grand_pos, grand_cash, grand_today, grand_cost, grand_div = \
+            [], 0.0, 0.0, 0.0, 0.0, 0.0
         for k in sorted(accounts, key=akey):
             a = accounts[k]
             a["positions"].sort(key=lambda p: p["market_value"], reverse=True)
@@ -109,12 +151,14 @@ class HoldingsService:
             a["total"] = pos_total + a["cash"]
             a["today_dollar"] = sum(p["today_dollar"] or 0.0 for p in a["positions"])
             a["cost_total"] = sum(p["cost_total"] or 0.0 for p in a["positions"])
+            a["div_income"] = sum(p["div_income"] or 0.0 for p in a["positions"])
             for p in a["positions"]:
                 p["pct_of_account"] = (p["market_value"] / a["total"]) if a["total"] else 0.0
             grand_pos += pos_total
             grand_cash += a["cash"]
             grand_today += a["today_dollar"]
             grand_cost += a["cost_total"]
+            grand_div += a["div_income"]
             out_accounts.append(a)
         return {
             "accounts": out_accounts,
@@ -123,6 +167,7 @@ class HoldingsService:
             "grand_cash": grand_cash,
             "grand_today_dollar": grand_today,
             "grand_cost_basis": grand_cost,
+            "grand_div_income": grand_div,
             "cash_symbol": SPAXX,
         }
 

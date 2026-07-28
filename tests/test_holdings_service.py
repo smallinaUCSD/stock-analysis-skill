@@ -6,9 +6,10 @@ def _svc(tmp_path):
     p.write_text("ticker,market_value,account\n"
                  "AAPU,1000,brokerage\nCASH,500,brokerage\nFCNTX,2000,roth\n")
     svc = HoldingsService(str(p))
-    # deterministic + offline: no live price fetch in unit tests (values fall back
-    # to the CSV market_value, so shares stay None and totals are exact).
+    # deterministic + offline: no live price/dividend fetch in unit tests (values
+    # fall back to the CSV market_value, so shares stay None and totals are exact).
     svc._prices = lambda tickers: {}
+    svc._dividends = lambda tickers: {}
     return svc, p
 
 
