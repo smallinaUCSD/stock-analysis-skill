@@ -87,19 +87,23 @@ everything from the tested indicator + signal libraries.
   entry/stop/target + position sizing), options ideas, the **stock-analyzer
   valuation** (fair value bear/base/bull, signal, reverse-DCF growth, consensus),
   and **recent news** headlines (clickable, publisher · age).
-- **Live, updated in place** — on a market-aware cadence (~10m open, 15m extended,
-  30m closed), the page **swaps just the changing numbers** (no full reload — your
-  scroll, view, filters and theme are kept). If a refetch is rate-limited or
-  errors, the board keeps the **last good values** instead of blanking. The update
-  time shows in **your local timezone**.
+- **Live, updated in place** — every 15 min while a session is active (pre-market
+  4:00 ET → after-hours 8:00 PM ET; no updates overnight or on weekends), the page
+  **swaps just the changing numbers** (no full reload — your scroll, view, filters
+  and theme are kept). If a refetch is rate-limited or errors, the board keeps the
+  **last good values** instead of blanking. The update time shows in **your local
+  timezone**.
 
-**Tool pop-ups** — Evaluate a trade, leverage Look-through (basket constituents ×
-multiplier, with the verified as-of date), and Monte Carlo run live in a modal
-(`/api/evaluate`, `/api/lookthrough`, `/api/montecarlo`).
+**Tools & pages** — Evaluate a trade, **Look-through** (leveraged baskets ×
+multiplier *and* plain index/sector ETFs like VOO/QQQ — top holdings + sector
+weights), and Monte Carlo run live in a pop-up; a **Technical-indicators page**
+(`/indicators`) plots price + Bollinger Bands + SMAs, RSI, and MACD for any ticker
+(`/api/evaluate`, `/api/lookthrough`, `/api/montecarlo`, `/api/indicators`).
 
 **Holdings dashboard (`/holdings`, local only)** — opens in a new tab; positions
 split by account (Brokerage / Roth IRA / 401(k)) with shares, live price,
-today's gain, net gain, cost basis, value and % of account; cash as Fidelity
+today's gain, net gain, cost basis, **dividend yield + est. annual income**, value
+and % of account; cash as Fidelity
 SPAXX; summary tiles (total, current value, cost basis, cash, day change).
 Record trades (bookkeeping — buy/sell, optional price/share to track cost basis)
 and deposit/withdraw cash. `holdings.csv` is gitignored and **never published**.
