@@ -42,6 +42,11 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
     def analyze():
         return analyzer_html()
 
+    @app.get("/indicators")
+    def indicators_page():
+        from .indicators_page import indicators_html
+        return indicators_html(request.args.get("t", ""))
+
     # --- holdings (LOCAL ONLY — never written to a file or published) ---
     @app.get("/holdings")
     def holdings_page():
@@ -212,6 +217,34 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
             "prob_up": r.prob_up, "prob_gain": r.prob_gain, "prob_loss": r.prob_loss,
             "gain_threshold": r.gain_threshold, "loss_threshold": r.loss_threshold,
             "var_95": r.var_95, "pctiles": r.pctiles,
+        })
+
+    @app.get("/api/indicators/<ticker>")
+    def indicators(ticker: str):
+        if not _TICKER_RE.match(ticker):
+            return jsonify({"error": "invalid ticker"}), 400
+        period = request.args.get("period", "1y")
+        if period not in ("3mo", "6mo", "1y", "2y", "5y"):
+            period = "1y"
+        from ..data.prices import ohlcv
+        from ..technicals.series import (sma_series, bollinger_series,
+                                         rsi_series, macd_series)
+        try:
+            o = ohlcv(ticker.upper(), period)
+        except Exception as e:  # noqa: BLE001
+            return jsonify({"error": str(e)}), 502
+        closes = o.get("close") or []
+        if len(closes) < 30:
+            return jsonify({"error": f"not enough history for {ticker.upper()}"}), 404
+        mid, up, lo = bollinger_series(closes)
+        macd_line, sig, hist = macd_series(closes)
+        return jsonify({
+            "ticker": ticker.upper(), "period": period,
+            "dates": [d.isoformat() for d in o.get("dates", [])],
+            "close": [round(c, 4) for c in closes],
+            "sma20": sma_series(closes, 20), "sma50": sma_series(closes, 50),
+            "bb_upper": up, "bb_mid": mid, "bb_lower": lo,
+            "rsi": rsi_series(closes), "macd": macd_line, "signal": sig, "hist": hist,
         })
 
     @app.get("/api/pulse")

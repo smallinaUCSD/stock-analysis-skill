@@ -971,6 +971,7 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
         '<button class="tool-b" onclick="openTool(\'evaluate\')">Evaluate</button>'
         '<button class="tool-b" onclick="openTool(\'lookthrough\')">Look-through</button>'
         '<button class="tool-b" onclick="openTool(\'montecarlo\')">Monte Carlo</button>'
+        '<a class="tool-b" href="/indicators" target="_blank">Indicators</a>'
         '<a class="tool-b" href="/holdings" target="_blank">Holdings</a>'
         '</span>'
         '<span id="addmsg" class="muted"></span></div>'
