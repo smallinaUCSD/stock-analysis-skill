@@ -73,7 +73,15 @@ def _first(*vals):
 
 
 def fetch_snapshot(ticker: str) -> FundamentalSnapshot:
-    """Pull a fundamentals snapshot from yfinance. Missing fields stay None."""
+    """Pull a fundamentals snapshot. Prefers FMP when a key is configured (works
+    from datacenter IPs); falls back to yfinance. Missing fields stay None."""
+    from . import fmp
+
+    if fmp.has_fmp():
+        snap = fmp.snapshot(ticker)
+        if snap and snap.name:
+            return snap
+
     import yfinance as yf
 
     t = yf.Ticker(ticker)

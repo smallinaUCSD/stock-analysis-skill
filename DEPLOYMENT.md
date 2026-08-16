@@ -21,7 +21,7 @@ once you have real users (see Phase 1).
 | Phase | What | You set up |
 |---|---|---|
 | **0. Safe public launch** *(now)* | Public mode (no holdings, no add-ticker) + Buy-me-a-coffee, on a container host | Host account |
-| **1. Real data** | Data-provider seam → licensed API (Finnhub/Tiingo/Polygon free tier) | API key |
+| **1. Real data** *(built)* | Data-provider seam → FMP licensed API (yfinance fallback) | `FMP_API_KEY` |
 | **2. Auth** | Managed sign-in (Clerk / Supabase Auth / Auth0) | Auth account |
 | **3. Database** | Per-user watchlists/holdings/settings in Postgres (holdings now safe) | Supabase / Neon |
 | **4. Payments** | Stripe subscriptions (Checkout + Portal + webhooks), gate premium | Stripe account |
@@ -96,6 +96,41 @@ many users is Phase 1: a licensed API.)
   gracefully (keeps last-good values), but for reliable traffic, do Phase 1
   (a licensed data API) before you rely on it.
 - Railway / Fly.io work the same way from the `Dockerfile` if you prefer them.
+
+## Phase 1 — licensed data via FMP (built in)
+
+Yahoo blocks datacenter IPs, so on the host the *live* features (add-ticker,
+Indicators, Evaluate, Look-through, News) return "no data". The fix is a licensed,
+key-based API. **Financial Modeling Prep (FMP)** is wired in behind a data-provider
+seam: when `FMP_API_KEY` is set, `data/` fetches OHLCV, fundamentals, search, ETF
+holdings, and news from FMP; when it isn't (or a call fails), it **falls back to
+yfinance** — so local runs are unchanged and nothing breaks if the key is missing.
+
+**Turn it on:**
+
+1. Get a free key at **financialmodelingprep.com** (Dashboard → API key).
+2. In Render → the service → **Environment**, add `FMP_API_KEY = your_key`. Save;
+   Render redeploys. (It's `sync: false` in `render.yaml` — the value lives only in
+   the host, never in the repo.)
+3. Verify locally first if you like:
+
+   ```bash
+   export FMP_API_KEY=your_key
+   uv run stockskill fmp-check AAPL      # fetches one ticker live through FMP
+   ```
+
+**How this interacts with the snapshot / quota**
+- The **board** still serves the committed `data/cache/` snapshot (7-day TTL) — it
+  does **not** hit FMP in bulk, so a page view costs no API calls.
+- FMP is used only for **per-action** live fetches (adding a new ticker, opening
+  Indicators, Evaluate, Look-through, News) — a handful of calls each.
+- Build the snapshot **locally without** `FMP_API_KEY` set, so the 116-ticker
+  refresh uses yfinance (unlimited from your IP) and burns **zero** FMP quota.
+- Free tier is ~250 calls/day — plenty for a hobby launch's interactive use.
+
+**Still shared / resets on restart.** Added tickers go into the one shared
+watchlist and are lost when the free service sleeps/redeploys. Per-user, persistent
+watchlists come with auth + a database (Phases 2–3).
 
 ### Alternative: static view-only board (GitHub Pages, already wired)
 `.github/workflows/dashboard.yml` renders the board to static HTML and publishes

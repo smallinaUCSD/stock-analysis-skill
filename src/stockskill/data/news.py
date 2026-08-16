@@ -70,13 +70,8 @@ def _relevant(text: str, ticker: str, tokens: list[str]) -> bool:
     return any(tok in low for tok in tokens)
 
 
-def fetch_news(ticker: str, limit: int = 6, name: str | None = None) -> list[dict]:
-    """Recent, company-relevant headlines, newest first.
-
-    When ``name`` is given, keep only items whose headline/summary mentions the
-    ticker or a company-name token (drops broad market roundups). Falls back to
-    the unfiltered set if that would leave nothing.
-    """
+def _yf_raw(ticker: str) -> list[dict]:
+    """Fetch and flatten yfinance news to {title, summary, publisher, url, published}."""
     import yfinance as yf
 
     try:
@@ -84,8 +79,7 @@ def fetch_news(ticker: str, limit: int = 6, name: str | None = None) -> list[dic
     except Exception:  # noqa: BLE001
         return []
 
-    tokens = _name_tokens(name)
-    out: list[dict] = []
+    items = []
     for item in raw:
         if not isinstance(item, dict):
             continue
@@ -95,19 +89,52 @@ def fetch_news(ticker: str, limit: int = 6, name: str | None = None) -> list[dic
         title = (c.get("title") or "").strip()
         if not title:
             continue
-        summary = (c.get("summary") or c.get("description") or "")
         prov = c.get("provider")
         publisher = prov.get("displayName") if isinstance(prov, dict) else (c.get("publisher") or "")
-        pub = _iso(c.get("pubDate") or c.get("displayTime") or c.get("providerPublishTime"))
-        out.append({
+        items.append({
             "title": title,
+            "summary": c.get("summary") or c.get("description") or "",
             "publisher": publisher or "",
             "url": _url(c),
-            "published": pub or "",
+            "published": _iso(c.get("pubDate") or c.get("displayTime")
+                              or c.get("providerPublishTime")) or "",
+        })
+    return items
+
+
+def fetch_news(ticker: str, limit: int = 6, name: str | None = None) -> list[dict]:
+    """Recent, company-relevant headlines, newest first.
+
+    When ``name`` is given, keep only items whose headline/summary mentions the
+    ticker or a company-name token (drops broad market roundups). Falls back to
+    the unfiltered set if that would leave nothing. Prefers FMP when a key is
+    configured (works from datacenter IPs), falling back to yfinance.
+    """
+    from . import fmp
+
+    raw = None
+    if fmp.has_fmp():
+        raw = fmp.news_raw(ticker, limit=max(limit * 2, 12))
+    if not raw:
+        raw = _yf_raw(ticker)
+
+    tokens = _name_tokens(name)
+    out: list[dict] = []
+    for item in raw:
+        title = (item.get("title") or "").strip()
+        if not title:
+            continue
+        summary = item.get("summary") or ""
+        pub = item.get("published") or ""
+        out.append({
+            "title": title,
+            "publisher": item.get("publisher") or "",
+            "url": item.get("url") or "",
+            "published": pub,
             "age": _age(pub),
             "_ts": _epoch(pub),
             "_rel": _relevant(title + " " + summary, ticker, tokens),
-            "type": (c.get("contentType") or "").upper(),
+            "type": (item.get("type") or "STORY").upper(),
         })
 
     # keep only company-relevant items when we can tell them apart

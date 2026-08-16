@@ -629,6 +629,45 @@ def cmd_evaluate(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_fmp_check(args: argparse.Namespace) -> int:
+    """Verify the FMP_API_KEY works by fetching one ticker live through it."""
+    from .data import fmp
+
+    if not fmp.has_fmp():
+        print("FMP_API_KEY is not set. Export it, e.g.:\n"
+              "  export FMP_API_KEY=your_key_here", file=sys.stderr)
+        return 1
+
+    tk = args.ticker.upper()
+    print(f"=== FMP check: {tk} ===")
+
+    snap = fmp.snapshot(tk)
+    if snap and snap.name:
+        px = f"${snap.price:,.2f}" if snap.price else "n/a"
+        mc = f"${snap.market_cap/1e9:,.1f}B" if snap.market_cap else "n/a"
+        print(f"  snapshot ✓  {snap.name}  ({snap.sector or '—'})  price {px}  mktcap {mc}")
+    else:
+        print("  snapshot ✗  (no data — check the key or ticker)")
+
+    bars = fmp.ohlcv(tk, "1mo")
+    if bars and bars["close"]:
+        print(f"  ohlcv    ✓  {len(bars['close'])} daily bars, "
+              f"last close ${bars['close'][-1]:,.2f}")
+    else:
+        print("  ohlcv    ✗  (no history)")
+
+    hits = fmp.search(tk, limit=3)
+    if hits:
+        print(f"  search   ✓  {', '.join(h['symbol'] for h in hits)}")
+    else:
+        print("  search   ✗")
+
+    ok = bool(snap and snap.name and bars and bars["close"])
+    print("\n  " + ("FMP is wired up and returning data." if ok
+                    else "FMP responded but data was incomplete — see above."))
+    return 0 if ok else 1
+
+
 def cmd_smart_watchlist(args: argparse.Namespace) -> int:
     from concurrent.futures import ThreadPoolExecutor, as_completed
     from .data.fundamentals import fetch_snapshot
@@ -798,6 +837,10 @@ def build_parser() -> argparse.ArgumentParser:
     mc.add_argument("--climate", action="store_true", help="nudge drift by market climate")
     mc.add_argument("--seed", type=int, default=12345)
     mc.set_defaults(func=cmd_montecarlo)
+
+    fc = sub.add_parser("fmp-check", help="verify FMP_API_KEY works (live fetch)")
+    fc.add_argument("ticker", nargs="?", default="AAPL", help="ticker to test (default AAPL)")
+    fc.set_defaults(func=cmd_fmp_check)
     return p
 
 

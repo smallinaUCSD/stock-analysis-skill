@@ -19,3 +19,6 @@ services:
         value: "604800"                    # 7d: serve the snapshot without refetching
       - key: STOCKSKILL_BMC_URL
         sync: false      # set your Buy-me-a-coffee URL in the Render dashboard
+      - key: FMP_API_KEY
+        sync: false      # Financial Modeling Prep key — enables live data (add,
+                         # indicators, evaluate, news) despite Yahoo IP-blocking

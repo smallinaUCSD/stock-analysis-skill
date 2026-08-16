@@ -39,19 +39,22 @@ def search_symbols(query: str, limit: int = 8) -> list[dict]:
     query = (query or "").strip()
     if len(query) < 1:
         return []
-    quotes = _fetch_quotes(query)
 
-    results = []
-    for q in quotes:
-        sym = q.get("symbol")
-        if not sym:
-            continue
-        results.append({
-            "symbol": sym,
-            "name": q.get("shortname") or q.get("longname") or sym,
-            "type": q.get("quoteType"),
-            "exchange": q.get("exchDisp"),
-        })
+    from . import fmp
+    results = fmp.search(query, limit=max(limit, 12)) if fmp.has_fmp() else None
+
+    if not results:
+        results = []
+        for q in _fetch_quotes(query):
+            sym = q.get("symbol")
+            if not sym:
+                continue
+            results.append({
+                "symbol": sym,
+                "name": q.get("shortname") or q.get("longname") or sym,
+                "type": q.get("quoteType"),
+                "exchange": q.get("exchDisp"),
+            })
 
     ql = query.upper()
 

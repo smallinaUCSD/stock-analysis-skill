@@ -28,8 +28,16 @@ def ohlcv(ticker: str, period: str = "1y") -> dict[str, list]:
     """OHLCV history for ``ticker`` as parallel lists (oldest -> newest).
 
     Keys: dates, open, high, low, close, volume. Empty lists on failure. This
-    feeds the technical-indicator library.
+    feeds the technical-indicator library. Prefers FMP when a key is configured
+    (works from datacenter IPs), falling back to yfinance.
     """
+    from . import fmp
+
+    if fmp.has_fmp():
+        r = fmp.ohlcv(ticker, period)
+        if r:
+            return r
+
     import yfinance as yf
 
     empty = {k: [] for k in ("dates", "open", "high", "low", "close", "volume")}

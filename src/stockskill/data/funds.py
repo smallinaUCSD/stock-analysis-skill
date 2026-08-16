@@ -9,6 +9,13 @@ from __future__ import annotations
 
 
 def etf_holdings(ticker: str, limit: int = 15) -> dict | None:
+    from . import fmp
+
+    if fmp.has_fmp():
+        r = fmp.etf_holdings(ticker, limit=limit)
+        if r:
+            return r
+
     import yfinance as yf
 
     try:
