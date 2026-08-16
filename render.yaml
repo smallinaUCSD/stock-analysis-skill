@@ -9,5 +9,9 @@ services:
     envVars:
       - key: STOCKSKILL_PUBLIC
         value: "1"
+      - key: STOCKSKILL_TICKERS
+        value: "data/public_tickers.csv"   # lighter board -> fast build on free tier
+      - key: STOCKSKILL_PERIOD
+        value: "1y"
       - key: STOCKSKILL_BMC_URL
         sync: false      # set your Buy-me-a-coffee URL in the Render dashboard

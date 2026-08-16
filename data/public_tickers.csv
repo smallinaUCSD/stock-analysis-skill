@@ -1,0 +1,21 @@
+# Lighter watchlist for the PUBLIC/hosted build (STOCKSKILL_TICKERS points here).
+# Kept small so the first board build is fast and fits a 512MB free-tier host.
+# The full data/tickers.csv is still used for local runs.
+
+[M7]
+AAPL, MSFT, GOOGL, AMZN, NVDA, META, TSLA
+
+[SEMIS]
+AVGO, AMD, QCOM, MU, ARM
+
+[AI-DATACENTER]
+PLTR, VRT, CEG, ANET
+
+[GROWTH]
+NFLX, CRWD, HOOD, COIN, SHOP
+
+[BLUE-CHIP]
+JPM, V, COST, WMT, LLY, XOM, JNJ
+
+[FUNDS]
+VOO, QQQ

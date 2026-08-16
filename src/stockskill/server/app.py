@@ -43,10 +43,15 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
     if public is None:
         public = os.environ.get("STOCKSKILL_PUBLIC", "").lower() in ("1", "true", "yes")
     bmc_url = bmc_url or os.environ.get("STOCKSKILL_BMC_URL") or None
+    tickers_path = os.environ.get("STOCKSKILL_TICKERS") or tickers_path
+    cache_dir = os.environ.get("STOCKSKILL_CACHE_DIR") or cache_dir
+    # shorter history = a lighter, faster first build (important on small hosts).
+    period = os.environ.get("STOCKSKILL_PERIOD") or ("1y" if public else "5y")
 
     app = Flask(__name__)
     board = WatchlistService(tickers_path=tickers_path, cache_dir=cache_dir,
-                             public=public, bmc_url=bmc_url)
+                             public=public, bmc_url=bmc_url, period=period)
+    board.wait_ready(0)   # start building the board in the background at startup
 
     @app.get("/")
     def index():

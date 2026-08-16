@@ -17,17 +17,33 @@ from ..watchlist import build_watchlist_html
 _TICKER_RE = re.compile(r"^[A-Za-z0-9.\-\^]{1,12}$")
 
 
+_WARMING_HTML = (
+    "<!doctype html><html><head><meta charset='utf-8'>"
+    "<meta http-equiv='refresh' content='6'><title>Loading…</title>"
+    "<style>body{font-family:system-ui,-apple-system,sans-serif;background:#0b0e13;"
+    "color:#e6e8eb;text-align:center;padding-top:22vh;margin:0}"
+    ".s{width:34px;height:34px;border:3px solid #2a2f3a;border-top-color:#3b82f6;"
+    "border-radius:50%;margin:0 auto 18px;animation:sp 1s linear infinite}"
+    "@keyframes sp{to{transform:rotate(360deg)}}p{color:#8a93a2}</style></head>"
+    "<body><div class='s'></div><h2>Loading the market board…</h2>"
+    "<p>Fetching live data — this can take a moment on first load.<br>"
+    "The page refreshes automatically.</p></body></html>"
+)
+
+
 class WatchlistService:
     def __init__(self, tickers_path: str = "data/tickers.csv", cache_dir: str | None = None,
-                 public: bool = False, bmc_url: str | None = None):
+                 public: bool = False, bmc_url: str | None = None, period: str = "5y"):
         self._path = tickers_path
         self._cache_dir = cache_dir
         self._public = public
         self._bmc_url = bmc_url
+        self._period = period
         self._added: list[str] = []          # user-added, in order
         self._html: str | None = None
         self._ts = 0.0
         self._refresh = 1800
+        self._building = False
         self._lock = threading.Lock()
 
     # --- spec assembly -------------------------------------------------
@@ -51,7 +67,7 @@ class WatchlistService:
     # --- build / cache -------------------------------------------------
     def _rebuild(self) -> str:
         html, meta = build_watchlist_html(
-            self._spec(), cache_dir=self._cache_dir, served=True,
+            self._spec(), period=self._period, cache_dir=self._cache_dir, served=True,
             public=self._public, bmc_url=self._bmc_url)
         with self._lock:
             self._html = html
@@ -59,14 +75,43 @@ class WatchlistService:
             self._refresh = meta["refresh"]
         return html
 
+    def _start_bg_build(self) -> None:
+        with self._lock:
+            if self._building:
+                return
+            self._building = True
+
+        def run():
+            try:
+                self._rebuild()
+            except Exception:  # noqa: BLE001
+                pass
+            finally:
+                with self._lock:
+                    self._building = False
+        threading.Thread(target=run, daemon=True).start()
+
     def html(self, force: bool = False) -> str:
+        """Never block the request on a full fetch: return the (stale) board and
+        rebuild in the background, or a lightweight 'loading' page until the first
+        build finishes. This keeps the hosted app from 502-ing on a slow build."""
         with self._lock:
             fresh = (self._html is not None
                      and (time.time() - self._ts) < self._refresh)
             cached = self._html
         if fresh and not force:
             return cached
-        return self._rebuild()
+        self._start_bg_build()          # refresh (or first build) in the background
+        return cached if cached is not None else _WARMING_HTML
+
+    def wait_ready(self, timeout: float = 0.0) -> bool:
+        """Block up to ``timeout`` s for the first board (used at startup)."""
+        import time as _t
+        self._start_bg_build()
+        end = _t.time() + timeout
+        while self._html is None and _t.time() < end:
+            _t.sleep(0.25)
+        return self._html is not None
 
     # --- mutations -----------------------------------------------------
     def add(self, ticker: str) -> dict:
