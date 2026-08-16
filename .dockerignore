@@ -17,3 +17,6 @@ snapshots
 tests
 scratchpad
 data/smart_tickers.csv
+
+# ...but DO ship the committed data snapshot the hosted app serves
+!data/cache

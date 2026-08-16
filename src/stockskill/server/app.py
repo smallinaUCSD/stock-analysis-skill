@@ -47,10 +47,17 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
     cache_dir = os.environ.get("STOCKSKILL_CACHE_DIR") or cache_dir
     # shorter history = a lighter, faster first build (important on small hosts).
     period = os.environ.get("STOCKSKILL_PERIOD") or ("1y" if public else "5y")
+    # a long cache TTL serves a committed data snapshot without refetching — useful
+    # when the host IP is rate-limited (STOCKSKILL_CACHE_TTL in seconds).
+    try:
+        cache_ttl = float(os.environ.get("STOCKSKILL_CACHE_TTL") or 1800.0)
+    except ValueError:
+        cache_ttl = 1800.0
 
     app = Flask(__name__)
     board = WatchlistService(tickers_path=tickers_path, cache_dir=cache_dir,
-                             public=public, bmc_url=bmc_url, period=period)
+                             public=public, bmc_url=bmc_url, period=period,
+                             cache_ttl=cache_ttl)
     board.wait_ready(0)   # start building the board in the background at startup
 
     @app.get("/")

@@ -33,12 +33,14 @@ _WARMING_HTML = (
 
 class WatchlistService:
     def __init__(self, tickers_path: str = "data/tickers.csv", cache_dir: str | None = None,
-                 public: bool = False, bmc_url: str | None = None, period: str = "5y"):
+                 public: bool = False, bmc_url: str | None = None, period: str = "5y",
+                 cache_ttl: float = 1800.0):
         self._path = tickers_path
         self._cache_dir = cache_dir
         self._public = public
         self._bmc_url = bmc_url
         self._period = period
+        self._cache_ttl = cache_ttl
         self._added: list[str] = []          # user-added, in order
         self._html: str | None = None
         self._ts = 0.0
@@ -68,7 +70,7 @@ class WatchlistService:
     def _rebuild(self) -> str:
         html, meta = build_watchlist_html(
             self._spec(), period=self._period, cache_dir=self._cache_dir, served=True,
-            public=self._public, bmc_url=self._bmc_url)
+            public=self._public, bmc_url=self._bmc_url, ttl=self._cache_ttl)
         with self._lock:
             self._html = html
             self._ts = time.time()

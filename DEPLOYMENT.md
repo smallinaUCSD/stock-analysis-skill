@@ -67,6 +67,26 @@ STOCKSKILL_PUBLIC=1 uv run gunicorn -w 1 -k gthread --threads 8 -t 120 \
   -b 0.0.0.0:8000 'stockskill.server:create_app()'
 ```
 
+### Data snapshot (so the hosted site shows real data despite Yahoo IP-blocking)
+
+Yahoo rate-limits datacenter IPs, so live fetches from Render often return "n/a".
+The fix: build the data **locally** (your IP works) and ship it. The deploy is
+configured to serve `data/cache/` (a committed snapshot) with a 7-day TTL, so it
+never refetches from the blocked host.
+
+**Refresh the snapshot before each deploy:**
+
+```bash
+# fetch the public tickers locally and write the cache the deploy serves
+uv run stockskill watchlist --tickers data/public_tickers.csv \
+  --cache-dir data/cache --period 1y --out /tmp/snapshot.html
+git add data/cache && git commit -m "refresh data snapshot" && git push
+```
+
+Render redeploys on push, and the site shows your freshly-fetched data. (The data
+is a snapshot — as fresh as your last local build. Live per-request data across
+many users is Phase 1: a licensed API.)
+
 **Free-tier caveats**
 - The service **sleeps after ~15 min idle**; the first hit after that spins it up
   and builds the board (~1 min). Fine for a hobby launch.

@@ -13,5 +13,9 @@ services:
         value: "data/public_tickers.csv"   # lighter board -> fast build on free tier
       - key: STOCKSKILL_PERIOD
         value: "1y"
+      - key: STOCKSKILL_CACHE_DIR
+        value: "data/cache"                # committed data snapshot (built locally)
+      - key: STOCKSKILL_CACHE_TTL
+        value: "604800"                    # 7d: serve the snapshot without refetching
       - key: STOCKSKILL_BMC_URL
         sync: false      # set your Buy-me-a-coffee URL in the Render dashboard

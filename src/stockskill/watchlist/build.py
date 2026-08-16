@@ -129,7 +129,7 @@ def build_watchlist_html(tickers_spec, *, period: str = "5y", workers: int = 5,
                          cache_dir: str | None = None, alerts_path: str | None = None,
                          interval: float | None = None, served: bool = False,
                          title: str = "Watchlist", public: bool = False,
-                         bmc_url: str | None = None) -> tuple[str, dict]:
+                         bmc_url: str | None = None, ttl: float = 1800.0) -> tuple[str, dict]:
     """Return ``(html, meta)`` for the watchlist board.
 
     ``tickers_spec`` is anything :func:`parse_tickers` accepts (a path or a
@@ -156,7 +156,7 @@ def build_watchlist_html(tickers_spec, *, period: str = "5y", workers: int = 5,
         for t in tks:
             tag_map.setdefault(t, set()).add(sec)
 
-    data = fetch_all(tickers, period=period, workers=workers, cache_dir=cache_dir)
+    data = fetch_all(tickers, period=period, workers=workers, cache_dir=cache_dir, ttl=ttl)
     cfg = SignalConfig.from_env()
     rows = [build_row(data[t], cfg, tag_map.get(t)) for t in tickers if t in data]
     custom = load_custom_alerts(alerts_path) if alerts_path else []
