@@ -169,6 +169,9 @@ table.wl th:nth-child(15),table.wl td:nth-child(15){text-align:left}
   background:var(--surface);border:1px solid var(--border);color:var(--ink);
   text-decoration:none;display:inline-flex;align-items:center}
 .tool-b:hover{border-color:var(--accent);color:var(--accent)}
+.bmc{font:650 12px inherit;padding:7px 12px;border-radius:9px;text-decoration:none;
+  background:#ffdd57;color:#3a2f00;border:1px solid #e6c200;white-space:nowrap}
+.bmc:hover{filter:brightness(1.04)}
 .tool-head h3{margin:0 34px 10px 0;font-size:17px}
 .tool-form{margin-bottom:10px}
 .t-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
@@ -959,26 +962,34 @@ function _mcCone(p){ const keys=['p95','p75','p50','p25','p5']; const vals=keys.
 
 def render_watchlist(rows, title="Watchlist", updated="", status_badge="", status_label="",
                      alerts=None, sectors=None, markets=None, refresh_seconds=1800,
-                     served=False, updated_ts=None, macro=None):
+                     served=False, updated_ts=None, macro=None, public=False, bmc_url=None):
     banner, _sig = _banner(alerts or [])
     sector_html = _sector_html(sectors)
     markets_html = _markets_html(markets)
     macro_html = _macro_html(macro)
-    add_html = (
-        '<div class="addbar"><div class="addwrap">'
+    # In public mode: no add-ticker box (shared state) and no Holdings button
+    # (personal data). The read-only analysis tools stay.
+    _add_box = "" if public else (
+        '<div class="addwrap">'
         '<input id="addq" placeholder="Add ticker (e.g. NVDA or &quot;oracle&quot;)…" '
         'autocomplete="off" oninput="addSearch()" onkeydown="addKey(event)">'
         '<div id="addsug" class="addsug"></div></div>'
-        '<button class="tbtn add" onclick="addTicker()">+ Add</button>'
+        '<button class="tbtn add" onclick="addTicker()">+ Add</button>')
+    _holdings_btn = "" if public else '<button class="tool-b" onclick="openTab(\'/holdings\')">Holdings</button>'
+    add_html = (
+        '<div class="addbar">' + _add_box +
         '<span class="toolsbar">'
         '<button class="tool-b" onclick="openTool(\'evaluate\')">Evaluate</button>'
         '<button class="tool-b" onclick="openTool(\'lookthrough\')">Look-through</button>'
         '<button class="tool-b" onclick="openTool(\'montecarlo\')">Monte Carlo</button>'
         '<button class="tool-b" onclick="openTab(\'/indicators\')">Indicators</button>'
-        '<button class="tool-b" onclick="openTab(\'/holdings\')">Holdings</button>'
+        + _holdings_btn +
         '</span>'
         '<span id="addmsg" class="muted"></span></div>'
     ) if served else ""
+    bmc_html = (
+        f'<a class="bmc" href="{html.escape(bmc_url)}" target="_blank" rel="noopener">'
+        '☕ Buy me a coffee</a>') if bmc_url else ""
     tool_modal = (
         '<div id="toolmodal" class="modal" onclick="closeTool(event)">'
         '<div class="modal-card" onclick="event.stopPropagation()">'
@@ -1015,7 +1026,8 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
   </div>
   <input id="q" placeholder="Filter tickers…" oninput="applyFilter()">
   <span class="count" id="count">{ok} of {len(rows)} tickers</span>
-  <button class="tbtn" onclick="toggleTheme()" style="margin-left:auto">◐ Theme</button>
+  <span style="margin-left:auto;display:inline-flex;gap:8px;align-items:center">{bmc_html}
+  <button class="tbtn" onclick="toggleTheme()">◐ Theme</button></span>
 </div>
 {add_html}
 <div class="panels">{sector_html}{markets_html}{macro_html}</div>

@@ -462,9 +462,12 @@ def cmd_serve(args: argparse.Namespace) -> int:
     from .server import create_app
 
     app = create_app(tickers_path=args.tickers, cache_dir=args.cache_dir,
-                     holdings_path=args.holdings)
+                     holdings_path=args.holdings,
+                     public=getattr(args, "public", False) or None)
     url = f"http://{args.host}:{args.port}"
-    print(f"Live dashboard at {url}  (board /, holdings /holdings, analyzer /analyze; Ctrl-C to stop)")
+    mode = "PUBLIC (no holdings/add)" if (getattr(args, "public", False)
+           or __import__("os").environ.get("STOCKSKILL_PUBLIC", "").lower() in ("1", "true", "yes")) else "local"
+    print(f"Live dashboard [{mode}] at {url}  (Ctrl-C to stop)")
     if args.open:
         os.system(f"open {url!r}" if sys.platform == "darwin" else f"xdg-open {url!r}")
     # threaded so API calls (news, tools) aren't blocked while the board refetches
@@ -741,6 +744,8 @@ def build_parser() -> argparse.ArgumentParser:
     sv.add_argument("--tickers", default="data/tickers.csv", help="watchlist ticker file")
     sv.add_argument("--cache-dir", help="per-ticker cache dir (e.g. .cache/stock_cache)")
     sv.add_argument("--holdings", default="holdings.csv", help="holdings ledger (local only)")
+    sv.add_argument("--public", action="store_true",
+                    help="safe shared mode: no holdings routes, no add-ticker (also STOCKSKILL_PUBLIC=1)")
     sv.add_argument("--open", action="store_true", help="open the browser after starting")
     sv.set_defaults(func=cmd_serve)
 

@@ -18,9 +18,12 @@ _TICKER_RE = re.compile(r"^[A-Za-z0-9.\-\^]{1,12}$")
 
 
 class WatchlistService:
-    def __init__(self, tickers_path: str = "data/tickers.csv", cache_dir: str | None = None):
+    def __init__(self, tickers_path: str = "data/tickers.csv", cache_dir: str | None = None,
+                 public: bool = False, bmc_url: str | None = None):
         self._path = tickers_path
         self._cache_dir = cache_dir
+        self._public = public
+        self._bmc_url = bmc_url
         self._added: list[str] = []          # user-added, in order
         self._html: str | None = None
         self._ts = 0.0
@@ -48,7 +51,8 @@ class WatchlistService:
     # --- build / cache -------------------------------------------------
     def _rebuild(self) -> str:
         html, meta = build_watchlist_html(
-            self._spec(), cache_dir=self._cache_dir, served=True)
+            self._spec(), cache_dir=self._cache_dir, served=True,
+            public=self._public, bmc_url=self._bmc_url)
         with self._lock:
             self._html = html
             self._ts = time.time()

@@ -128,7 +128,8 @@ def _macro_panel() -> dict:
 def build_watchlist_html(tickers_spec, *, period: str = "5y", workers: int = 5,
                          cache_dir: str | None = None, alerts_path: str | None = None,
                          interval: float | None = None, served: bool = False,
-                         title: str = "Watchlist") -> tuple[str, dict]:
+                         title: str = "Watchlist", public: bool = False,
+                         bmc_url: str | None = None) -> tuple[str, dict]:
     """Return ``(html, meta)`` for the watchlist board.
 
     ``tickers_spec`` is anything :func:`parse_tickers` accepts (a path or a
@@ -183,7 +184,7 @@ def build_watchlist_html(tickers_spec, *, period: str = "5y", workers: int = 5,
         updated_ts=int(now.timestamp() * 1000),
         status_badge=status.badge, status_label=status.label, alerts=alerts,
         sectors=sectors, markets=markets, macro=macro,
-        refresh_seconds=refresh, served=served)
+        refresh_seconds=refresh, served=served, public=public, bmc_url=bmc_url)
     ok = sum(1 for r in rows if r.price is not None)
     meta = {"status": status, "refresh": refresh, "ok": ok, "n": len(rows),
             "line": f"[{status.badge}] ({ok}/{len(rows)} tickers), reload {refresh}s"}
