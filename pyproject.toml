@@ -27,3 +27,6 @@ build-backend = "uv_build"
 dev = [
     "pytest>=9.1.1",
 ]
+deploy = [
+    "gunicorn>=23.0.0",
+]

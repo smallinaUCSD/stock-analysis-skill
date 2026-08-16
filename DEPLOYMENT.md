@@ -46,18 +46,43 @@ STOCKSKILL_BMC_URL=https://buymeacoffee.com/YOURNAME uv run stockskill serve --p
 - `holdings.csv` is never deployed and stays gitignored; the holdings routes
   simply don't exist in public mode.
 
-### Deploy to a container host (example: Render)
+### Deploy to Render (free, ~5 minutes)
 
-1. Add a production WSGI server (gunicorn) — one dep, run:
-   `gunicorn -w 2 -k gthread --threads 8 -t 120 "stockskill.server:create_app()"`
-   (create_app reads `STOCKSKILL_PUBLIC` / `STOCKSKILL_BMC_URL` from the env).
-2. Set env vars on the host: `STOCKSKILL_PUBLIC=1`, `STOCKSKILL_BMC_URL=…`,
-   optionally `STOCKSKILL_CACHE_DIR` on a persistent disk.
-3. Point the start command at the app; the host provides HTTPS + a URL.
+The repo already ships everything: a `Dockerfile` (gunicorn + the public app), a
+`.dockerignore` (never ships `holdings.csv`), and a `render.yaml` blueprint.
 
-> Note: with several workers each has its own cache and refetches. For real
-> traffic, move to a shared cache (Redis/KV) and a background refresher, and
-> switch to a licensed data API (Phase 1) so Yahoo doesn't rate-limit you.
+1. Push to GitHub (already done).
+2. Go to **render.com** → sign in with GitHub → **New +** → **Blueprint**.
+3. Pick this repo. Render reads `render.yaml` and creates a free web service that
+   builds the `Dockerfile` and runs it with `STOCKSKILL_PUBLIC=1`.
+4. (Optional) In the service's **Environment**, set `STOCKSKILL_BMC_URL` to your
+   Buy-me-a-coffee link so the button appears.
+5. Deploy. Render gives you `https://stockskill.onrender.com` (HTTPS included).
+   Health check: `/healthz` returns `{"ok": true, "public": true}`.
+
+Locally you can run the exact same server:
+
+```bash
+STOCKSKILL_PUBLIC=1 uv run gunicorn -w 1 -k gthread --threads 8 -t 120 \
+  -b 0.0.0.0:8000 'stockskill.server:create_app()'
+```
+
+**Free-tier caveats**
+- The service **sleeps after ~15 min idle**; the first hit after that spins it up
+  and builds the board (~1 min). Fine for a hobby launch.
+- ~512 MB RAM → one gunicorn worker (the Dockerfile default). Bump workers only on
+  a paid plan.
+- **Yahoo may rate-limit the cloud IP.** The stale-while-error cache degrades
+  gracefully (keeps last-good values), but for reliable traffic, do Phase 1
+  (a licensed data API) before you rely on it.
+- Railway / Fly.io work the same way from the `Dockerfile` if you prefer them.
+
+### Alternative: static view-only board (GitHub Pages, already wired)
+`.github/workflows/dashboard.yml` renders the board to static HTML and publishes
+it to Pages during market hours (public tickers only — no holdings). Enable it at
+**Settings → Pages → Source: GitHub Actions** (the workflow also tries to enable
+it automatically). This is zero-server and reliable, but view-only — the live
+tools/indicators need the server above.
 
 ## Considerations before charging money
 

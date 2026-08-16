@@ -1,0 +1,13 @@
+# Render Blueprint — one-click deploy of the PUBLIC dashboard.
+# In Render: New +  ->  Blueprint  ->  connect this repo. Free tier, HTTPS + URL.
+services:
+  - type: web
+    name: stockskill
+    runtime: docker
+    plan: free
+    healthCheckPath: /healthz
+    envVars:
+      - key: STOCKSKILL_PUBLIC
+        value: "1"
+      - key: STOCKSKILL_BMC_URL
+        sync: false      # set your Buy-me-a-coffee URL in the Render dashboard

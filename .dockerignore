@@ -1,0 +1,19 @@
+# Never ship personal data or local cruft into the image
+holdings.csv
+.git
+.github
+.venv
+__pycache__
+**/__pycache__
+*.pyc
+.pytest_cache
+.cache
+.cache*
+*.log
+dashboard.html
+watchlist.html
+*.snapshot.json
+snapshots
+tests
+scratchpad
+data/smart_tickers.csv
