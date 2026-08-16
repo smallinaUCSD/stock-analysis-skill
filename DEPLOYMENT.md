@@ -77,8 +77,8 @@ never refetches from the blocked host.
 **Refresh the snapshot before each deploy:**
 
 ```bash
-# fetch the public tickers locally and write the cache the deploy serves
-uv run stockskill watchlist --tickers data/public_tickers.csv \
+# fetch the full watchlist locally and write the cache the deploy serves
+uv run stockskill watchlist --tickers data/tickers.csv \
   --cache-dir data/cache --period 1y --out /tmp/snapshot.html
 git add data/cache && git commit -m "refresh data snapshot" && git push
 ```
