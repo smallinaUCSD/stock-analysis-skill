@@ -12,11 +12,13 @@ services:
       - key: STOCKSKILL_TICKERS
         value: "data/tickers.csv"          # the full watchlist (built from cache)
       - key: STOCKSKILL_PERIOD
-        value: "1y"
+        value: "5y"                        # 5 years of history on the board/charts
       - key: STOCKSKILL_CACHE_DIR
         value: "data/cache"                # committed data snapshot (built locally)
       - key: STOCKSKILL_CACHE_TTL
-        value: "604800"                    # 7d: serve the snapshot without refetching
+        value: "2592000"                   # 30d: always serve the committed snapshot
+                                           # (never bulk-refetch 116 tickers via FMP —
+                                           #  that would blow the free ~250 calls/day)
       - key: STOCKSKILL_BMC_URL
         sync: false      # set your Buy-me-a-coffee URL in the Render dashboard
       - key: FMP_API_KEY

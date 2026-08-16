@@ -77,9 +77,13 @@ never refetches from the blocked host.
 **Refresh the snapshot before each deploy:**
 
 ```bash
-# fetch the full watchlist locally and write the cache the deploy serves
-uv run stockskill watchlist --tickers data/tickers.csv \
-  --cache-dir data/cache --period 1y --out /tmp/snapshot.html
+# fetch the full watchlist locally and write the cache the deploy serves.
+# Clear first so the 5y refetch isn't blocked by a fresh 1y cache entry
+# (the cache key doesn't include the period), and unset FMP_API_KEY so the
+# 116-ticker build uses yfinance (unlimited from home) and burns no FMP quota.
+rm -f data/cache/*.pkl
+env -u FMP_API_KEY uv run stockskill watchlist --tickers data/tickers.csv \
+  --cache-dir data/cache --period 5y --out /tmp/snapshot.html
 git add data/cache && git commit -m "refresh data snapshot" && git push
 ```
 
