@@ -967,9 +967,9 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
     sector_html = _sector_html(sectors)
     markets_html = _markets_html(markets)
     macro_html = _macro_html(macro)
-    # In public mode: no add-ticker box (shared state) and no Holdings button
-    # (personal data). The read-only analysis tools stay.
-    _add_box = "" if public else (
+    # Public mode hides only the Holdings button (personal data). Add-ticker and
+    # the read-only tools stay.
+    _add_box = (
         '<div class="addwrap">'
         '<input id="addq" placeholder="Add ticker (e.g. NVDA or &quot;oracle&quot;)…" '
         'autocomplete="off" oninput="addSearch()" onkeydown="addKey(event)">'

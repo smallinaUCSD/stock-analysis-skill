@@ -5,13 +5,14 @@ def _rules(app):
     return {r.rule for r in app.url_map.iter_rules()}
 
 
-def test_public_mode_omits_personal_routes():
+def test_public_mode_omits_holdings_only():
     r = _rules(create_app(public=True))
-    for gone in ("/holdings", "/api/holdings", "/api/holdings/trade",
-                 "/api/watchlist/add", "/api/watchlist/remove"):
+    # holdings is personal -> gated out
+    for gone in ("/holdings", "/api/holdings", "/api/holdings/trade", "/api/holdings/cash"):
         assert gone not in r, gone
-    # read-only analysis stays available
-    for kept in ("/", "/indicators", "/api/lookthrough/<ticker>", "/api/search"):
+    # the watchlist (incl. add-ticker) and read-only tools stay
+    for kept in ("/", "/indicators", "/api/watchlist/add", "/api/watchlist/remove",
+                 "/api/lookthrough/<ticker>", "/api/search"):
         assert kept in r, kept
 
 

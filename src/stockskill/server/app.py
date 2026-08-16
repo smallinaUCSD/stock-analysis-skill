@@ -73,9 +73,25 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
         from .indicators_page import indicators_html
         return indicators_html(request.args.get("t", ""))
 
+    # Add-ticker stays available in public mode (shared, resets on restart);
+    # only HOLDINGS is gated, since that's the personal/private data.
+    @app.post("/api/watchlist/add")
+    def watchlist_add():
+        res = board.add(request.args.get("ticker", ""))
+        return jsonify(res), (200 if res.get("ok") else 400)
+
+    @app.post("/api/watchlist/remove")
+    def watchlist_remove():
+        res = board.remove(request.args.get("ticker", ""))
+        return jsonify(res), (200 if res.get("ok") else 400)
+
+    @app.get("/api/watchlist/added")
+    def watchlist_added():
+        return jsonify({"added": board.added()})
+
     if not public:
-        # personal, local-only features — omitted entirely in public mode so a
-        # shared deployment can never expose or mutate personal data.
+        # personal, local-only — omitted in public mode so a shared deployment
+        # can never expose or mutate holdings.
         holdings = HoldingsService(path=holdings_path)
 
         @app.get("/holdings")
@@ -105,20 +121,6 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
             res = holdings.cash(request.args.get("account", ""),
                                 request.args.get("direction", ""), amt or 0.0)
             return jsonify(res), (200 if res.get("ok") else 400)
-
-        @app.post("/api/watchlist/add")
-        def watchlist_add():
-            res = board.add(request.args.get("ticker", ""))
-            return jsonify(res), (200 if res.get("ok") else 400)
-
-        @app.post("/api/watchlist/remove")
-        def watchlist_remove():
-            res = board.remove(request.args.get("ticker", ""))
-            return jsonify(res), (200 if res.get("ok") else 400)
-
-        @app.get("/api/watchlist/added")
-        def watchlist_added():
-            return jsonify({"added": board.added()})
 
     @app.get("/healthz")
     def healthz():

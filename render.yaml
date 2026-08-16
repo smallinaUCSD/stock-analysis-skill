@@ -10,7 +10,7 @@ services:
       - key: STOCKSKILL_PUBLIC
         value: "1"
       - key: STOCKSKILL_TICKERS
-        value: "data/public_tickers.csv"   # lighter board -> fast build on free tier
+        value: "data/tickers.csv"          # the full watchlist (built from cache)
       - key: STOCKSKILL_PERIOD
         value: "1y"
       - key: STOCKSKILL_CACHE_DIR
