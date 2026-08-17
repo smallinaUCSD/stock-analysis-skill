@@ -152,3 +152,53 @@ The modeling step is **Monte Carlo simulation** (not a classifier).
 4 → 5 → 6 add market context, alerts, and trade framing.
 7 → 8 add ML and automation last (highest effort, most caveats).
 Reassess after Phase 3 — that's where it starts to *look* like Dad's tool.
+
+---
+
+# Beyond feature-parity — public deployment + factor investing
+
+The smi-parity phases above are built. Two new directions have since shipped on
+top, aimed at turning the tool into a public — and eventually paid — product.
+
+## Public deployment  ✅ DONE
+- **Public mode** (`STOCKSKILL_PUBLIC`) — safe shared board: excludes the
+  holdings routes + UI, keeps the read-only tools. `Dockerfile` + Render blueprint.
+- **Fast cold-start**: `build_watchlist_html(live=False)` paints the committed-
+  snapshot board instantly (~0.5s, network-free) so a waking free-tier host shows
+  the board immediately; live prices fill in via a background rebuild — no warming
+  spinner.
+- Committed 5y snapshot (`data/cache/`) served on a long TTL so the board never
+  bulk-refetches; the ET market clock is correct on Linux (tzdata pinned); stale
+  extended-hours price dropped on the host (no fresh post-market source). See
+  DEPLOYMENT.md.
+
+## Data-provider seam  ✅ DONE (`data/`)
+Yahoo blocks datacenter IPs, so the host uses licensed, key-based APIs behind a
+seam, with yfinance as the automatic fallback:
+- **FMP** (stable API) — fundamentals + on-demand single-symbol fetches
+  (add-ticker, indicators, evaluate). Legacy `/api/v3` was retired 2025-08-31.
+- **Finnhub** — the real-time board quote feed (FMP free blocks multi-symbol
+  batch quotes); rate-limited, refreshes the whole board on a market-aware cadence
+  (**15m** regular / **30m** extended / static overnight+weekend).
+- Verify with `stockskill fmp-check` / `finnhub-check`. Both free tiers are
+  non-commercial — move to paid data when monetizing.
+
+## Factor investing  ✅ DONE (`factors/`)
+- Cross-sectional **value / quality / momentum / growth / low-vol** scoring reusing
+  the screener's percentile engine; coverage-gated composite; env-weighted
+  (`STOCKSKILL_FACTOR_WEIGHTS`); **sector-neutral** option (cheap-vs-peers). Wired
+  into the board (card chip + sortable **Factor** column). `stockskill factors`.
+- **Backtest** (`stockskill backtest`): monthly rebalance → buckets → long-short
+  spread + information coefficient, no look-ahead. Momentum only for now — and it
+  honestly reports the factor is **weak** on this large-cap-growth universe (IC≈0,
+  non-monotonic buckets).
+- **Point-in-time fundamentals** (`snapshot-fundamentals` → `data/fundamentals_history/`):
+  records dated fundamentals daily so a **value** backtest becomes possible as the
+  history accrues. Methodology + citations: `references/factor-investing.md`.
+- **Next:** value/quality backtest once history accrues (or a paid historical-
+  statements feed); a factor-exposure regression on the Kenneth French factors.
+
+## SaaS path  — NEXT
+Managed **auth** (sign-in) → per-user **database** (persistent, scoped
+watchlists/holdings; re-enable add-ticker per user) → **Stripe** subscriptions
+gating premium features.

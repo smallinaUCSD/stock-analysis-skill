@@ -37,9 +37,11 @@ same numbers, provable by re-running.
 - **Snapshots and basket weights must be verified.** The leverage registry
   ships with dated snapshots flagged `verify=True`. Say so when you rely on
   them; refresh from issuer holdings when the analysis is high-stakes.
-- **Data is best-effort and free-source.** yfinance/Yahoo fields can be stale
-  or missing. Report the `as_of` date and any missing fields; never paper over
-  a gap with a guessed number.
+- **Data is best-effort.** Locally, free yfinance/Yahoo. The hosted app uses a
+  data-provider seam (FMP stable API for fundamentals + Finnhub for live quotes,
+  yfinance as fallback) because Yahoo blocks datacenter IPs. Free tiers can be
+  delayed or gate some endpoints. Report the `as_of` date and any missing fields;
+  never paper over a gap with a guessed number.
 
 ## Setup
 
@@ -47,7 +49,7 @@ The project is a uv package. Run everything through uv:
 
 ```bash
 uv run stockskill --help
-uv run pytest -q          # 50 tests; run after any change to the math
+uv run pytest -q          # ~200 tests; run after any change to the math
 ```
 
 ## Commands (this is where the math lives)
@@ -111,6 +113,27 @@ good as the list. `coverage` shows how much of the scoring weight had data
 (banks lack EBITDA metrics, etc.). Always run `value TICKER` on shortlisted
 names for a real fair-value check before drawing conclusions.
 
+### Factors — cross-sectional factor scores & backtest
+Scores the watchlist on **value / quality / momentum / growth / low-vol** (each a
+0–100 percentile within the universe) plus a coverage-gated composite and a
+plain-English read. `--sector-neutral` ranks each metric *within sector* so
+"cheap" means cheap-vs-peers, not a bet on cheap sectors. Value uses the same
+fundamentals as `value`. Weights via `STOCKSKILL_FACTOR_WEIGHTS`.
+
+```bash
+uv run stockskill factors --sector-neutral --by value
+uv run stockskill backtest                 # momentum: buckets, long-short spread, IC
+uv run stockskill snapshot-fundamentals    # record today's fundamentals (run daily)
+```
+
+Interpret honestly, same discipline as `screen`: percentiles are **relative to
+this universe**. A positive long-short spread with a **near-zero IC** and
+non-monotonic buckets means the factor does *not* reliably sort returns here —
+say that; don't sell the headline spread. Only **momentum** backtests today
+(price-derived); value/quality need point-in-time fundamentals, which
+`snapshot-fundamentals` accrues daily into `data/fundamentals_history/`. See
+`references/factor-investing.md`.
+
 ### Pulse — what's trending and why
 Reads the market from free ETF/macro data: sector rotation, factor/style
 rotation, breadth, and a regime snapshot (VIX, yield curve, credit, leadership)
@@ -173,6 +196,7 @@ numbers to mean anything.
 - New leveraged product → add to `src/stockskill/leverage/registry.py`.
 - New factor/sector tag → `src/stockskill/config.py`.
 - New screen lane / metric weights → `src/stockskill/screener/screen.py` (LANES).
+- New factor / metric / weight → `src/stockskill/factors/model.py` (FACTORS, DEFAULT_WEIGHTS).
 - New pulse sector/factor/regime ticker → `src/stockskill/pulse/universe.py`.
 - New valuation method → add a pure function under `src/stockskill/valuation/`,
   wire it into `service.py`, and **add a test with a hand-checked value.**
@@ -185,6 +209,8 @@ numbers to mean anything.
 - `references/portfolio-review-checklist.md` — what to look at and thresholds.
 - `references/financial-red-flags.md` — accounting/quality warning signs.
 - `references/screener-methodology.md` — how ranking, lanes, and coverage work.
+- `references/factor-investing.md` — the factor formulas/weights, sector-neutral
+  scoring, the backtest method, and the value-backtest data gap.
 - `references/market-pulse.md` — what each pulse section means; the paid layer.
 - `references/regime-playbook.md` — reading the macro regime; defensive rotation.
 - `references/dashboard-and-scheduling.md` — the HTML dashboard and cron setup.
