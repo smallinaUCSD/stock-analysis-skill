@@ -125,6 +125,37 @@ def _macro_panel() -> dict:
             "fear_greed": fear_greed}
 
 
+def _attach_factors(rows, data) -> None:
+    """Compute cross-sectional factor scores (value/quality/momentum/…) for the
+    board and hang a compact read on each row. Network-free (uses the cached
+    snapshot + price history), so it runs on the fast cold-start build too. Never
+    raises into the build."""
+    from ..factors.model import (factor_metrics, momentum_12_1, annualized_vol,
+                                 score_factors, weights_from_env)
+    try:
+        metric_rows = []
+        for r in rows:
+            td = data.get(r.ticker)
+            if not (td and td.snapshot):
+                continue
+            closes = (td.ohlcv or {}).get("close", [])
+            metric_rows.append(factor_metrics(td.snapshot, momentum_12_1(closes),
+                                              annualized_vol(closes)))
+        if not metric_rows:
+            return
+        scores = {s.ticker: s for s in score_factors(
+            metric_rows, weights=weights_from_env(), sector_neutral=True)}
+        for r in rows:
+            s = scores.get(r.ticker)
+            if s:
+                r.factor = {"label": s.label, "composite": s.composite_pct,
+                            "value": s.factor_pct.get("value"),
+                            "quality": s.factor_pct.get("quality"),
+                            "momentum": s.factor_pct.get("momentum")}
+    except Exception:  # noqa: BLE001 - factors are a nice-to-have, never break the board
+        return
+
+
 def _overlay_live_prices(rows, status) -> None:
     """Patch rows' price + 1d change from a live quote source during an active
     session, and drop a stale extended-hours price outside pre/after sessions
@@ -204,6 +235,7 @@ def build_watchlist_html(tickers_spec, *, period: str = "5y", workers: int = 5,
     data = fetch_all(tickers, period=period, workers=workers, cache_dir=cache_dir, ttl=ttl)
     cfg = SignalConfig.from_env()
     rows = [build_row(data[t], cfg, tag_map.get(t)) for t in tickers if t in data]
+    _attach_factors(rows, data)
     custom = load_custom_alerts(alerts_path) if alerts_path else []
     alerts = all_alerts(rows, custom)
 

@@ -120,6 +120,9 @@ table.wl th:nth-child(15),table.wl td:nth-child(15){text-align:left}
 .card-item{cursor:pointer;position:relative;transition:border-color .12s}
 .card-item:hover{border-color:var(--accent)}
 .trendline{font-size:12.5px;font-weight:650;margin:1px 0 6px}
+.fchip{font-size:11.5px;font-weight:600;margin:0 0 6px;padding:2px 7px;border-radius:6px;
+  background:var(--chip,rgba(120,130,150,.10));display:inline-block;max-width:100%}
+.fchip .up{color:var(--good)}.fchip .down{color:var(--crit)}
 /* fixed-height slots so optional lines don't misalign cards */
 .exthrs{font-size:11.5px;color:var(--muted);margin:1px 0 5px;font-variant-numeric:tabular-nums;min-height:16px}
 .exthrs b{color:var(--ink);font-weight:700}
@@ -369,13 +372,38 @@ def _indicator_chips(r):
 
 # ---------- per-view renderers ---------- #
 _HEADERS = ["Ticker", "Price", "Day", "5D", "1M", "1Y", "52wL", "52wH", "Sector",
-            "30d", "Signal", "Trend", "RSI", "Conf", "Indicators", "P/E", "Mkt Cap"]
+            "30d", "Signal", "Trend", "RSI", "Conf", "Indicators", "P/E", "Mkt Cap",
+            "Factor"]
+
+
+def _factor_cls(pct):
+    if pct is None:
+        return "muted"
+    return "up" if pct >= 66 else ("down" if pct <= 33 else "")
+
+
+def _factor_cell(r):
+    """Table cell: the composite factor percentile (sortable), color-coded."""
+    comp = (getattr(r, "factor", None) or {}).get("composite")
+    if comp is None:
+        return '<td class="muted" data-sort="-1">—</td>'
+    return f'<td class="{_factor_cls(comp)}" data-sort="{comp}">{comp}</td>'
+
+
+def _factor_chip(r):
+    """Card chip: the plain-English factor read + composite percentile."""
+    f = getattr(r, "factor", None) or {}
+    comp, label = f.get("composite"), f.get("label")
+    if comp is None or not label:
+        return ""
+    return (f'<div class="fchip"><span class="{_factor_cls(comp)}">◆</span> '
+            f'{html.escape(label)} <span class="muted">· factor {comp}</span></div>')
 
 
 def _row_html(r):
     if r.error or r.price is None:
         return (f'<tr class="item" {_data_attrs(r)}><td class="tk">{html.escape(r.ticker)}</td>'
-                f'<td colspan="16" class="muted">no data</td></tr>')
+                f'<td colspan="17" class="muted">no data</td></tr>')
 
     def cell(x):
         cls, txt = _pct(x)
@@ -406,7 +434,8 @@ def _row_html(r):
         f'<td>{conf}</td>'
         f'<td style="text-align:left">{_indicator_chips(r)}</td>'
         f'<td data-sort="{r.pe if r.pe is not None else -1}">{_num(r.pe,1)}</td>'
-        f'<td data-sort="{r.market_cap or 0}">{_mktcap(r.market_cap)}</td></tr>'
+        f'<td data-sort="{r.market_cap or 0}">{_mktcap(r.market_cap)}</td>'
+        + _factor_cell(r) + '</tr>'
     )
 
 
@@ -592,6 +621,7 @@ def _card_html(r):
         f'<div class="nm">{html.escape((r.name or "")[:34])}</div>'
         f'{_ext_html(r)}'
         f'<div class="trendline {tcls}">{html.escape(trend_word)} <span class="muted">· trend {r.trend_score:+.0f}</span></div>'
+        f'{_factor_chip(r)}'
         f'{_earnings_badge(r)}'
         f'<div class="card-spark">{_spark(r.sparkline, w=222, h=34)}</div>'
         f'<div style="margin:4px 0">{_indicator_chips(r)}</div>'

@@ -100,3 +100,18 @@ def test_fast_build_is_network_free(monkeypatch):
     with pytest.raises(RuntimeError):
         build_mod.build_watchlist_html(
             "[T]\nAAPL\n", cache_dir="data/cache", served=True, ttl=2592000, live=True)
+
+
+def test_factor_chip_and_cell_render():
+    from types import SimpleNamespace
+    from stockskill.watchlist.render import _factor_chip, _factor_cell
+    r = SimpleNamespace(factor={"label": "cheap · high quality", "composite": 83,
+                                "value": 90, "quality": 78, "momentum": 40})
+    chip = _factor_chip(r)
+    assert "cheap · high quality" in chip and "factor 83" in chip
+    cell = _factor_cell(r)
+    assert 'data-sort="83"' in cell and ">83<" in cell
+    # no factor data -> empty chip, muted dash cell (sorts last)
+    blank = SimpleNamespace(factor={})
+    assert _factor_chip(blank) == ""
+    assert 'data-sort="-1"' in _factor_cell(blank)

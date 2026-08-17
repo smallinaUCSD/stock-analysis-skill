@@ -60,6 +60,8 @@ class TickerRow:
     # embedded stock-analyzer detail (valuation + consensus), for card expansion
     valuation: dict = field(default_factory=dict)
     price_history: dict = field(default_factory=dict)   # {"d": [iso...], "c": [close...]}
+    # cross-sectional factor scores (0-100 percentiles) + plain-English read
+    factor: dict = field(default_factory=dict)          # {label, composite, value, quality, momentum}
     error: str | None = None
 
 
