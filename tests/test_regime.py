@@ -60,3 +60,28 @@ def test_dzz_filter_bounded_and_responsive():
 
 def test_dzz_too_short_is_none():
     assert dzz_rule(_ramp(30, 0.001)) is None
+
+
+# --- Kaminski-Lo stop-loss study ------------------------------------------
+from stockskill.regime.stops import stop_study  # noqa: E402
+
+
+def test_stop_helps_when_trend_then_crash():
+    # up-trend then a sustained crash: the stop exits into the crash and helps.
+    closes = _ramp(200, 0.001) + [_ramp(200, 0.001)[-1] * (0.99 ** i) for i in range(1, 121)]
+    s = stop_study(closes, exit_thresh=-0.08, window=30)
+    assert s is not None
+    assert s.stopped_return > s.buyhold_return      # avoided the crash
+    assert s.n_stops >= 1 and s.pct_in_market < 1.0
+    assert s.helps                                   # better risk-adjusted
+
+
+def test_stop_never_triggers_in_steady_uptrend():
+    s = stop_study(_ramp(300, 0.001), exit_thresh=-0.10, window=50)
+    assert s.n_stops == 0 and s.pct_in_market == 1.0
+    assert abs(s.stopping_premium) < 1e-9            # identical to buy-and-hold
+    assert not s.helps
+
+
+def test_stop_study_too_short_is_none():
+    assert stop_study(_ramp(40, 0.001), window=50) is None

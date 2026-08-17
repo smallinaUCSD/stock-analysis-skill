@@ -11,3 +11,7 @@ from .dzz import DZZ, RegimeParams, dzz_rule, estimate_regimes, filter_p_bull
 
 __all__ = ["TSMom", "tsmom", "DZZ", "RegimeParams", "dzz_rule",
            "estimate_regimes", "filter_p_bull"]
+
+from .stops import StopStudy, stop_study  # noqa: E402
+
+__all__ += ["StopStudy", "stop_study"]

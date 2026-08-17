@@ -131,14 +131,16 @@ def build_row(td: TickerData, cfg: SignalConfig | None = None,
 
         # regime/trend: Dai-Zhang-Zhu P(bull) + time-series momentum
         try:
-            from ..regime import dzz_rule, tsmom
-            dz, tm = dzz_rule(closes), tsmom(closes)
-            if dz or tm:
+            from ..regime import dzz_rule, tsmom, stop_study
+            dz, tm, ss = dzz_rule(closes), tsmom(closes), stop_study(closes)
+            if dz or tm or ss:
                 row.regime = {
                     "p_bull": dz.p_bull if dz else None,
                     "state": dz.state if dz else None,
                     "tsmom_label": tm.label if tm else None,
                     "tsmom_signal": tm.signal if tm else None,
+                    "stop_helps": ss.helps if ss else None,
+                    "stop_premium": ss.stopping_premium if ss else None,
                 }
         except Exception:  # noqa: BLE001
             pass

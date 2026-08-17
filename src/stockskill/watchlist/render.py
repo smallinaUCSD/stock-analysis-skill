@@ -466,6 +466,14 @@ def _trade_setup_html(r):
         cls_rg = "up" if rg["state"] == "bull" else ("down" if rg["state"] == "bear" else "muted")
         regime_line = (f'<div class="ts-sub">Regime · <span class="{cls_rg}">{rg["state"]}'
                        f'</span>{pbt}{tml}</div>')
+    if rg.get("stop_helps") is not None:
+        prem = rg.get("stop_premium")
+        verdict = "helped" if rg["stop_helps"] else "hurt"
+        vcls = "up" if rg["stop_helps"] else "down"
+        premtxt = f' ({prem*100:+.0f}%/yr)' if prem is not None else ''
+        regime_line += (f'<div class="ts-sub">Stop study · a trailing stop would have '
+                        f'<span class="{vcls}">{verdict}{premtxt}</span> '
+                        f'<span class="muted">(stops help in trends, hurt in chop)</span></div>')
     # P(target before stop) — a first-passage probability from drift/vol; the
     # honest edge estimate that feeds Kelly. Informational; always shown. The
     # sizing lenses (fixed 2% risk vs edge-based half-Kelly vs vol-target
