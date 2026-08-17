@@ -694,6 +694,29 @@ def cmd_factors(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_market_timing(args: argparse.Namespace) -> int:
+    """Virtue-of-Complexity market timing (EXPERIMENTAL) — honest OOS reporting."""
+    from .data.prices import closing_prices
+    from .regime.voc import voc_timing
+
+    tk = args.ticker.upper()
+    print(f"Fetching {tk} history ...", file=sys.stderr)
+    closes = closing_prices(tk, "max")
+    res = voc_timing(closes, n_features=args.features)
+    if not res:
+        print(f"not enough history for {tk}", file=sys.stderr)
+        return 1
+    print(f"=== Virtue-of-Complexity market timing: {tk}  (EXPERIMENTAL) ===")
+    print(f"  Next-month read:  {res.signal}  (predicted {res.prediction*100:+.2f}%)")
+    print(f"  Out-of-sample R²: {res.oos_r2:+.3f}   "
+          f"({res.n_test} months tested, {res.n_features} random features)")
+    print(f"  Timing Sharpe:    {res.timing_sharpe:+.2f}   vs buy-hold {res.buyhold_sharpe:+.2f}")
+    print("\n  Complex random-feature ridge (Kelly-Malamud-Zhou). Market timing is hard")
+    print("  and this result is DEBATED — trust the OOS numbers above, not the headline")
+    print("  signal. A near-zero R² means no reliable edge on this series.")
+    return 0
+
+
 def cmd_snapshot_fundamentals(args: argparse.Namespace) -> int:
     """Record today's fundamentals for the watchlist -> point-in-time value panel.
 
@@ -1030,6 +1053,12 @@ def build_parser() -> argparse.ArgumentParser:
     sf.add_argument("--store", default="data/fundamentals_history")
     sf.add_argument("--date", default=None, help="override as-of date (YYYY-MM-DD)")
     sf.set_defaults(func=cmd_snapshot_fundamentals)
+
+    mt = sub.add_parser("market-timing",
+                        help="EXPERIMENTAL Virtue-of-Complexity market timing (Kelly-Malamud-Zhou)")
+    mt.add_argument("ticker", nargs="?", default="SPY", help="market index/ETF (default SPY)")
+    mt.add_argument("--features", type=int, default=1000, help="number of random features")
+    mt.set_defaults(func=cmd_market_timing)
 
     bt = sub.add_parser("backtest", help="backtest a factor (momentum) on 5y prices")
     bt.add_argument("--tickers", default="data/tickers.csv")

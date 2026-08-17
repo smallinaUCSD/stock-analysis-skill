@@ -15,3 +15,7 @@ __all__ = ["TSMom", "tsmom", "DZZ", "RegimeParams", "dzz_rule",
 from .stops import StopStudy, stop_study  # noqa: E402
 
 __all__ += ["StopStudy", "stop_study"]
+
+from .voc import VoCResult, voc_timing  # noqa: E402
+
+__all__ += ["VoCResult", "voc_timing"]
