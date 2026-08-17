@@ -126,6 +126,10 @@ table.wl th:nth-child(15),table.wl td:nth-child(15){text-align:left}
 .fchip .fpill{display:inline-block;max-width:100%;padding:2px 7px;border-radius:6px;
   background:var(--chip,rgba(120,130,150,.10))}
 .fchip .up{color:var(--good)}.fchip .down{color:var(--crit)}
+.analysis-btn{width:100%;margin:10px 0 6px;padding:10px;border-radius:9px;
+  border:1px solid var(--accent);background:var(--surface-2);color:var(--accent);
+  font-weight:650;font-size:13.5px;cursor:pointer;transition:background .12s,color .12s}
+.analysis-btn:hover{background:var(--accent);color:#fff}
 /* fixed-height slots so optional lines don't misalign cards */
 .exthrs{font-size:11.5px;color:var(--muted);margin:1px 0 5px;font-variant-numeric:tabular-nums;min-height:16px}
 .exthrs b{color:var(--ink);font-weight:700}
@@ -596,7 +600,7 @@ def _valuation_html(r):
     return f'<div class="det-sec">{header}{body}{"".join(rows)}{note_html}</div>'
 
 
-_TIMEFRAMES = [("1mo", "1M"), ("3mo", "3M"), ("6mo", "6M"),
+_TIMEFRAMES = [("5d", "1W"), ("1mo", "1M"), ("3mo", "3M"), ("6mo", "6M"),
                ("1y", "1Y"), ("2y", "2Y"), ("5y", "5Y"), ("max", "Max")]
 _CHART_DEFAULT_TF = "1y"
 
@@ -617,11 +621,49 @@ def _chart_html(r):
             f'<div class="chart-tip muted">Hover the chart for price at a date</div></div>')
 
 
+def _valuation_summary(r):
+    """One-line valuation stance + Monte Carlo P(undervalued) for the modal."""
+    v = r.valuation or {}
+    if not v.get("reliable"):
+        sig = v.get("signal") or ""
+        return (f'<div class="det-sec"><div class="det-h">Valuation</div>'
+                f'<div class="muted" style="font-size:12px">{html.escape(sig)}</div></div>') if sig else ""
+    mos = v.get("margin_of_safety") or 0.0
+    stance = "Undervalued" if mos >= 0.10 else ("Overvalued" if mos <= -0.10 else "Fairly valued")
+    scls = "up" if mos >= 0.10 else ("down" if mos <= -0.10 else "muted")
+    bits = []
+    if v.get("base"):
+        bits.append(f'base ${v["base"]:,.0f}')
+    if v.get("mc_prob_undervalued") is not None:
+        bits.append(f'MC P(undervalued) {v["mc_prob_undervalued"]*100:.0f}%')
+    tail = f' <span class="muted" style="font-weight:400">· {" · ".join(bits)}</span>' if bits else ''
+    return (f'<div class="det-sec"><div class="det-h">Valuation</div>'
+            f'<div class="det-row"><b class="{scls}">{stance}</b>{tail}</div></div>')
+
+
+def _regime_summary(r):
+    """One-line regime + trend read for the modal."""
+    rg = r.regime or {}
+    parts = []
+    if rg.get("state"):
+        pb = rg.get("p_bull")
+        parts.append(rg["state"] + (f' (P bull {pb*100:.0f}%)' if pb is not None else ''))
+    if rg.get("tsmom_label"):
+        parts.append(rg["tsmom_label"])
+    if not parts:
+        return ""
+    return (f'<div class="det-sec"><div class="det-h">Regime &amp; trend</div>'
+            f'<div class="det-row muted">{html.escape(" · ".join(parts))}</div></div>')
+
+
 def _card_detail(r):
-    ts = _trade_setup_html(r)
-    ts_sec = f'<div class="det-sec">{ts}</div>' if ts else ""
+    """Modal quick-look: chart + compact summaries + news, with a button to the
+    full, roomier analysis page. The dense valuation/trade/regime detail lives on
+    /analysis/<ticker> to keep the modal readable."""
+    btn = (f'<button type="button" class="analysis-btn" onclick="event.stopPropagation();'
+           f"openTab('/analysis/{html.escape(r.ticker)}')\">🔎 Full analysis ↗</button>")
     return (f'<div class="card-detail" onclick="event.stopPropagation()">'
-            f'{_chart_html(r)}{ts_sec}{_options_html(r)}{_valuation_html(r)}'
+            f'{_chart_html(r)}{_valuation_summary(r)}{_regime_summary(r)}{btn}'
             f'<div class="cardnews" data-ticker="{html.escape(r.ticker)}"></div></div>')
 
 
@@ -1201,7 +1243,7 @@ function openCard(card){{
   drawCharts(body);
   if(typeof loadNews==='function') loadNews(body);
 }}
-const TF_DAYS={{'1mo':31,'3mo':92,'6mo':183,'1y':366,'2y':731,'5y':1827,'max':1e9}};
+const TF_DAYS={{'5d':8,'1mo':31,'3mo':92,'6mo':183,'1y':366,'2y':731,'5y':1827,'max':1e9}};
 function drawCharts(root){{
   root.querySelectorAll('.pricechart').forEach(el=>{{
     try{{ el._series=JSON.parse(el.dataset.series); }}catch(e){{ return; }}

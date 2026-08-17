@@ -117,3 +117,20 @@ def test_factor_chip_and_cell_render():
     blank = SimpleNamespace(factor={})
     assert _factor_chip(blank) == '<div class="fchip"></div>'
     assert 'data-sort="-1"' in _factor_cell(blank)
+
+
+def test_analysis_page_and_trimmed_modal():
+    import pickle
+    from stockskill.watchlist import build_row
+    from stockskill.signals import SignalConfig
+    from stockskill.server.analysis_page import analysis_html
+    from stockskill.watchlist.render import _card_detail
+    td = pickle.load(open("data/cache/GOOGL.pkl", "rb"))
+    row = build_row(td, SignalConfig.from_env())
+    # full analysis page has the dense sections
+    page = analysis_html(row)
+    assert "Stock analyzer" in page and "Trade setup" in page
+    # modal is trimmed: no full method table, but has the button to the page
+    modal = _card_detail(row)
+    assert "analysis-btn" in modal and "/analysis/GOOGL" in modal
+    assert modal.count("fvtable") == 0            # dense valuation moved off the modal
