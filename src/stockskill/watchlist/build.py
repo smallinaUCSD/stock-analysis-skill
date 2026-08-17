@@ -184,15 +184,20 @@ def _overlay_live_prices(rows, status) -> None:
                 if q.get("change_pct") is not None:
                     r.changes["1d"] = q["change_pct"]
 
-    # When live prices are overlaid onto the cached snapshot (hosted mode), the
-    # snapshot's extended-hours price is stale and there's no fresh source for it
-    # — so drop it in every session. A wrong "after hours $X" is worse than none;
-    # the live regular price stands on its own. Local yfinance (no keys) has a
-    # freshly-fetched ext price, so it's kept there.
-    if finnhub.has_finnhub() or fmp.has_fmp():
-        for r in rows:
-            r.ext_price = None
-            r.ext_change = None
+
+def _drop_stale_ext(rows) -> None:
+    """Clear the snapshot's extended-hours price on the hosted board.
+
+    On the host the board serves a cached snapshot, so its ext price is stale and
+    there's no fresh post-market source — a wrong "after hours $X" is worse than
+    none. Runs on BOTH the fast cold-start build and the live build. Local
+    yfinance (no keys) has a freshly-fetched ext price, so it's kept there."""
+    from ..data import finnhub, fmp
+    if not (finnhub.has_finnhub() or fmp.has_fmp()):
+        return
+    for r in rows:
+        r.ext_price = None
+        r.ext_change = None
 
 
 def build_watchlist_html(tickers_spec, *, period: str = "5y", workers: int = 5,
@@ -266,6 +271,8 @@ def build_watchlist_html(tickers_spec, *, period: str = "5y", workers: int = 5,
     # signals) stays from the snapshot; only price and 1d change go live.
     if served and live:
         _overlay_live_prices(rows, status)
+    if served:
+        _drop_stale_ext(rows)              # both fast cold-start and live builds
 
     now = datetime.now(ET)
     html_out = render_watchlist(
