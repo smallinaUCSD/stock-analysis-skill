@@ -84,7 +84,11 @@ never refetches from the blocked host.
 rm -f data/cache/*.pkl
 env -u FMP_API_KEY uv run stockskill watchlist --tickers data/tickers.csv \
   --cache-dir data/cache --period 5y --out /tmp/snapshot.html
-git add data/cache && git commit -m "refresh data snapshot" && git push
+# Record today's fundamentals as a point-in-time row (accrues a value backtest).
+# Reuses the cache just built, so no extra fetching. Run this DAILY to build history.
+uv run stockskill snapshot-fundamentals
+git add data/cache data/fundamentals_history \
+  && git commit -m "refresh data snapshot + fundamentals" && git push
 ```
 
 Render redeploys on push, and the site shows your freshly-fetched data. (The data

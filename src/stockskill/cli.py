@@ -680,6 +680,26 @@ def cmd_factors(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_snapshot_fundamentals(args: argparse.Namespace) -> int:
+    """Record today's fundamentals for the watchlist -> point-in-time value panel.
+
+    Run daily (locally / cron) alongside the data-snapshot refresh; it reuses the
+    cached snapshots so it doesn't refetch. History accrues into a value backtest.
+    """
+    from .watchlist.tickers import parse_tickers
+    from .watchlist.pipeline import fetch_all
+    from .factors.history import record_snapshots
+
+    tickers = parse_tickers(args.tickers)["all"]
+    data = fetch_all(tickers, period="5y", workers=args.workers,
+                     cache_dir=args.cache_dir, ttl=float(args.cache_ttl))
+    snaps = [td.snapshot for td in data.values() if td.snapshot]
+    n = record_snapshots(snaps, args.store, as_of=args.date)
+    print(f"Recorded {n}/{len(tickers)} fundamentals to {args.store}/"
+          f"{args.date or __import__('datetime').date.today().isoformat()}.json")
+    return 0 if n else 1
+
+
 def cmd_backtest(args: argparse.Namespace) -> int:
     """Backtest a factor: bucket the universe monthly, measure forward returns."""
     from .watchlist.tickers import parse_tickers
@@ -985,6 +1005,16 @@ def build_parser() -> argparse.ArgumentParser:
     ft.add_argument("--sector-neutral", action="store_true",
                     help="rank factors within each sector (cheap vs peers, not cheap sectors)")
     ft.set_defaults(func=cmd_factors)
+
+    sf = sub.add_parser("snapshot-fundamentals",
+                        help="record today's fundamentals (point-in-time value panel)")
+    sf.add_argument("--tickers", default="data/tickers.csv")
+    sf.add_argument("--cache-dir", default="data/cache")
+    sf.add_argument("--cache-ttl", default="2592000")
+    sf.add_argument("--workers", type=int, default=5)
+    sf.add_argument("--store", default="data/fundamentals_history")
+    sf.add_argument("--date", default=None, help="override as-of date (YYYY-MM-DD)")
+    sf.set_defaults(func=cmd_snapshot_fundamentals)
 
     bt = sub.add_parser("backtest", help="backtest a factor (momentum) on 5y prices")
     bt.add_argument("--tickers", default="data/tickers.csv")
