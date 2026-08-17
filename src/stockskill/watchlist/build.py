@@ -164,12 +164,18 @@ def build_watchlist_html(tickers_spec, *, period: str = "5y", workers: int = 5,
                          cache_dir: str | None = None, alerts_path: str | None = None,
                          interval: float | None = None, served: bool = False,
                          title: str = "Watchlist", public: bool = False,
-                         bmc_url: str | None = None, ttl: float = 1800.0) -> tuple[str, dict]:
+                         bmc_url: str | None = None, ttl: float = 1800.0,
+                         live: bool = True) -> tuple[str, dict]:
     """Return ``(html, meta)`` for the watchlist board.
 
     ``tickers_spec`` is anything :func:`parse_tickers` accepts (a path or a
     string of sectioned tickers). ``served=True`` turns on the live add-ticker
     box (needs the Flask API behind it).
+
+    ``live=False`` renders a fast, network-free board straight from the cached
+    snapshot: it skips the Yahoo panel fetches and the Finnhub price overlay, so
+    a waking host can paint the board instantly and refresh live in the
+    background (avoids the cold-start warming spinner).
     """
     import os
     from ..marketclock import market_status, refresh_seconds_for, ET
@@ -197,11 +203,15 @@ def build_watchlist_html(tickers_spec, *, period: str = "5y", workers: int = 5,
     custom = load_custom_alerts(alerts_path) if alerts_path else []
     alerts = all_alerts(rows, custom)
 
-    sec_pm = price_map(list(SECTOR_ETFS), period="3mo")
-    sectors = [(r.name, r.ticker, r.returns.get("1m")) for r in sector_table(sec_pm, "1m")]
-    mkt_pm = price_map(all_market_tickers(), period="5d")
-    markets = market_quotes(mkt_pm)
-    macro = _macro_panel()
+    if live:
+        sec_pm = price_map(list(SECTOR_ETFS), period="3mo")
+        sectors = [(r.name, r.ticker, r.returns.get("1m")) for r in sector_table(sec_pm, "1m")]
+        mkt_pm = price_map(all_market_tickers(), period="5d")
+        markets = market_quotes(mkt_pm)
+        macro = _macro_panel()
+    else:
+        # Fast path: don't touch Yahoo; fall through to the cached panels below.
+        sectors, markets, macro = [], [], {}
 
     # Keep the last good panel data so a failed/rate-limited fetch doesn't blank
     # the Sector / Markets / Macro panels (in memory + on disk when cached).
@@ -218,7 +228,7 @@ def build_watchlist_html(tickers_spec, *, period: str = "5y", workers: int = 5,
     # FMP batch-quote call so prices/day-change update on the 15/30-min cadence
     # without a full per-ticker refetch. The heavy data (valuation, history,
     # signals) stays from the snapshot; only price and 1d change go live.
-    if served:
+    if served and live:
         _overlay_live_prices(rows, status)
 
     now = datetime.now(ET)

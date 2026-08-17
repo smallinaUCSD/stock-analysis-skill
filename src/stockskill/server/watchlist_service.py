@@ -47,6 +47,7 @@ class WatchlistService:
         self._refresh = 1800
         self._building = False
         self._lock = threading.Lock()
+        self._fast_lock = threading.Lock()
 
     # --- spec assembly -------------------------------------------------
     def _base_text(self) -> str:
@@ -67,15 +68,27 @@ class WatchlistService:
         return {t.upper() for t in parse_tickers_text(self._spec())["all"]}
 
     # --- build / cache -------------------------------------------------
-    def _rebuild(self) -> str:
+    def _rebuild(self, live: bool = True) -> str:
         html, meta = build_watchlist_html(
             self._spec(), period=self._period, cache_dir=self._cache_dir, served=True,
-            public=self._public, bmc_url=self._bmc_url, ttl=self._cache_ttl)
+            public=self._public, bmc_url=self._bmc_url, ttl=self._cache_ttl, live=live)
         with self._lock:
             self._html = html
             self._ts = time.time()
             self._refresh = meta["refresh"]
         return html
+
+    def _cold_paint(self) -> str | None:
+        """Synchronous, network-free build so a cold/waking host paints the
+        cached-snapshot board instantly instead of the warming spinner; the live
+        Finnhub/Yahoo refresh then fills in via the background build."""
+        with self._fast_lock:
+            if self._html is not None:      # another request already painted it
+                return self._html
+            try:
+                return self._rebuild(live=False)
+            except Exception:  # noqa: BLE001
+                return None
 
     def _start_bg_build(self) -> None:
         with self._lock:
@@ -103,7 +116,9 @@ class WatchlistService:
             cached = self._html
         if fresh and not force:
             return cached
-        self._start_bg_build()          # refresh (or first build) in the background
+        if cached is None:              # cold start / just woke: paint instantly
+            cached = self._cold_paint()
+        self._start_bg_build()          # live refresh (or first build) in the background
         return cached if cached is not None else _WARMING_HTML
 
     def wait_ready(self, timeout: float = 0.0) -> bool:

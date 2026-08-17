@@ -76,3 +76,27 @@ def test_build_row_error():
     row = build_row(td, SignalConfig())
     assert row.error == "boom"
     assert row.price is None
+
+
+def _boom(*a, **k):
+    raise RuntimeError("network called during fast build")
+
+
+def test_fast_build_is_network_free(monkeypatch):
+    """live=False must render the cached-snapshot board without touching Yahoo
+    (price_map) or Finnhub (the overlay) — that's what makes cold start instant."""
+    import stockskill.watchlist.build as build_mod
+
+    monkeypatch.setattr("stockskill.data.prices.price_map", _boom)
+    monkeypatch.setattr(build_mod, "_overlay_live_prices", _boom)
+
+    # Fast path: booby-trapped network fns are never called -> no error.
+    html, meta = build_mod.build_watchlist_html(
+        "[T]\nAAPL, MSFT\n", cache_dir="data/cache", served=True, ttl=2592000, live=False)
+    assert "card-price" in html and meta["n"] == 2
+
+    # Live path WOULD call price_map -> the booby trap fires, proving the
+    # difference is real (not that the fns were simply absent).
+    with pytest.raises(RuntimeError):
+        build_mod.build_watchlist_html(
+            "[T]\nAAPL\n", cache_dir="data/cache", served=True, ttl=2592000, live=True)
