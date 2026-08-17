@@ -125,6 +125,32 @@ def _macro_panel() -> dict:
             "fear_greed": fear_greed}
 
 
+def _overlay_live_prices(rows, status) -> None:
+    """Patch rows' price + 1d change from FMP batch quotes during an active
+    session, and drop a stale extended-hours price outside pre/after sessions
+    (e.g. a frozen weekend 'after hours' showing while the market is open)."""
+    from ..data import fmp
+
+    active = status.label in ("open", "pre-market", "after-hours")
+    if active and fmp.has_fmp():
+        try:
+            quotes = fmp.batch_quotes([r.ticker for r in rows])
+        except Exception:  # noqa: BLE001
+            quotes = {}
+        for r in rows:
+            q = quotes.get(r.ticker.upper())
+            if q and q.get("price"):
+                r.price = q["price"]
+                if q.get("change_pct") is not None:
+                    r.changes["1d"] = q["change_pct"]
+
+    if status.label not in ("pre-market", "after-hours"):
+        for r in rows:
+            if getattr(r, "ext_price", None) is not None:
+                r.ext_price = None
+                r.ext_change = None
+
+
 def build_watchlist_html(tickers_spec, *, period: str = "5y", workers: int = 5,
                          cache_dir: str | None = None, alerts_path: str | None = None,
                          interval: float | None = None, served: bool = False,
@@ -178,6 +204,14 @@ def build_watchlist_html(tickers_spec, *, period: str = "5y", workers: int = 5,
 
     status = market_status()
     refresh = refresh_seconds_for(status, interval)
+
+    # Live-price overlay (served board only): patch the cached rows with one
+    # FMP batch-quote call so prices/day-change update on the 15/30-min cadence
+    # without a full per-ticker refetch. The heavy data (valuation, history,
+    # signals) stays from the snapshot; only price and 1d change go live.
+    if served:
+        _overlay_live_prices(rows, status)
+
     now = datetime.now(ET)
     html_out = render_watchlist(
         rows, title=title, updated=now.strftime("%a %b %d, %I:%M %p") + " ET",

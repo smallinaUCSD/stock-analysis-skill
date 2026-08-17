@@ -134,3 +134,58 @@ def test_search_symbols_uses_fmp_when_keyed(key, monkeypatch):
         {"symbol": "ORCL", "name": "Oracle", "type": "NASDAQ", "exchange": "NASDAQ"}])
     r = search.search_symbols("oracle")
     assert r[0]["symbol"] == "ORCL"
+
+
+def test_batch_quotes_normalizes(key, monkeypatch):
+    _route(monkeypatch, {"/quote/": [
+        {"symbol": "AAPL", "price": 190.0, "changesPercentage": 1.25},
+        {"symbol": "MSFT", "price": 410.0, "changesPercentage": -0.5},
+        {"symbol": "BAD"},                              # no price -> skipped
+    ]})
+    q = fmp.batch_quotes(["AAPL", "MSFT", "BAD"])
+    assert q["AAPL"] == {"price": 190.0, "change_pct": 0.0125}
+    assert q["MSFT"]["change_pct"] == -0.005
+    assert "BAD" not in q
+
+
+# --- server-side live-price overlay -------------------------------------------
+from types import SimpleNamespace                        # noqa: E402
+
+from stockskill.watchlist.build import _overlay_live_prices  # noqa: E402
+
+
+def _row(tk, price, ext=None):
+    return SimpleNamespace(ticker=tk, price=price, changes={"1d": 0.0},
+                           ext_price=ext, ext_change=0.02)
+
+
+def test_overlay_patches_prices_when_open(key, monkeypatch):
+    monkeypatch.setattr(fmp, "batch_quotes",
+                        lambda tks: {"AAPL": {"price": 200.0, "change_pct": 0.03}})
+    rows = [_row("AAPL", 190.0, ext=195.0)]
+    _overlay_live_prices(rows, SimpleNamespace(label="open"))
+    assert rows[0].price == 200.0 and rows[0].changes["1d"] == 0.03
+    assert rows[0].ext_price is None                     # stale after-hours cleared
+
+
+def test_overlay_no_fetch_when_closed(key, monkeypatch):
+    called = {"n": 0}
+
+    def bq(tks):
+        called["n"] += 1
+        return {}
+    monkeypatch.setattr(fmp, "batch_quotes", bq)
+    rows = [_row("AAPL", 190.0, ext=195.0)]
+    _overlay_live_prices(rows, SimpleNamespace(label="closed"))
+    assert called["n"] == 0                              # no FMP call when closed
+    assert rows[0].price == 190.0
+    assert rows[0].ext_price is None                     # still clears stale ext
+
+
+def test_overlay_keeps_ext_during_after_hours(key, monkeypatch):
+    monkeypatch.setattr(fmp, "batch_quotes",
+                        lambda tks: {"AAPL": {"price": 191.0, "change_pct": 0.01}})
+    rows = [_row("AAPL", 190.0, ext=195.0)]
+    _overlay_live_prices(rows, SimpleNamespace(label="after-hours"))
+    assert rows[0].price == 191.0
+    assert rows[0].ext_price == 195.0                    # kept during after-hours

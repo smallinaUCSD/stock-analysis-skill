@@ -123,6 +123,31 @@ def snapshot(ticker: str):
     )
 
 
+def batch_quotes(tickers: list[str], chunk: int = 100) -> dict[str, dict]:
+    """Current price + day-change for many tickers in ONE call per ``chunk``.
+
+    FMP's /quote endpoint takes a comma-separated symbol list, so the whole board
+    costs 1-2 calls (not one per ticker) -- cheap enough to refresh on the live
+    15/30-min cadence within the free tier. Returns {TICKER: {price, change_pct}};
+    {} on total failure so callers keep showing the cached snapshot price.
+    """
+    out: dict[str, dict] = {}
+    syms = [t.upper() for t in (tickers or []) if t]
+    for i in range(0, len(syms), max(1, chunk)):
+        part = syms[i:i + chunk]
+        j = _get("/quote/" + ",".join(part))
+        if not isinstance(j, list):
+            continue
+        for q in j:
+            sym = (q.get("symbol") or "").upper()
+            if not sym or q.get("price") is None:
+                continue
+            cp = q.get("changesPercentage")
+            out[sym] = {"price": q.get("price"),
+                        "change_pct": (cp / 100.0) if cp is not None else None}
+    return out
+
+
 def search(query: str, limit: int = 10) -> list[dict] | None:
     j = _get("/search", query=query, limit=limit)
     if not isinstance(j, list):
