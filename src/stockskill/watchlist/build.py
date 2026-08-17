@@ -153,11 +153,15 @@ def _overlay_live_prices(rows, status) -> None:
                 if q.get("change_pct") is not None:
                     r.changes["1d"] = q["change_pct"]
 
-    if status.label not in ("pre-market", "after-hours"):
+    # When live prices are overlaid onto the cached snapshot (hosted mode), the
+    # snapshot's extended-hours price is stale and there's no fresh source for it
+    # — so drop it in every session. A wrong "after hours $X" is worse than none;
+    # the live regular price stands on its own. Local yfinance (no keys) has a
+    # freshly-fetched ext price, so it's kept there.
+    if finnhub.has_finnhub() or fmp.has_fmp():
         for r in rows:
-            if getattr(r, "ext_price", None) is not None:
-                r.ext_price = None
-                r.ext_change = None
+            r.ext_price = None
+            r.ext_change = None
 
 
 def build_watchlist_html(tickers_spec, *, period: str = "5y", workers: int = 5,

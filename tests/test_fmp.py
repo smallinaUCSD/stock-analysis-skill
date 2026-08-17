@@ -183,10 +183,21 @@ def test_overlay_no_fetch_when_closed(key, monkeypatch):
     assert rows[0].ext_price is None                     # still clears stale ext
 
 
-def test_overlay_keeps_ext_during_after_hours(key, monkeypatch):
+def test_overlay_drops_stale_ext_in_after_hours_on_host(key, monkeypatch):
+    # A live source is configured (host) -> the snapshot's ext price is stale and
+    # dropped even during after-hours, so no wrong "after hours" number shows.
     monkeypatch.setattr(fmp, "batch_quotes",
                         lambda tks: {"AAPL": {"price": 191.0, "change_pct": 0.01}})
     rows = [_row("AAPL", 190.0, ext=195.0)]
     _overlay_live_prices(rows, SimpleNamespace(label="after-hours"))
     assert rows[0].price == 191.0
-    assert rows[0].ext_price == 195.0                    # kept during after-hours
+    assert rows[0].ext_price is None                     # stale ext dropped on host
+
+
+def test_overlay_keeps_fresh_ext_locally(monkeypatch):
+    # No API keys (local yfinance) -> ext price came fresh from the snapshot, keep it.
+    monkeypatch.delenv("FMP_API_KEY", raising=False)
+    monkeypatch.delenv("FINNHUB_API_KEY", raising=False)
+    rows = [_row("AAPL", 190.0, ext=195.0)]
+    _overlay_live_prices(rows, SimpleNamespace(label="after-hours"))
+    assert rows[0].ext_price == 195.0                    # kept locally
