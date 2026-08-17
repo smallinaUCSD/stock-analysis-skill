@@ -32,13 +32,14 @@ def test_has_fmp_reflects_env(monkeypatch):
     assert fmp.has_fmp() is True
 
 
-def test_ohlcv_reverses_and_uses_adjclose(key, monkeypatch):
-    _route(monkeypatch, {"historical-price-full": {"historical": [
+def test_ohlcv_sorts_and_uses_adjclose(key, monkeypatch):
+    # stable returns a flat list, newest-first; we sort oldest->newest.
+    _route(monkeypatch, {"historical-price-eod": [
         {"date": "2024-01-03", "open": 3, "high": 4, "low": 2, "close": 3.5,
          "adjClose": 3.4, "volume": 300},
         {"date": "2024-01-02", "open": 2, "high": 3, "low": 1, "close": 2.5,
          "adjClose": 2.4, "volume": 200},
-    ]}})
+    ]})
     r = fmp.ohlcv("AAPL", "1y")
     assert r["dates"] == [date(2024, 1, 2), date(2024, 1, 3)]   # oldest -> newest
     assert r["close"] == [2.4, 3.4]                             # adjClose preferred
@@ -46,24 +47,24 @@ def test_ohlcv_reverses_and_uses_adjclose(key, monkeypatch):
 
 
 def test_ohlcv_empty_returns_none(key, monkeypatch):
-    _route(monkeypatch, {"historical-price-full": {"historical": []}})
+    _route(monkeypatch, {"historical-price-eod": []})
     assert fmp.ohlcv("AAPL", "1y") is None
 
 
 def test_snapshot_maps_fields(key, monkeypatch):
     _route(monkeypatch, {
-        "/profile/": [{"companyName": "Apple Inc.", "sector": "Technology",
-                       "beta": 1.2, "currency": "USD", "lastDiv": 0.96,
-                       "mktCap": 3e12, "isEtf": False, "volAvg": 5e7}],
-        "/quote/": [{"price": 190.0, "sharesOutstanding": 1.5e10, "eps": 6.1,
-                     "marketCap": 2.85e12, "yearHigh": 199.0, "yearLow": 164.0,
-                     "avgVolume": 6e7, "earningsAnnouncement": "2099-02-01T21:00:00.000+0000"}],
-        "/cash-flow-statement/": [{"freeCashFlow": 9.9e10}],
-        "/income-statement/": [{"revenue": 3.8e11, "ebitda": 1.2e11, "eps": 6.0}],
-        "/balance-sheet-statement/": [{"totalDebt": 1.0e11,
-                                       "cashAndShortTermInvestments": 6e10}],
-        "/financial-growth/": [{"revenueGrowth": 0.08, "epsgrowth": 0.11}],
-        "/price-target-consensus/": [{"targetConsensus": 210.0}],
+        "/profile": [{"companyName": "Apple Inc.", "sector": "Technology",
+                      "beta": 1.2, "currency": "USD", "lastDividend": 0.96,
+                      "marketCap": 3e12, "isEtf": False, "averageVolume": 5e7}],
+        "/quote": [{"price": 190.0, "sharesOutstanding": 1.5e10, "eps": 6.1,
+                    "marketCap": 2.85e12, "yearHigh": 199.0, "yearLow": 164.0,
+                    "avgVolume": 6e7, "earningsAnnouncement": "2099-02-01T21:00:00.000+0000"}],
+        "/cash-flow-statement": [{"freeCashFlow": 9.9e10}],
+        "/income-statement": [{"revenue": 3.8e11, "ebitda": 1.2e11, "eps": 6.0}],
+        "/balance-sheet-statement": [{"totalDebt": 1.0e11,
+                                      "cashAndShortTermInvestments": 6e10}],
+        "/financial-growth": [{"revenueGrowth": 0.08, "epsgrowth": 0.11}],
+        "/price-target-consensus": [{"targetConsensus": 210.0}],
     })
     s = fmp.snapshot("AAPL")
     assert s.name == "Apple Inc." and s.sector == "Technology"
@@ -81,9 +82,9 @@ def test_snapshot_none_when_no_profile_or_quote(key, monkeypatch):
 
 
 def test_search_normalizes(key, monkeypatch):
-    _route(monkeypatch, {"/search": [
-        {"symbol": "AAPL", "name": "Apple Inc.", "exchangeShortName": "NASDAQ",
-         "stockExchange": "NASDAQ Global Select"},
+    _route(monkeypatch, {"/search-symbol": [
+        {"symbol": "AAPL", "name": "Apple Inc.", "exchange": "NASDAQ",
+         "exchangeFullName": "NASDAQ Global Select"},
         {"symbol": None},
     ]})
     r = fmp.search("apple")
@@ -92,7 +93,7 @@ def test_search_normalizes(key, monkeypatch):
 
 
 def test_etf_holdings_scales_and_sorts(key, monkeypatch):
-    _route(monkeypatch, {"/etf-holder/": [
+    _route(monkeypatch, {"/etf/holdings": [
         {"asset": "MSFT", "name": "Microsoft", "weightPercentage": "5.0"},
         {"asset": "AAPL", "name": "Apple", "weightPercentage": "7.5"},
         {"asset": "X", "name": "bad", "weightPercentage": None},
@@ -137,9 +138,9 @@ def test_search_symbols_uses_fmp_when_keyed(key, monkeypatch):
 
 
 def test_batch_quotes_normalizes(key, monkeypatch):
-    _route(monkeypatch, {"/quote/": [
-        {"symbol": "AAPL", "price": 190.0, "changesPercentage": 1.25},
-        {"symbol": "MSFT", "price": 410.0, "changesPercentage": -0.5},
+    _route(monkeypatch, {"/quote": [
+        {"symbol": "AAPL", "price": 190.0, "changePercentage": 1.25},
+        {"symbol": "MSFT", "price": 410.0, "changePercentage": -0.5},
         {"symbol": "BAD"},                              # no price -> skipped
     ]})
     q = fmp.batch_quotes(["AAPL", "MSFT", "BAD"])
