@@ -22,5 +22,8 @@ services:
       - key: STOCKSKILL_BMC_URL
         sync: false      # set your Buy-me-a-coffee URL in the Render dashboard
       - key: FMP_API_KEY
-        sync: false      # Financial Modeling Prep key — enables live data (add,
-                         # indicators, evaluate, news) despite Yahoo IP-blocking
+        sync: false      # Financial Modeling Prep key — fundamentals + add/indicators/
+                         # evaluate (single-symbol) despite Yahoo IP-blocking
+      - key: FINNHUB_API_KEY
+        sync: false      # Finnhub key — real-time quotes for the live board overlay
+                         # (FMP free tier blocks multi-symbol batch quotes)

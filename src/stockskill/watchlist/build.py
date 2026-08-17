@@ -126,15 +126,24 @@ def _macro_panel() -> dict:
 
 
 def _overlay_live_prices(rows, status) -> None:
-    """Patch rows' price + 1d change from FMP batch quotes during an active
+    """Patch rows' price + 1d change from a live quote source during an active
     session, and drop a stale extended-hours price outside pre/after sessions
-    (e.g. a frozen weekend 'after hours' showing while the market is open)."""
-    from ..data import fmp
+    (e.g. a frozen weekend 'after hours' showing while the market is open).
+
+    Prefers Finnhub (free real-time US quotes, whole board) and falls back to
+    FMP's multi-symbol batch (which needs a paid FMP plan)."""
+    from ..data import finnhub, fmp
 
     active = status.label in ("open", "pre-market", "after-hours")
-    if active and fmp.has_fmp():
+    if active:
+        tickers = [r.ticker for r in rows]
         try:
-            quotes = fmp.batch_quotes([r.ticker for r in rows])
+            if finnhub.has_finnhub():
+                quotes = finnhub.batch_quotes(tickers)
+            elif fmp.has_fmp():
+                quotes = fmp.batch_quotes(tickers)
+            else:
+                quotes = {}
         except Exception:  # noqa: BLE001
             quotes = {}
         for r in rows:
