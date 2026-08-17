@@ -456,15 +456,46 @@ def _trade_setup_html(r):
         return ""
     illustrative = "" if r.signal in ("BUY", "SHORT") else \
         '<div class="ts-sub">no active signal — illustrative ATR setup, direction from trend</div>'
-    size_line = ""
+    # P(target before stop) — a first-passage probability from drift/vol; the
+    # honest edge estimate that feeds Kelly. Informational; always shown. The
+    # sizing lenses (fixed 2% risk vs edge-based half-Kelly vs vol-target
+    # allocation) differ in *fraction*; dollars only when ACCOUNT_SIZE is set.
+    from ..trade.sizing import (win_prob_barrier, kelly_risk_fraction,
+                                vol_target_fraction, sizing_plan)
+    win_line = size_line = lens_line = ""
+    if r.vol_annual and r.drift_annual is not None:
+        wp = win_prob_barrier(s.entry, s.target, s.stop, r.drift_annual, r.vol_annual, direction)
+        if wp is not None:
+            win_line = (f'<div class="ts-row"><span>P(target before stop)</span>'
+                        f'<b class="{"up" if wp >= 0.5 else "down"}">{wp*100:.0f}%</b></div>')
+            f = kelly_risk_fraction(wp, s.rr_ratio)
+            vf = vol_target_fraction(r.vol_annual)
+            kelly_txt = f'½-Kelly {0.5*f*100:.1f}% risk' if f > 0 else 'Kelly: no edge → pass'
+            vt_txt = f' · vol-tgt {vf*100:.0f}% alloc' if vf else ''
+            lens_line = f'<div class="ts-sub">Sizing · 2% risk · {kelly_txt}{vt_txt}</div>'
+
     acct = os.environ.get("ACCOUNT_SIZE")
-    if acct:
+    if acct and r.vol_annual and r.drift_annual is not None:
+        try:
+            pl = sizing_plan(float(acct), s, r.drift_annual, r.vol_annual)
+            parts = []
+            if pl.fixed_dollars:
+                parts.append(f'2% ${pl.fixed_dollars:,.0f}')
+            if pl.tradable and pl.kelly_dollars:
+                parts.append(f'½-Kelly ${pl.kelly_dollars:,.0f}')
+            if pl.voltarget_dollars:
+                parts.append(f'vol-tgt ${pl.voltarget_dollars:,.0f}')
+            if parts:
+                size_line = f'<div class="ts-row"><span>Size</span><b>{" · ".join(parts)}</b></div>'
+        except ValueError:
+            pass
+    elif acct:
         try:
             ps = position_size(float(acct), s.entry, s.stop)
             if ps:
-                cap = " (cap)" if ps.capped else ""
                 size_line = (f'<div class="ts-row"><span>Size</span><b>{ps.shares:.0f} sh · '
-                             f'${ps.dollars:,.0f} ({ps.pct_of_account:.0%}){cap}</b></div>')
+                             f'${ps.dollars:,.0f} ({ps.pct_of_account:.0%})'
+                             f'{" (cap)" if ps.capped else ""}</b></div>')
         except ValueError:
             pass
     return (
@@ -473,7 +504,7 @@ def _trade_setup_html(r):
         f'<div class="ts-row"><span>Entry</span><b>${s.entry:,.2f}</b></div>'
         f'<div class="ts-row"><span>Stop</span><b class="down">${s.stop:,.2f} (-{s.risk_pct*100:.1f}%)</b></div>'
         f'<div class="ts-row"><span>Target</span><b class="up">${s.target:,.2f} (+{s.reward_pct*100:.1f}%)</b></div>'
-        f'{size_line}</div>')
+        f'{win_line}{size_line}{lens_line}</div>')
 
 
 def _options_html(r):

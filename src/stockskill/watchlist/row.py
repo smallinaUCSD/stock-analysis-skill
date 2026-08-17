@@ -49,6 +49,9 @@ class TickerRow:
     week52_low: float | None = None
     week52_position: float | None = None                 # 0..1 within the 52w range
     next_earnings: str | None = None                     # ISO date of next earnings
+    # annualized drift + volatility (for the barrier win-probability / Kelly sizing)
+    drift_annual: float | None = None
+    vol_annual: float | None = None
     # extended-hours (pre/post-market)
     market_state: str | None = None
     ext_price: float | None = None
@@ -113,6 +116,16 @@ def build_row(td: TickerData, cfg: SignalConfig | None = None,
         dates = o.get("dates") or []
         if dates and len(dates) == len(closes):
             row.price_history = _downsample_history(dates, closes)
+
+        # annualized drift + vol from trailing ~1y daily returns (win-prob / Kelly)
+        window = closes[-253:]
+        rets = [b / a - 1.0 for a, b in zip(window[:-1], window[1:]) if a]
+        if len(rets) > 20:
+            import math as _math
+            mean = sum(rets) / len(rets)
+            var = sum((x - mean) ** 2 for x in rets) / (len(rets) - 1)
+            row.drift_annual = mean * 252
+            row.vol_annual = (var ** 0.5) * _math.sqrt(252)
 
         # signals
         s = build_snapshot(highs, lows, closes, vols)
