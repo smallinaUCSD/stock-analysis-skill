@@ -629,6 +629,57 @@ def cmd_evaluate(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_factors(args: argparse.Namespace) -> int:
+    """Rank the watchlist on value / quality / momentum factors (cross-sectional)."""
+    from .watchlist.tickers import parse_tickers
+    from .watchlist.pipeline import fetch_all
+    from .factors.model import (factor_metrics, momentum_12_1, annualized_vol,
+                                score_factors, weights_from_env, FACTORS)
+
+    tickers = parse_tickers(args.tickers)["all"]
+    print(f"Scoring {len(tickers)} names on factors "
+          f"(value/quality/momentum/growth/low-vol) ...", file=sys.stderr)
+    # reuse the committed cache (5y) so this doesn't refetch
+    data = fetch_all(tickers, period="5y", workers=args.workers,
+                     cache_dir=args.cache_dir, ttl=float(args.cache_ttl))
+
+    rows = []
+    for tk in tickers:
+        td = data.get(tk)
+        if not td or not td.snapshot:
+            continue
+        closes = (td.ohlcv or {}).get("close", [])
+        rows.append(factor_metrics(td.snapshot, momentum_12_1(closes),
+                                   annualized_vol(closes)))
+
+    ranked = score_factors(rows, weights=weights_from_env(),
+                           sector_neutral=args.sector_neutral)
+    if args.by in FACTORS:
+        ranked = sorted(
+            ranked,
+            key=lambda s: (s.factor_pct.get(args.by) if s.factor_pct.get(args.by) is not None else -1),
+            reverse=True)
+
+    def cell(x, w=5):
+        return f"{(x if x is not None else '—'):>{w}}"
+
+    print(f"\n=== Factors: top {args.top} of {len(ranked)} by {args.by} ===")
+    print(f"{'rank':>4}  {'ticker':<7}{'comp':>5}{'val':>5}{'qual':>5}{'mom':>5}"
+          f"{'grow':>5}{'lvol':>5}{'cov':>6}   read")
+    for i, s in enumerate(ranked[:args.top], 1):
+        fp = s.factor_pct
+        print(f"{i:>4}  {s.ticker:<7}{cell(s.composite_pct)}{cell(fp.get('value'))}"
+              f"{cell(fp.get('quality'))}{cell(fp.get('momentum'))}{cell(fp.get('growth'))}"
+              f"{cell(fp.get('low_vol'))}{s.coverage:>6.0%}   {s.label}")
+    print("\n  0-100 = percentile within THIS universe (higher val = cheaper, higher "
+          "qual = more profitable/less levered,")
+    print("  higher mom = stronger 12-1, higher grow = faster, higher lvol = calmer). "
+          "'—' comp = below coverage floor.")
+    print("  Relative factor reads, not buy/sell advice. Value ties to the same "
+          "fundamentals as `value TICKER`.")
+    return 0
+
+
 def cmd_fmp_check(args: argparse.Namespace) -> int:
     """Verify the FMP_API_KEY works by fetching one ticker live through it."""
     from .data import fmp
@@ -639,7 +690,29 @@ def cmd_fmp_check(args: argparse.Namespace) -> int:
         return 1
 
     tk = args.ticker.upper()
-    print(f"=== FMP check: {tk} ===")
+    print(f"=== FMP check: {tk} (stable API) ===")
+
+    # Raw per-endpoint probe — shows FMP's actual response (key never printed),
+    # so we can confirm which stable endpoints the key can reach.
+    probes = [
+        ("quote", "/quote", {"symbol": tk}),
+        ("history", "/historical-price-eod/full", {"symbol": tk, "from": "2026-08-01"}),
+        ("profile", "/profile", {"symbol": tk}),
+        ("search", "/search-symbol", {"query": tk, "limit": 3}),
+        ("news", "/news/stock", {"symbols": tk, "limit": 2}),
+        ("etf-hold", "/etf/holdings", {"symbol": "SPY"}),
+    ]
+    for label, path, params in probes:
+        status, body = fmp.probe(path, **params)
+        oneline = " ".join(str(body).split())[:150]
+        print(f"  {label:<9} HTTP {status}  {oneline}")
+
+    # Multi-symbol batch quote — this is what powers the live board overlay.
+    bstatus, bbody = fmp.probe("/quote", symbol="AAPL,MSFT,NVDA")
+    print(f"  batch     HTTP {bstatus}  {' '.join(str(bbody).split())[:150]}")
+    bq = fmp.batch_quotes(["AAPL", "MSFT", "NVDA"])
+    print(f"  batch parsed: {len(bq)}/3 tickers -> {bq}")
+    print()
 
     snap = fmp.snapshot(tk)
     if snap and snap.name:
@@ -666,6 +739,32 @@ def cmd_fmp_check(args: argparse.Namespace) -> int:
     print("\n  " + ("FMP is wired up and returning data." if ok
                     else "FMP responded but data was incomplete — see above."))
     return 0 if ok else 1
+
+
+def cmd_finnhub_check(args: argparse.Namespace) -> int:
+    """Verify FINNHUB_API_KEY works — real-time quotes for the live board overlay."""
+    from .data import finnhub
+
+    if not finnhub.has_finnhub():
+        print("FINNHUB_API_KEY is not set. Get a free key at finnhub.io, then:\n"
+              "  export FINNHUB_API_KEY=your_key_here", file=sys.stderr)
+        return 1
+
+    syms = [s.upper() for s in (args.tickers or "AAPL,MSFT,NVDA").split(",")]
+    print(f"=== Finnhub check: {', '.join(syms)} ===")
+    status, body = finnhub.probe("/quote", symbol=syms[0])
+    print(f"  raw /quote  HTTP {status}  {' '.join(str(body).split())[:150]}")
+
+    q = finnhub.batch_quotes(syms)
+    for s in syms:
+        d = q.get(s)
+        print(f"  {s:<7} " + (f"${d['price']:,.2f}  {d['change_pct']*100:+.2f}%"
+                              if d and d.get('change_pct') is not None
+                              else (f"${d['price']:,.2f}" if d else "— no data")))
+    ok = len(q) == len(syms)
+    print("\n  " + ("Finnhub is wired up — the live board overlay will use it."
+                    if ok else "Some symbols returned no data — see above."))
+    return 0 if q else 1
 
 
 def cmd_smart_watchlist(args: argparse.Namespace) -> int:
@@ -838,9 +937,26 @@ def build_parser() -> argparse.ArgumentParser:
     mc.add_argument("--seed", type=int, default=12345)
     mc.set_defaults(func=cmd_montecarlo)
 
+    ft = sub.add_parser("factors", help="rank the watchlist on value/quality/momentum factors")
+    ft.add_argument("--tickers", default="data/tickers.csv")
+    ft.add_argument("--cache-dir", default="data/cache")
+    ft.add_argument("--cache-ttl", default="2592000", help="cache TTL seconds (default 30d)")
+    ft.add_argument("--workers", type=int, default=5)
+    ft.add_argument("--by", default="composite",
+                    help="rank by: composite | value | quality | momentum | growth | low_vol")
+    ft.add_argument("--top", type=int, default=25)
+    ft.add_argument("--sector-neutral", action="store_true",
+                    help="rank factors within each sector (cheap vs peers, not cheap sectors)")
+    ft.set_defaults(func=cmd_factors)
+
     fc = sub.add_parser("fmp-check", help="verify FMP_API_KEY works (live fetch)")
     fc.add_argument("ticker", nargs="?", default="AAPL", help="ticker to test (default AAPL)")
     fc.set_defaults(func=cmd_fmp_check)
+
+    fh = sub.add_parser("finnhub-check", help="verify FINNHUB_API_KEY works (live quotes)")
+    fh.add_argument("tickers", nargs="?", default="AAPL,MSFT,NVDA",
+                    help="comma-separated tickers (default AAPL,MSFT,NVDA)")
+    fh.set_defaults(func=cmd_finnhub_check)
     return p
 
 
