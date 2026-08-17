@@ -211,6 +211,9 @@ numbers to mean anything.
 - `references/screener-methodology.md` — how ranking, lanes, and coverage work.
 - `references/factor-investing.md` — the factor formulas/weights, sector-neutral
   scoring, the backtest method, and the value-backtest data gap.
+- `references/trading-models.md` — sourced plan for upgrading the DCF (Monte Carlo
+  valuation) and entry/stop/target models (Kelly + vol targeting, Kaminski-Lo
+  stops, Dai-Zhang-Zhu trend rule), with build order and citations.
 - `references/market-pulse.md` — what each pulse section means; the paid layer.
 - `references/regime-playbook.md` — reading the macro regime; defensive rotation.
 - `references/dashboard-and-scheduling.md` — the HTML dashboard and cron setup.
