@@ -111,7 +111,9 @@ def test_factor_chip_and_cell_render():
     assert "cheap · high quality" in chip and "factor 83" in chip
     cell = _factor_cell(r)
     assert 'data-sort="83"' in cell and ">83<" in cell
-    # no factor data -> empty chip, muted dash cell (sorts last)
+    # a 2-line read lives inside a fixed-height slot (keeps cards aligned)
+    assert 'class="fchip"' in chip and 'class="fpill"' in chip
+    # no factor data -> empty slot (still reserves height), muted dash cell (sorts last)
     blank = SimpleNamespace(factor={})
-    assert _factor_chip(blank) == ""
+    assert _factor_chip(blank) == '<div class="fchip"></div>'
     assert 'data-sort="-1"' in _factor_cell(blank)

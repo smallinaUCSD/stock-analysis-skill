@@ -101,8 +101,10 @@ table.wl th:nth-child(15),table.wl td:nth-child(15){text-align:left}
 .up{color:var(--up)}.down{color:var(--down)}.muted{color:var(--muted)}
 .arrow.up{color:var(--up)}.arrow.down{color:var(--down)}.arrow.flat{color:var(--muted)}
 .conf-STRONG{color:var(--good);font-weight:700}.conf-MODERATE{color:var(--warn)}.conf-WEAK{color:var(--muted)}
+/* board fills the page (override the shared 1180px cap); responsive side padding */
+.wrap{max-width:min(2400px,100%);padding:18px clamp(14px,2.6vw,40px)}
 /* cards */
-.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:12px}
 .card-item{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px}
 .card-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:nowrap}
 .card-top>div:first-child{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
@@ -120,8 +122,9 @@ table.wl th:nth-child(15),table.wl td:nth-child(15){text-align:left}
 .card-item{cursor:pointer;position:relative;transition:border-color .12s}
 .card-item:hover{border-color:var(--accent)}
 .trendline{font-size:12.5px;font-weight:650;margin:1px 0 6px}
-.fchip{font-size:11.5px;font-weight:600;margin:0 0 6px;padding:2px 7px;border-radius:6px;
-  background:var(--chip,rgba(120,130,150,.10));display:inline-block;max-width:100%}
+.fchip{min-height:36px;margin:0 0 4px;font-size:11.5px;font-weight:600;line-height:1.35}
+.fchip .fpill{display:inline-block;max-width:100%;padding:2px 7px;border-radius:6px;
+  background:var(--chip,rgba(120,130,150,.10))}
 .fchip .up{color:var(--good)}.fchip .down{color:var(--crit)}
 /* fixed-height slots so optional lines don't misalign cards */
 .exthrs{font-size:11.5px;color:var(--muted);margin:1px 0 5px;font-variant-numeric:tabular-nums;min-height:16px}
@@ -391,13 +394,14 @@ def _factor_cell(r):
 
 
 def _factor_chip(r):
-    """Card chip: the plain-English factor read + composite percentile."""
+    """Card chip in a fixed-height slot (so 1- vs 2-line reads don't misalign
+    cards): the plain-English factor read + composite percentile."""
     f = getattr(r, "factor", None) or {}
     comp, label = f.get("composite"), f.get("label")
     if comp is None or not label:
-        return ""
-    return (f'<div class="fchip"><span class="{_factor_cls(comp)}">◆</span> '
-            f'{html.escape(label)} <span class="muted">· factor {comp}</span></div>')
+        return '<div class="fchip"></div>'          # empty slot keeps cards aligned
+    return (f'<div class="fchip"><span class="fpill"><span class="{_factor_cls(comp)}">◆</span> '
+            f'{html.escape(label)} <span class="muted">· factor {comp}</span></span></div>')
 
 
 def _row_html(r):
