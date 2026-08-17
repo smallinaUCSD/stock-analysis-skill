@@ -12,7 +12,13 @@ from dataclasses import dataclass
 from datetime import datetime, time
 from zoneinfo import ZoneInfo
 
-ET = ZoneInfo("America/New_York")
+try:
+    ET = ZoneInfo("America/New_York")
+except Exception:  # noqa: BLE001 - no tz database (e.g. a slim container missing tzdata)
+    # Degraded fallback so the app never 500s; the `tzdata` dependency should
+    # make this branch unreachable. UTC makes the session read wrong, not crash.
+    from datetime import timezone
+    ET = timezone.utc
 
 REGULAR_OPEN = time(9, 30)
 REGULAR_CLOSE = time(16, 0)
@@ -73,8 +79,10 @@ def refresh_seconds_for(status: "MarketStatus", base_interval: float | None = No
     """
     if base_interval:
         return max(60, int(base_interval * 60))
-    # 15 min whenever a trading session is active (pre-market 4:00 ET -> after-
-    # hours close 8:00 PM ET); effectively no updates overnight or on weekends.
-    if status.label in ("open", "pre-market", "after-hours"):
+    # Regular session -> 15 min; extended hours (pre-market + after-hours) -> 30
+    # min; overnight/weekend -> effectively static (6h).
+    if status.label == "open":
         return 900          # 15 min
+    if status.label in ("pre-market", "after-hours"):
+        return 1800         # 30 min (extended hours)
     return 21600            # 6h (closed after 8pm ET / weekend -> no live updates)

@@ -741,6 +741,7 @@ dependencies = [
     { name = "numpy" },
     { name = "pandas" },
     { name = "requests" },
+    { name = "tzdata" },
     { name = "yfinance" },
 ]
 
@@ -759,6 +760,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=2.5.1" },
     { name = "pandas", specifier = ">=3.0.5" },
     { name = "requests", specifier = ">=2.34.2" },
+    { name = "tzdata", specifier = ">=2025.1" },
     { name = "yfinance", specifier = ">=1.5.2" },
 ]
 
