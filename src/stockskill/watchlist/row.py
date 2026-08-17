@@ -52,6 +52,8 @@ class TickerRow:
     # annualized drift + volatility (for the barrier win-probability / Kelly sizing)
     drift_annual: float | None = None
     vol_annual: float | None = None
+    # regime/trend read (Dai-Zhang-Zhu P(bull) + time-series momentum)
+    regime: dict = field(default_factory=dict)
     # extended-hours (pre/post-market)
     market_state: str | None = None
     ext_price: float | None = None
@@ -126,6 +128,20 @@ def build_row(td: TickerData, cfg: SignalConfig | None = None,
             var = sum((x - mean) ** 2 for x in rets) / (len(rets) - 1)
             row.drift_annual = mean * 252
             row.vol_annual = (var ** 0.5) * _math.sqrt(252)
+
+        # regime/trend: Dai-Zhang-Zhu P(bull) + time-series momentum
+        try:
+            from ..regime import dzz_rule, tsmom
+            dz, tm = dzz_rule(closes), tsmom(closes)
+            if dz or tm:
+                row.regime = {
+                    "p_bull": dz.p_bull if dz else None,
+                    "state": dz.state if dz else None,
+                    "tsmom_label": tm.label if tm else None,
+                    "tsmom_signal": tm.signal if tm else None,
+                }
+        except Exception:  # noqa: BLE001
+            pass
 
         # signals
         s = build_snapshot(highs, lows, closes, vols)

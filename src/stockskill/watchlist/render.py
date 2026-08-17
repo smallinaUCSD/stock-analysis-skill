@@ -456,6 +456,16 @@ def _trade_setup_html(r):
         return ""
     illustrative = "" if r.signal in ("BUY", "SHORT") else \
         '<div class="ts-sub">no active signal — illustrative ATR setup, direction from trend</div>'
+    # Regime & trend context (Dai-Zhang-Zhu P(bull) + time-series momentum).
+    rg = getattr(r, "regime", None) or {}
+    regime_line = ""
+    if rg.get("state"):
+        pb = rg.get("p_bull")
+        pbt = f' (P bull {pb*100:.0f}%)' if pb is not None else ''
+        tml = f' · TS-mom {html.escape(rg["tsmom_label"])}' if rg.get("tsmom_label") else ''
+        cls_rg = "up" if rg["state"] == "bull" else ("down" if rg["state"] == "bear" else "muted")
+        regime_line = (f'<div class="ts-sub">Regime · <span class="{cls_rg}">{rg["state"]}'
+                       f'</span>{pbt}{tml}</div>')
     # P(target before stop) — a first-passage probability from drift/vol; the
     # honest edge estimate that feeds Kelly. Informational; always shown. The
     # sizing lenses (fixed 2% risk vs edge-based half-Kelly vs vol-target
@@ -500,7 +510,7 @@ def _trade_setup_html(r):
             pass
     return (
         f'<div class="tsetup {cls}"><div class="ts-h">Trade setup · {direction} '
-        f'({s.rr_ratio:.0f}:1 R:R)</div>{illustrative}'
+        f'({s.rr_ratio:.0f}:1 R:R)</div>{illustrative}{regime_line}'
         f'<div class="ts-row"><span>Entry</span><b>${s.entry:,.2f}</b></div>'
         f'<div class="ts-row"><span>Stop</span><b class="down">${s.stop:,.2f} (-{s.risk_pct*100:.1f}%)</b></div>'
         f'<div class="ts-row"><span>Target</span><b class="up">${s.target:,.2f} (+{s.reward_pct*100:.1f}%)</b></div>'
