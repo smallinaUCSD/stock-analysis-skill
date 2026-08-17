@@ -528,6 +528,13 @@ def _valuation_html(r):
     ig = v.get("implied_market_growth")
     if ig is not None:
         rows.append(f'<div class="det-row"><span>Reverse-DCF implied growth</span><b>{ig*100:.0f}%</b></div>')
+    mc_p = v.get("mc_prob_undervalued")
+    if mc_p is not None:
+        p5, p95 = v.get("mc_p5"), v.get("mc_p95")
+        band = (f' <span class="muted" style="font-weight:400">· P5–P95 ${p5:,.0f}–${p95:,.0f}</span>'
+                if (p5 and p95) else '')
+        rows.append('<div class="det-row"><span>Monte Carlo DCF · P(undervalued)</span>'
+                    f'<b class="{"up" if mc_p >= 0.5 else "down"}">{mc_p*100:.0f}%</b>{band}</div>')
     reco = c.get("reco")
     if reco and reco != "n/a":
         tvp = c.get("target_vs_price")

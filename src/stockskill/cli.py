@@ -88,6 +88,20 @@ def cmd_value(args: argparse.Namespace) -> int:
             cells = "".join(("     n/a " if v != v else f"{v:>9,.0f}") for v in row)
             print(f"  {r:>7.2%}   {cells}")
 
+    # Monte Carlo DCF: a fair-value distribution from assumed input spreads.
+    if out.dcf_inputs is not None and not args.no_mc:
+        from .valuation.mc_dcf import MCDCFSpec, monte_carlo_dcf
+        mc = monte_carlo_dcf(MCDCFSpec(base=out.dcf_inputs), price=snap.price)
+        p = mc.pctiles
+        print("\nMonte Carlo DCF (5,000 draws over growth / discount / terminal / FCF):")
+        print(f"  Fair value   mean {_fmt_money(mc.mean)}   median {_fmt_money(mc.median)}")
+        print(f"  Bands   p5 {_fmt_money(p['p5'])}   p25 {_fmt_money(p['p25'])}   "
+              f"p50 {_fmt_money(p['p50'])}   p75 {_fmt_money(p['p75'])}   p95 {_fmt_money(p['p95'])}")
+        if mc.prob_undervalued is not None:
+            print(f"  At {_fmt_money(snap.price)}:  P(undervalued) {mc.prob_undervalued:.0%}   "
+                  f"P(≥+25%) {mc.prob_upside_25:.0%}   P(≤−25%) {mc.prob_downside_25:.0%}")
+        print("  Probabilities reflect assumed input uncertainty, not a forecast.")
+
     if out.warnings:
         print("\nNotes:")
         for w in out.warnings:
@@ -885,6 +899,7 @@ def build_parser() -> argparse.ArgumentParser:
     v.add_argument("--snapshot", help="load a saved snapshot JSON instead of fetching")
     v.add_argument("--save", help="save fetched snapshot to this JSON path")
     v.add_argument("--no-sensitivity", action="store_true", help="hide the DCF sensitivity grid")
+    v.add_argument("--no-mc", action="store_true", help="hide the Monte Carlo DCF distribution")
     v.set_defaults(func=cmd_value)
 
     lt = sub.add_parser("lookthrough", help="true underlying exposure of holdings")

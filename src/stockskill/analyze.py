@@ -149,6 +149,20 @@ def analyze_ticker(ticker: str, growth: float | None = None,
         },
     })
 
+    # Monte Carlo DCF: a fair-value distribution + P(undervalued) at today's price.
+    # Modest path count keeps the per-card cost low on the board build.
+    if reliable and base_out.dcf_inputs is not None:
+        from .valuation.mc_dcf import MCDCFSpec, monte_carlo_dcf
+        try:
+            mc = monte_carlo_dcf(MCDCFSpec(base=base_out.dcf_inputs), price=price, n_paths=1500)
+            valuation.update({
+                "mc_prob_undervalued": mc.prob_undervalued,
+                "mc_p5": mc.pctiles["p5"], "mc_p50": mc.pctiles["p50"],
+                "mc_p95": mc.pctiles["p95"],
+            })
+        except Exception:  # noqa: BLE001
+            pass
+
     consensus = {
         "reco": _reco_label(snap.analyst_mean, snap.analyst_reco),
         "mean": snap.analyst_mean,
