@@ -51,7 +51,8 @@ uv run stockskill holdings buy AAPU 10 --price 45   # update holdings from a tra
 
 | Command | What it does |
 |---|---|
-| `value TICKER` | Fair value — two-stage DCF, reverse DCF (market-implied growth), relative multiples, dividend model; blended range + margin of safety. Assumption-sensitive names are flagged low-confidence instead of getting a false verdict. |
+| `value TICKER` | Fair value — two-stage DCF, reverse DCF (market-implied growth), relative multiples, dividend model; **Monte Carlo DCF** (fair-value distribution + P(undervalued) from input spreads); blended range + margin of safety. Assumption-sensitive names are flagged low-confidence instead of getting a false verdict. |
+| `market-timing [TICKER]` | **Experimental** Virtue-of-Complexity market timing (Kelly-Malamud-Zhou): a complex random-feature ridge predicting the market's next-month return, with honest out-of-sample R² + timing Sharpe. Debated; reports what it finds (often ~0) rather than asserting an edge. |
 | `factors [--sector-neutral] [--by value\|…]` | Cross-sectional **factor scores** for the watchlist — value / quality / momentum / growth / low-vol, each a 0–100 percentile + a plain-English read, plus a coverage-gated composite. `--sector-neutral` ranks within sector (cheap-vs-peers, not a bet on cheap sectors). Weights via `STOCKSKILL_FACTOR_WEIGHTS`. |
 | `backtest [--buckets N]` | **Backtest** a factor: monthly rebalance → buckets → forward returns → long-short spread, hit rate, and information coefficient (no look-ahead). Momentum today; value/quality once fundamentals history accrues. |
 | `snapshot-fundamentals` | Record today's fundamentals as a dated point-in-time row (`data/fundamentals_history/`) — run daily to build the history a **value** backtest needs. Reuses the cache (no refetch). |
@@ -95,10 +96,13 @@ everything from the tested indicator + signal libraries.
   sector-neutral composite percentile). See [factor investing](references/factor-investing.md).
 - **Earnings flag** on each card — today / tomorrow / in N days / next week.
 - **Click a card → a modal** with the full detail: an **interactive price chart**
-  (1M–5Y/Max, real axes, hover shows date + price), the trade setup (ATR
-  entry/stop/target + position sizing), options ideas, the **stock-analyzer
-  valuation** (fair value bear/base/bull, signal, reverse-DCF growth, consensus),
-  and **recent news** headlines (clickable, publisher · age).
+  (1M–5Y/Max, real axes, hover shows date + price), the **trade setup** (ATR
+  entry/stop/target, **P(target before stop)**, and three sizing lenses — fixed
+  2% risk, **half-Kelly**, and **vol-targeted**), a **regime & trend** read
+  (Dai-Zhang-Zhu **P(bull)** + time-series momentum) and a **stop study** (would a
+  trailing stop have helped or hurt this name — Kaminski-Lo), options ideas, the
+  **stock-analyzer valuation** (fair value bear/base/bull, signal, reverse-DCF
+  growth, **Monte Carlo P(undervalued)**, consensus), and **recent news**.
 - **Live prices, updated in place** — a real-time quote feed refreshes the whole
   board on a market-aware cadence: **every 15 min** during regular hours, **30 min**
   in extended hours (pre-market 4:00 ET → after-hours 8:00 PM ET), and **static**
@@ -172,10 +176,11 @@ src/stockskill/
   technicals/   RSI, MACD, Bollinger, ATR, Ichimoku, Stochastic, ADX, OBV, …
   signals/      BB/RSI/MACD/Ichimoku/Combined strategies, trend score, confidence
   factors/      value/quality/momentum/growth/low-vol scoring, sector-neutral, backtest, history
-  valuation/    DCF, reverse DCF, multiples, DDM, scenarios, engine
+  regime/       time-series momentum, Dai-Zhang-Zhu bull/bear filter, stop study, VoC timing
+  valuation/    DCF, reverse DCF, Monte Carlo DCF, multiples, DDM, scenarios, engine
+  trade/        ATR setup, fixed/Kelly/vol-target sizing (barrier win-prob), options ideas
   portfolio/    look-through leverage, concentration, decay, holdings management
   pulse/        sector/factor rotation, breadth, regime, market bar, sentiment
-  trade/        ATR trade setup, position sizing, options-strategy suggestions
   alerts/       auto + custom alert engine
   montecarlo/   GBM + bootstrap price simulation (E[r], probability cone, VaR)
   watchlist/    ticker parsing, parallel pipeline, row model, board build + render

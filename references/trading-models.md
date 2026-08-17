@@ -124,20 +124,22 @@ trustworthy — a later R&D item, honestly caveated, not a quick win.
 
 ---
 
-## Build order & module map
+## Build order & module map — ✅ ALL SHIPPED (2026-08-17)
 
-| # | Model | Where it lands | Effort |
+| # | Model | Where it landed | Status |
 |---|---|---|---|
-| 1 | **Monte Carlo DCF** | `valuation/` (+ montecarlo engine), analyzer + card | Medium |
-| 2 | **Kelly + vol-targeted sizing** | `trade/` (extend position sizing) | Low |
-| 3 | **Evidence-based stops** (Kaminski-Lo) | `trade/` + `factors/backtest.py` | Low–Med |
-| 4 | **TS-momentum signal** (MOP) | `signals/` or `factors/` (building block for #5) | Low |
-| 5 | **Dai-Zhang-Zhu trend rule** | new `regime/` (2-state filter) → `trade/` | High |
-| 6 | **Virtue of Complexity** timing | `pulse/` overlay (R&D) | High |
+| 1 | **Monte Carlo DCF** | `valuation/mc_dcf.py`; `value` CLI + card modal (P(undervalued), P5–P95) | ✅ |
+| 2 | **Kelly + vol-targeted sizing** | `trade/sizing.py`; card trade setup (P(target before stop), ½-Kelly, vol-tgt) | ✅ |
+| 3 | **Evidence-based stops** (Kaminski-Lo) | `regime/stops.py`; card "Stop study · helped/hurt" | ✅ |
+| 4 | **TS-momentum** (MOP) | `regime/tsmom.py`; card regime line | ✅ |
+| 5 | **Dai-Zhang-Zhu trend rule** | `regime/dzz.py` (2-state Wonham filter); card "Regime · bull/bear (P bull)" | ✅ |
+| 6 | **Virtue of Complexity** timing | `regime/voc.py`; `market-timing` CLI (EXPERIMENTAL, CLI-only) | ✅ |
 
-Recommended: **1 → 2 → 3** (they directly upgrade the named models and reuse
-engines we have), then **4 → 5** (the principled entry model), with **6** as later
-research.
+Notes from building them: on the current large-cap-growth universe, momentum
+factors and stop-losses mostly read **weak/negative** (Kaminski-Lo: stops whipsaw
+in persistent trends), and VoC market timing shows **~0 OOS R²** on real 5y data —
+all reported honestly rather than asserted. The MC DCF and Kelly sizing are the
+day-to-day useful additions.
 
 ## References
 - Damodaran, A. — *Probabilistic Approaches in Valuation* (Monte Carlo / scenario / decision trees). [stern.nyu.edu](https://pages.stern.nyu.edu/~adamodar/pdfiles/ovhds/inv2E/probabilistic.pdf)

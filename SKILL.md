@@ -68,7 +68,16 @@ uv run stockskill value --snapshot nvda.json   # reproduce offline, identical ou
 Always report the **reverse-DCF implied growth** — "the price implies ~X% FCF
 growth for 10 years" is usually the most decision-useful line. Growth and peer
 multiples are explicit, logged assumptions; state them, and vary them to show
-sensitivity rather than presenting one number as truth.
+sensitivity rather than presenting one number as truth. `value` also runs a
+**Monte Carlo DCF** (a fair-value *distribution* + P(undervalued) from assumed
+input spreads) — report the range and probability, not a false point estimate.
+
+The trade setup (on the board card) adds research-grounded models — a barrier
+**P(target before stop)** with fractional-Kelly + vol-targeted sizing, a
+Dai-Zhang-Zhu **P(bull)** regime read, and a Kaminski-Lo **stop study** (did a
+stop help or hurt this name). `stockskill market-timing` is an EXPERIMENTAL
+Virtue-of-Complexity market read — trust its OOS numbers, not the headline. See
+`references/trading-models.md`.
 
 ### Look-through exposure — what you actually own
 Collapses leveraged/basket ETFs into true underlying dollar exposure and
