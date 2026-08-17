@@ -680,6 +680,43 @@ def cmd_factors(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_backtest(args: argparse.Namespace) -> int:
+    """Backtest a factor: bucket the universe monthly, measure forward returns."""
+    from .watchlist.tickers import parse_tickers
+    from .watchlist.pipeline import fetch_all
+    from .factors.backtest import momentum_panel, run_backtest
+
+    tickers = parse_tickers(args.tickers)["all"]
+    print(f"Backtesting momentum on {len(tickers)} names (5y daily) ...", file=sys.stderr)
+    data = fetch_all(tickers, period="5y", workers=args.workers,
+                     cache_dir=args.cache_dir, ttl=float(args.cache_ttl))
+    price_data = {tk: (td.ohlcv["dates"], td.ohlcv["close"])
+                  for tk, td in data.items()
+                  if td.ohlcv and td.ohlcv.get("close") and td.ohlcv.get("dates")}
+
+    sig, fwd = momentum_panel(price_data)
+    res = run_backtest(sig, fwd, factor="momentum", n_buckets=args.buckets)
+    if not res:
+        print("not enough history to backtest", file=sys.stderr)
+        return 1
+
+    print(f"\n=== Backtest: {res.factor}, {args.buckets} buckets · "
+          f"{res.n_periods} monthly rebalances ({res.start} → {res.end}) ===")
+    for i, m in enumerate(res.bucket_avg, 1):
+        bar = "█" * max(0, round(m * 400))
+        tag = "  (short)" if i == 1 else ("  (long)" if i == len(res.bucket_avg) else "")
+        print(f"  Q{i} {m*100:+6.2f}%/mo  {bar}{tag}")
+    ic = f"{res.ic_avg:+.3f}" if res.ic_avg is not None else "n/a"
+    print(f"\n  Long-short (Q{args.buckets}-Q1): {res.long_short_avg*100:+.2f}%/mo  "
+          f"({res.long_short_annual*100:+.1f}%/yr)")
+    print(f"  Hit rate: {res.hit_rate*100:.0f}% of months positive   IC: {ic}")
+    print(f"  $1 long-short compounded -> ${res.ls_curve[-1]:.2f}")
+    print("\n  In-sample on a fixed 116-name universe; no costs/slippage; momentum "
+          "only\n  (value/quality need point-in-time fundamentals). Illustrative, "
+          "not a live strategy.")
+    return 0
+
+
 def cmd_fmp_check(args: argparse.Namespace) -> int:
     """Verify the FMP_API_KEY works by fetching one ticker live through it."""
     from .data import fmp
@@ -948,6 +985,14 @@ def build_parser() -> argparse.ArgumentParser:
     ft.add_argument("--sector-neutral", action="store_true",
                     help="rank factors within each sector (cheap vs peers, not cheap sectors)")
     ft.set_defaults(func=cmd_factors)
+
+    bt = sub.add_parser("backtest", help="backtest a factor (momentum) on 5y prices")
+    bt.add_argument("--tickers", default="data/tickers.csv")
+    bt.add_argument("--cache-dir", default="data/cache")
+    bt.add_argument("--cache-ttl", default="2592000")
+    bt.add_argument("--workers", type=int, default=5)
+    bt.add_argument("--buckets", type=int, default=5)
+    bt.set_defaults(func=cmd_backtest)
 
     fc = sub.add_parser("fmp-check", help="verify FMP_API_KEY works (live fetch)")
     fc.add_argument("ticker", nargs="?", default="AAPL", help="ticker to test (default AAPL)")
