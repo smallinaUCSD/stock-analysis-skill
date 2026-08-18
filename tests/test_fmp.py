@@ -152,12 +152,12 @@ def test_batch_quotes_normalizes(key, monkeypatch):
 # --- server-side live-price overlay -------------------------------------------
 from types import SimpleNamespace                        # noqa: E402
 
-from stockskill.watchlist.build import _overlay_live_prices, _drop_stale_ext  # noqa: E402
+from stockskill.watchlist.build import _overlay_live_prices, _apply_ext_prices  # noqa: E402
 
 
 def _row(tk, price, ext=None):
     return SimpleNamespace(ticker=tk, price=price, changes={"1d": 0.0},
-                           ext_price=ext, ext_change=0.02)
+                           ext_price=ext, ext_change=0.02, market_state=None)
 
 
 def test_overlay_patches_prices_when_open(key, monkeypatch):
@@ -180,18 +180,40 @@ def test_overlay_no_fetch_when_closed(key, monkeypatch):
     assert called["n"] == 0 and rows[0].price == 190.0   # no fetch, price unchanged
 
 
-def test_drop_stale_ext_on_host(key):
-    # A live source is configured (host) -> the snapshot's ext price is stale and
-    # dropped, so no wrong "after hours $X" shows (runs on fast + live builds).
+def test_apply_ext_clears_stale_when_no_fresh(key):
+    # Hosted + regular session -> no Yahoo fetch -> the stale snapshot ext is dropped.
     rows = [_row("AAPL", 190.0, ext=195.0)]
-    _drop_stale_ext(rows)
+    _apply_ext_prices(rows, SimpleNamespace(label="open"))
     assert rows[0].ext_price is None and rows[0].ext_change is None
 
 
-def test_drop_stale_ext_keeps_fresh_ext_locally(monkeypatch):
+def test_apply_ext_fresh_from_yahoo_after_hours(key, monkeypatch):
+    # After-hours: source a FRESH ext price from Yahoo (Finnhub only has the close).
+    from stockskill.data import yahoo_ext
+    monkeypatch.setattr(yahoo_ext, "ext_quotes",
+                        lambda tks: {"AAPL": {"market_state": "POST",
+                                              "ext_price": 201.5, "ext_change": 0.012}})
+    rows = [_row("AAPL", 190.0)]
+    _apply_ext_prices(rows, SimpleNamespace(label="after-hours"), live=True)
+    assert rows[0].ext_price == 201.5 and rows[0].ext_change == 0.012
+    assert rows[0].market_state == "POST"
+
+
+def test_apply_ext_no_yahoo_on_fast_build(key, monkeypatch):
+    # The network-free cold-start build (live=False) must not fetch Yahoo.
+    from stockskill.data import yahoo_ext
+    called = {"n": 0}
+    monkeypatch.setattr(yahoo_ext, "ext_quotes",
+                        lambda tks: called.__setitem__("n", called["n"] + 1) or {})
+    rows = [_row("AAPL", 190.0, ext=195.0)]
+    _apply_ext_prices(rows, SimpleNamespace(label="after-hours"), live=False)
+    assert called["n"] == 0 and rows[0].ext_price is None
+
+
+def test_apply_ext_keeps_fresh_ext_locally(monkeypatch):
     # No API keys (local yfinance) -> ext price came fresh from the snapshot, keep it.
     monkeypatch.delenv("FMP_API_KEY", raising=False)
     monkeypatch.delenv("FINNHUB_API_KEY", raising=False)
     rows = [_row("AAPL", 190.0, ext=195.0)]
-    _drop_stale_ext(rows)
+    _apply_ext_prices(rows, SimpleNamespace(label="after-hours"))
     assert rows[0].ext_price == 195.0                    # kept locally

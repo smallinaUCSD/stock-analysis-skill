@@ -185,19 +185,38 @@ def _overlay_live_prices(rows, status) -> None:
                     r.changes["1d"] = q["change_pct"]
 
 
-def _drop_stale_ext(rows) -> None:
-    """Clear the snapshot's extended-hours price on the hosted board.
+def _apply_ext_prices(rows, status, live: bool = True) -> None:
+    """Extended-hours (pre/post-market) price on the hosted board.
 
-    On the host the board serves a cached snapshot, so its ext price is stale and
-    there's no fresh post-market source — a wrong "after hours $X" is worse than
-    none. Runs on BOTH the fast cold-start build and the live build. Local
-    yfinance (no keys) has a freshly-fetched ext price, so it's kept there."""
+    Finnhub free returns the regular close during extended hours, so during a
+    pre/after-hours session we source a FRESH ext price from Yahoo (which carries
+    it) — best-effort, since Yahoo may rate-limit the host. Any name without a
+    fresh ext price has it cleared, so a stale snapshot value never shows. Only
+    fetched on the live build (never the network-free cold-start). Local yfinance
+    (no API keys) keeps the snapshot's freshly-fetched ext price."""
     from ..data import finnhub, fmp
     if not (finnhub.has_finnhub() or fmp.has_fmp()):
-        return
+        return                                    # local: keep the snapshot's fresh ext
+    fresh: dict = {}
+    # Fetch on any weekday non-regular session (pre/after/overnight) and let
+    # Yahoo's marketState decide if there's a pre/post price — our after-hours
+    # window (ends 8pm ET) is stricter than Yahoo's POST state, so this keeps the
+    # extended price showing through the evening. Never on weekends or the fast build.
+    if live and status.label in ("pre-market", "after-hours", "closed"):
+        try:
+            from ..data import yahoo_ext
+            fresh = yahoo_ext.ext_quotes([r.ticker for r in rows])
+        except Exception:  # noqa: BLE001
+            fresh = {}
     for r in rows:
-        r.ext_price = None
-        r.ext_change = None
+        q = fresh.get(r.ticker.upper())
+        if q and q.get("ext_price"):
+            r.ext_price = q["ext_price"]
+            r.ext_change = q.get("ext_change")
+            r.market_state = q.get("market_state")
+        else:
+            r.ext_price = None
+            r.ext_change = None
 
 
 def build_watchlist_html(tickers_spec, *, period: str = "5y", workers: int = 5,
@@ -272,7 +291,7 @@ def build_watchlist_html(tickers_spec, *, period: str = "5y", workers: int = 5,
     if served and live:
         _overlay_live_prices(rows, status)
     if served:
-        _drop_stale_ext(rows)              # both fast cold-start and live builds
+        _apply_ext_prices(rows, status, live=live)   # Yahoo ext during extended sessions
 
     now = datetime.now(ET)
     html_out = render_watchlist(
