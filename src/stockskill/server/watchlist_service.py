@@ -68,10 +68,11 @@ class WatchlistService:
         return {t.upper() for t in parse_tickers_text(self._spec())["all"]}
 
     # --- build / cache -------------------------------------------------
-    def _rebuild(self, live: bool = True) -> str:
+    def _rebuild(self, live: bool = True, interval: float | None = None) -> str:
         html, meta = build_watchlist_html(
             self._spec(), period=self._period, cache_dir=self._cache_dir, served=True,
-            public=self._public, bmc_url=self._bmc_url, ttl=self._cache_ttl, live=live)
+            public=self._public, bmc_url=self._bmc_url, ttl=self._cache_ttl, live=live,
+            interval=interval)
         with self._lock:
             self._html = html
             self._ts = time.time()
@@ -80,15 +81,19 @@ class WatchlistService:
 
     def _cold_paint(self) -> str | None:
         """Synchronous, network-free build so a cold/waking host paints the
-        cached-snapshot board instantly instead of the warming spinner; the live
-        Finnhub/Yahoo refresh then fills in via the background build."""
+        cached-snapshot board instantly instead of the warming spinner. It embeds
+        a SHORT (1-min) poll interval so the client auto-upgrades to the live
+        Finnhub/Yahoo prices within a cycle — no manual reload — then the live
+        build's normal cadence takes over."""
         with self._fast_lock:
             if self._html is not None:      # another request already painted it
                 return self._html
             try:
-                return self._rebuild(live=False)
+                html = self._rebuild(live=False, interval=1.0)   # 60s poll for a fast handoff
             except Exception:  # noqa: BLE001
                 return None
+            self._ts = 0.0                  # mark stale so the live bg build runs now
+            return html
 
     def _start_bg_build(self) -> None:
         with self._lock:

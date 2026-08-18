@@ -982,7 +982,9 @@ function refreshData(){
     const nb=doc.querySelector('.status'), ob=document.querySelector('.status');
     if(nb&&ob) ob.className=nb.className, ob.textContent=nb.textContent;
     const nu=doc.getElementById('updated'), ou=document.getElementById('updated');
-    if(nu&&ou){ ou.dataset.ts=nu.dataset.ts; fmtUpdated(); }
+    if(nu&&ou){ ou.dataset.ts=nu.dataset.ts;
+      if(nu.dataset.refresh) ou.dataset.refresh=nu.dataset.refresh;   // adopt new cadence
+      fmtUpdated(); }
     wireTableScroll(); _resort(); applyFilter();
   }).catch(()=>{}).finally(()=>{ _refreshing=false; });
 }
@@ -1148,7 +1150,7 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
 <title>{html.escape(title)}</title><style>{_CSS}{_CSS_EXTRA}</style></head>
 <body><div class="wrap">
 <header><h1>{html.escape(title)}</h1>{badge}
-  <span class="sub" style="margin:0">Updated <span id="updated" data-ts="{int(updated_ts) if updated_ts else ''}">{html.escape(updated)}</span></span></header>
+  <span class="sub" style="margin:0">Updated <span id="updated" data-ts="{int(updated_ts) if updated_ts else ''}" data-refresh="{int(refresh_seconds)}">{html.escape(updated)}</span></span></header>
 {banner}
 <div class="bar">
   <div class="seg">
@@ -1379,8 +1381,19 @@ function wireTableScroll(){{
     w.addEventListener('scroll', upd, {{passive:true}}); upd();
   }});
 }}
-const REFRESH_MS = {int(refresh_seconds)}*1000;
 const SERVED = {"true" if served else "false"};
+// Adaptive polling: re-read the interval from #updated[data-refresh] each cycle,
+// so the instant cold-start board (a short interval) auto-upgrades to live prices
+// within a cycle, then settles to the live cadence (15m open / 30m extended / 1h
+// closed). No manual reload needed; catches session changes too.
+function _pollMs(){{ const u=document.getElementById('updated');
+  const s=u&&u.dataset.refresh?parseInt(u.dataset.refresh,10):0;
+  return (s>0?Math.max(20000,Math.min(s*1000,3600000)):0); }}
+function _schedulePoll(){{
+  if(!SERVED || typeof refreshData!=='function') return;
+  const ms=_pollMs(); if(!ms) return;
+  setTimeout(function(){{ refreshData(); _schedulePoll(); }}, ms);
+}}
 (function init(){{
   const t=localStorage.getItem('wl_theme'); if(t) document.documentElement.setAttribute('data-theme', t);
   const b=document.getElementById('banner');
@@ -1388,10 +1401,7 @@ const SERVED = {"true" if served else "false"};
   setView(view);
   fmtUpdated();
   wireTableScroll();
-  // poll only while a session is active (short interval); no updates when the
-  // market is closed after 8pm ET or on weekends (long interval).
-  if(SERVED && typeof refreshData==='function' && REFRESH_MS>0 && REFRESH_MS<=3600000)
-    setInterval(refreshData, Math.max(30000, REFRESH_MS));
+  _schedulePoll();
 }})();
 {js_served}
 </script>

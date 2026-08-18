@@ -198,11 +198,10 @@ def _apply_ext_prices(rows, status, live: bool = True) -> None:
     if not (finnhub.has_finnhub() or fmp.has_fmp()):
         return                                    # local: keep the snapshot's fresh ext
     fresh: dict = {}
-    # Fetch on any weekday non-regular session (pre/after/overnight) and let
-    # Yahoo's marketState decide if there's a pre/post price — our after-hours
-    # window (ends 8pm ET) is stricter than Yahoo's POST state, so this keeps the
-    # extended price showing through the evening. Never on weekends or the fast build.
-    if live and status.label in ("pre-market", "after-hours", "closed"):
+    # Fetch during the extended sessions (pre-market 4:00-9:30, after-hours
+    # 16:00-20:00 ET). Yahoo's marketState decides if there's a pre/post price.
+    # Not overnight/weekend (no extended trading) and never on the fast build.
+    if live and status.label in ("pre-market", "after-hours"):
         try:
             from ..data import yahoo_ext
             fresh = yahoo_ext.ext_quotes([r.ticker for r in rows])

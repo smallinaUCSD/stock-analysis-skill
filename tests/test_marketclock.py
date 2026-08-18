@@ -12,8 +12,8 @@ def test_refresh_cadence_matches_session():
     assert refresh_seconds_for(market_status(_et(2026, 7, 22, 10, 0))) == 900   # open
     assert refresh_seconds_for(market_status(_et(2026, 7, 22, 18, 0))) == 1800  # after-hours
     assert refresh_seconds_for(market_status(_et(2026, 7, 22, 8, 0))) == 1800   # pre-market
-    assert refresh_seconds_for(market_status(_et(2026, 7, 22, 22, 0))) == 21600  # closed
-    assert refresh_seconds_for(market_status(_et(2026, 7, 25, 10, 0))) == 21600  # weekend
+    assert refresh_seconds_for(market_status(_et(2026, 7, 22, 22, 0))) == 3600   # closed
+    assert refresh_seconds_for(market_status(_et(2026, 7, 25, 10, 0))) == 3600   # weekend
     assert refresh_seconds_for(market_status(_et(2026, 7, 22, 10, 0)), base_interval=5) == 300
 
 

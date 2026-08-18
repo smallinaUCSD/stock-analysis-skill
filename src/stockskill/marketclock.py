@@ -85,4 +85,5 @@ def refresh_seconds_for(status: "MarketStatus", base_interval: float | None = No
         return 900          # 15 min
     if status.label in ("pre-market", "after-hours"):
         return 1800         # 30 min (extended hours)
-    return 21600            # 6h (closed after 8pm ET / weekend -> no live updates)
+    return 3600             # 1h overnight/weekend — still polls so the page picks
+    #                         up the next session's open without a manual reload
