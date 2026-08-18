@@ -157,7 +157,6 @@ def interpret_html() -> str:
 <p class="disc">This is educational analysis, not investment advice, and not a
 recommendation to buy, sell, or hold any security. Every figure is a model estimate
 built on free, possibly delayed data; the decision is always yours.</p>
-{back}
 <div class="foot">2026 SMI Investments. All rights reserved.</div>
 </div>
 <script>
