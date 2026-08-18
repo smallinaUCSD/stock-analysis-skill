@@ -1,0 +1,37 @@
+name: keep-alive
+
+# Keep the free Render instance from sleeping (it spins down after ~15 min idle),
+# so the board doesn't stall on the first visit after a quiet period. Best-effort:
+# GitHub's scheduler can delay runs, so each run pings several times ~2.5 min apart
+# to bridge the gaps. Pings the cheap /healthz (no board build); the adaptive
+# client poll keeps prices fresh once the board is open. Public repo -> free minutes.
+
+on:
+  schedule:
+    - cron: "*/10 * * * 1-5"     # weekdays, ~every 10 min (UTC) — covers pre-market
+    #                              (4am ET) through after-hours (8pm ET) + evening
+  workflow_dispatch: {}
+
+permissions: {}
+
+concurrency:
+  group: keepalive
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Ping Render health endpoint
+        run: |
+          URL="${KEEPALIVE_URL:-https://stockskill.onrender.com/healthz}"
+          for i in $(seq 1 4); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 45 "$URL" || echo 000)
+            echo "$(date -u +%H:%M:%S)  ping $i -> $code"
+            [ "$i" -lt 4 ] && sleep 150
+          done
+        env:
+          # Override in repo Settings -> Secrets and variables -> Actions -> Variables
+          # (name KEEPALIVE_URL) if the Render URL ever changes.
+          KEEPALIVE_URL: ${{ vars.KEEPALIVE_URL }}
