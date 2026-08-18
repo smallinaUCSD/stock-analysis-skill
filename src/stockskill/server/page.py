@@ -237,7 +237,7 @@ function render(d){
      + '<div class="big">'+money(d.price)+'</div>'
      + '<div class="muted" style="font-size:12px">as of '+d.as_of+' · beta '+num(d.beta)+' · div yield '+pct(d.dividend_yield)+'</div>'
    + '</div>'
-   + '<div class="card"><h2>Valuation — bear / base / bull fair value</h2>'
+   + '<div class="card"><h2>Valuation - bear / base / bull fair value</h2>'
      + (v.note ? '<div class="vnote">'+esc(v.note)+'</div>' : '')
      + '<div class="scenario">'
      + '<div class="scn bear"><div class="lab">Bear</div><div class="val">'+money(v.bear)+'</div></div>'
@@ -290,8 +290,8 @@ function renderEval(d){
   return '<div style="font-weight:700;margin-bottom:6px">'+esc(d.action)+' '+esc(d.ticker)
     + ' @ '+money(d.price)+'</div>'+facs
     + '<div class="align '+acls+'">Support '+d.n_support+' · Against '+d.n_against+rr
-    + ' — '+esc(d.alignment)+'</div>'
-    + '<div class="muted" style="font-size:11px;margin-top:6px">Analysis, not advice — the decision is yours.</div>';
+    + ' - '+esc(d.alignment)+'</div>'
+    + '<div class="muted" style="font-size:11px;margin-top:6px">Analysis, not advice - the decision is yours.</div>';
 }
 document.getElementById('ev-ticker').addEventListener('keydown', e=>{ if(e.key==='Enter') runEval(); });
 </script>

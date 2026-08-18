@@ -1,4 +1,4 @@
-"""Full-page deep analysis for one ticker — roomier and larger-text than the
+"""Full-page deep analysis for one ticker - roomier and larger-text than the
 card modal, opened from the card via a button. Reuses the board's *tested* render
 helpers (valuation, trade setup + sizing + regime, options); adds no new math.
 """
@@ -32,8 +32,12 @@ body{font-size:15px}
 .asec .ts-sub{font-size:13px;margin:6px 0;line-height:1.5}
 .asec .fvtable{width:100%;font-size:14.5px;margin:2px 0 4px}
 .asec .fvtable td,.asec .fvtable th{padding:7px 10px}
-.a-back{display:inline-block;margin:14px 0;color:var(--accent);text-decoration:none;font-size:14px}
+.a-back{display:inline-block;margin:14px 0;color:var(--muted);text-decoration:none;font-size:14px}
+.a-back:hover{color:var(--ink);text-decoration:underline}
 .a-note{color:var(--muted);font-size:12.5px;margin-top:16px;line-height:1.5}
+.h-help{color:var(--accent);text-decoration:none;font-weight:600}.h-help:hover{text-decoration:underline}
+.a-foot{color:var(--muted);font-size:12px;text-align:center;margin:26px 0 6px;
+  padding-top:14px;border-top:1px solid var(--border)}
 """
 
 
@@ -52,15 +56,22 @@ def analysis_html(row) -> str:
 
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{tk} — analysis</title><style>{_CSS}{_CSS_EXTRA}{_ANALYSIS_CSS}</style></head>
+<title>{tk} analysis</title><style>{_CSS}{_CSS_EXTRA}{_ANALYSIS_CSS}</style></head>
 <body><div class="wrap">
 <div class="a-head"><h1>{tk}</h1><span class="nm">{name}</span>
   <span class="badge {sig_cls}">{_html.escape(row.signal)}</span>
   <span class="a-price">{price} <span class="{dcls}" style="font-size:16px">{dtxt}</span></span></div>
-<a class="a-back" href="/">← back to board</a>
 <div class="agrid">{val_sec}{trade_sec}{opts_sec}</div>
-<p class="a-note">Analysis, not advice — valuation, edge estimates, and regime reads
+<p class="a-note">Analysis, not advice. Valuation, edge estimates, and regime reads
 are model outputs on free data; the decision is yours. See the board card for the
-price chart and recent news.</p>
-<a class="a-back" href="/">← back to board</a>
-</div></body></html>"""
+price chart and recent news. <a class="h-help" href="/interpret" onclick="return openHelp(event)">How to read these →</a></p>
+<a class="a-back" href="/" onclick="return goBack(event)">← back to board</a>
+<div class="a-foot">2026 SMI Investments. All rights reserved.</div>
+</div>
+<script>
+function goBack(e){{ if(e) e.preventDefault();
+  if(window.opener && !window.opener.closed){{ try{{window.opener.focus();}}catch(_){{}}; window.close(); }}
+  else location.href='/'; return false; }}
+function openHelp(e){{ if(e) e.preventDefault(); window.open('/interpret','_blank'); return false; }}
+</script>
+</body></html>"""

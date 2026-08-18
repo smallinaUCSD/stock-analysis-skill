@@ -1,4 +1,4 @@
-"""Render the holdings dashboard (served locally only — never published).
+"""Render the holdings dashboard (served locally only - never published).
 
 Accounts are stacked vertically; each position shows shares, live price, today's
 gain, net gain, cost basis, value and % of account. Cash is shown as Fidelity
@@ -16,36 +16,36 @@ _ACCOUNTS = [("brokerage", "Brokerage"), ("roth", "Roth IRA"), ("401k", "401(k)"
 
 
 def _money(x):
-    return "—" if x is None else "${:,.0f}".format(x)
+    return "-" if x is None else "${:,.0f}".format(x)
 
 
 def _price(x):
-    return "—" if x is None else "${:,.2f}".format(x)
+    return "-" if x is None else "${:,.2f}".format(x)
 
 
 def _shares(x):
     if x is None:
-        return "—"
+        return "-"
     return f"{x:,.2f}" if x < 1000 else f"{x:,.0f}"
 
 
 def _pct(x):
     if x is None:
-        return '<span class="muted">—</span>'
+        return '<span class="muted">-</span>'
     cls = "up" if x >= 0 else "down"
     return f'<span class="{cls}">{x*100:+.2f}%</span>'
 
 
 def _sign_money(x):
     if x is None:
-        return '<span class="muted">—</span>'
+        return '<span class="muted">-</span>'
     cls = "up" if x >= 0 else "down"
     return f'<span class="{cls}">{"+" if x >= 0 else "-"}${abs(x):,.0f}</span>'
 
 
 def _yld(x):
     if not x:
-        return '<span class="muted">—</span>'
+        return '<span class="muted">-</span>'
     return f"{x*100:.2f}%"
 
 
@@ -76,7 +76,7 @@ def _positions_table(acct: dict, cash_symbol: str) -> str:
     rows.append(
         '<tr class="h-cash">'
         f'<td class="h-tk">{html.escape(cash_symbol)} <span class="muted">cash</span></td>'
-        '<td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td>'
+        '<td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td>'
         f'<td class="h-mv">{_money(acct["cash"])}</td>'
         f'<td class="h-pct">{cash_pct*100:.1f}%</td></tr>')
     return ('<table class="htable"><thead><tr>'
@@ -154,7 +154,7 @@ def holdings_html(snap: dict, updated: str = "") -> str:
 </div>
 
 <p class="muted" style="font-size:11.5px;margin-top:14px">
-Bookkeeping only — records what you did elsewhere; it does not place orders.
+Bookkeeping only - records what you did elsewhere; it does not place orders.
 Prices are live (yfinance, may be delayed); shares are inferred from value when
 not recorded with a price. Net gain needs a cost basis.</p>
 </div>
@@ -174,7 +174,7 @@ function doTrade(){{
     +'&side='+side+'&amount='+encodeURIComponent(amt)+'&settle='+(settle?'1':'0');
   if(price) q+='&price='+encodeURIComponent(price);
   fetch('/api/holdings/trade'+q,{{method:'POST'}}).then(r=>r.json()).then(d=>{{
-    if(d.ok){{ _msg('tmsg',(side==='buy'?'Bought ':'Sold ')+'$'+amt+' '+tk+(d.note?' — '+d.note:''),true);
+    if(d.ok){{ _msg('tmsg',(side==='buy'?'Bought ':'Sold ')+'$'+amt+' '+tk+(d.note?' - '+d.note:''),true);
       setTimeout(()=>location.reload(),650); }}
     else _msg('tmsg',d.error||'failed',false);
   }}).catch(()=>_msg('tmsg','network error',false));

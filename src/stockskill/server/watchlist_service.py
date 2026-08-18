@@ -26,7 +26,7 @@ _WARMING_HTML = (
     "border-radius:50%;margin:0 auto 18px;animation:sp 1s linear infinite}"
     "@keyframes sp{to{transform:rotate(360deg)}}p{color:#8a93a2}</style></head>"
     "<body><div class='s'></div><h2>Loading the market board…</h2>"
-    "<p>Fetching live data — this can take a moment on first load.<br>"
+    "<p>Fetching live data. This can take a moment on first load.<br>"
     "The page refreshes automatically.</p></body></html>"
 )
 

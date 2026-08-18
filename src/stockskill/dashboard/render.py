@@ -239,7 +239,7 @@ def render_dashboard(*, status, updated_et: str, updated_local: str,
         )
         port_html = f"""
         <div class="card wide">
-          <h2>Portfolio — look-through</h2>
+          <h2>Portfolio - look-through</h2>
           <div class="tiles">{ptiles}</div>
           <div class="grid" style="margin-top:14px">
             <div><h2>Top true exposures</h2>{top_rows}</div>
@@ -251,7 +251,7 @@ def render_dashboard(*, status, updated_et: str, updated_local: str,
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="refresh" content="{int(refresh_seconds)}">
-<title>Market Pulse — {html.escape(status.badge)}</title>
+<title>Market Pulse - {html.escape(status.badge)}</title>
 <style>{_CSS}</style></head>
 <body><div class="wrap">
 <header>
@@ -273,7 +273,7 @@ def render_dashboard(*, status, updated_et: str, updated_local: str,
 </div>
 
 <div class="foot">
-  Computed facts, not signals — every number is produced by tested Python, not estimated.
+  Computed facts, not signals - every number is produced by tested Python, not estimated.
   A defensive lean is a <em>cluster</em> (rising VIX + inverted/flattening curve + narrow
   breadth + credit risk-off), not any single tile. Free ETF/price data; exchange holidays
   not modeled. This is analysis, not investment advice.

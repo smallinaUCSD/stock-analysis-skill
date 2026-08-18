@@ -73,6 +73,11 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
         from .indicators_page import indicators_html
         return indicators_html(request.args.get("t", ""))
 
+    @app.get("/interpret")
+    def interpret_page():
+        from .interpret_page import interpret_html
+        return interpret_html()
+
     @app.get("/analysis/<ticker>")
     def analysis_page(ticker: str):
         from .analysis_page import analysis_html

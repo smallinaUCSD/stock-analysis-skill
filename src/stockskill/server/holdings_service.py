@@ -246,7 +246,7 @@ class HoldingsService:
                 cash = self._cash_row(rows, account)
                 cash.market_value += amount if side == "sell" else -amount
                 if cash.market_value < 0:
-                    note = "cash is now negative — deposit to reconcile"
+                    note = "cash is now negative; deposit to reconcile"
             write_rows(self._path, rows)
         self._px_ts = 0.0   # force a price refresh on next snapshot
         return {"ok": True, "ticker": ticker, "account": account, "side": side,

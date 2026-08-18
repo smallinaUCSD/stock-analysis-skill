@@ -130,6 +130,9 @@ table.wl th:nth-child(15),table.wl td:nth-child(15){text-align:left}
   border:1px solid var(--accent);background:var(--surface-2);color:var(--accent);
   font-weight:650;font-size:13.5px;cursor:pointer;transition:background .12s,color .12s}
 .analysis-btn:hover{background:var(--accent);color:#fff}
+.site-help{color:var(--accent);text-decoration:none;font-weight:600}.site-help:hover{text-decoration:underline}
+.site-foot{color:var(--muted);font-size:12px;text-align:center;margin:18px 0 6px;
+  padding-top:14px;border-top:1px solid var(--border)}
 /* fixed-height slots so optional lines don't misalign cards */
 .exthrs{font-size:11.5px;color:var(--muted);margin:1px 0 5px;font-variant-numeric:tabular-nums;min-height:16px}
 .exthrs b{color:var(--ink);font-weight:700}
@@ -374,7 +377,7 @@ def _indicator_chips(r):
         c.append('<span class="chip g">52wH</span>')
     if "near_52w_low" in r.flags:
         c.append('<span class="chip r">52wL</span>')
-    return "".join(c) or '<span class="muted">—</span>'
+    return "".join(c) or '<span class="muted">-</span>'
 
 
 # ---------- per-view renderers ---------- #
@@ -393,7 +396,7 @@ def _factor_cell(r):
     """Table cell: the composite factor percentile (sortable), color-coded."""
     comp = (getattr(r, "factor", None) or {}).get("composite")
     if comp is None:
-        return '<td class="muted" data-sort="-1">—</td>'
+        return '<td class="muted" data-sort="-1">-</td>'
     return f'<td class="{_factor_cls(comp)}" data-sort="{comp}">{comp}</td>'
 
 
@@ -425,8 +428,8 @@ def _row_html(r):
     arrow_cls = "up" if r.trend_score > 1 else ("down" if r.trend_score < -1 else "flat")
     rsi_cls = "up" if (r.rsi or 50) >= 70 else ("down" if (r.rsi or 50) <= 30 else "")
     conf = (f'<span class="conf-{r.confidence}">{r.confidence}</span>'
-            if r.confidence else '<span class="muted">—</span>')
-    sector = html.escape((_abbr_sector(r.sector) or "—")[:16])
+            if r.confidence else '<span class="muted">-</span>')
+    sector = html.escape((_abbr_sector(r.sector) or "-")[:16])
     return (
         f'<tr class="item" {_data_attrs(r)}>'
         f'<td><span class="tk">{html.escape(r.ticker)}</span></td>'
@@ -459,7 +462,7 @@ def _trade_setup_html(r):
     if not s:
         return ""
     illustrative = "" if r.signal in ("BUY", "SHORT") else \
-        '<div class="ts-sub">no active signal — illustrative ATR setup, direction from trend</div>'
+        '<div class="ts-sub">no active signal - illustrative ATR setup, direction from trend</div>'
     # Regime & trend context (Dai-Zhang-Zhu P(bull) + time-series momentum).
     rg = getattr(r, "regime", None) or {}
     regime_line = ""
@@ -478,7 +481,7 @@ def _trade_setup_html(r):
         regime_line += (f'<div class="ts-sub">Stop study · a trailing stop would have '
                         f'<span class="{vcls}">{verdict}{premtxt}</span> '
                         f'<span class="muted">(stops help in trends, hurt in chop)</span></div>')
-    # P(target before stop) — a first-passage probability from drift/vol; the
+    # P(target before stop) - a first-passage probability from drift/vol; the
     # honest edge estimate that feeds Kelly. Informational; always shown. The
     # sizing lenses (fixed 2% risk vs edge-based half-Kelly vs vol-target
     # allocation) differ in *fraction*; dollars only when ACCOUNT_SIZE is set.
@@ -559,7 +562,7 @@ def _valuation_html(r):
         stance_cls, stance = "neg", "Overvalued"
     else:
         stance_cls, stance = "midtone", "Fairly valued"
-    header = (f'<div class="det-h">Stock analyzer — valuation '
+    header = (f'<div class="det-h">Stock analyzer - valuation '
               f'<span class="stance {stance_cls}">{stance}'
               + (f' {mos*100:+.0f}%' if mos is not None else '') + '</span></div>')
 
@@ -584,7 +587,7 @@ def _valuation_html(r):
     mc_p = v.get("mc_prob_undervalued")
     if mc_p is not None:
         p5, p95 = v.get("mc_p5"), v.get("mc_p95")
-        band = (f' <span class="muted" style="font-weight:400">· P5–P95 ${p5:,.0f}–${p95:,.0f}</span>'
+        band = (f' <span class="muted" style="font-weight:400">· P5-P95 ${p5:,.0f}-${p95:,.0f}</span>'
                 if (p5 and p95) else '')
         rows.append('<div class="det-row"><span>Monte Carlo DCF · P(undervalued)</span>'
                     f'<b class="{"up" if mc_p >= 0.5 else "down"}">{mc_p*100:.0f}%</b>{band}</div>')
@@ -860,7 +863,7 @@ def _markets_html(markets):
             last_group = q.group
         chg = q.change
         ccls = "up" if (chg or 0) >= 0 else "down"
-        chg_txt = f"{chg*100:+.2f}%" if chg is not None else "—"
+        chg_txt = f"{chg*100:+.2f}%" if chg is not None else "-"
         px = f"${q.last:,.2f}" if q.last < 100 else f"${q.last:,.0f}"
         rows.append(
             f'<div class="mkrow"><span class="mkname">{html.escape(q.name)}</span>'
@@ -874,13 +877,13 @@ def _macro_html(macro):
     """Macro-trends panel: rate/vol gauges, next Fed decision, event headlines."""
     macro = macro or {}
     body = ""
-    inds = [i for i in macro.get("indicators", []) if i.get("display") not in (None, "—")]
+    inds = [i for i in macro.get("indicators", []) if i.get("display") not in (None, "-")]
     if inds:
         rows = []
         for i in inds:
             chg = i.get("change")
             ccls = "up" if (chg or 0) >= 0 else "down"
-            chg_txt = f"{chg*100:+.2f}%" if chg is not None else "—"
+            chg_txt = f"{chg*100:+.2f}%" if chg is not None else "-"
             rows.append(
                 f'<div class="mkrow"><span class="mkname">{html.escape(i["name"])}</span>'
                 f'<span class="mkpx">{html.escape(str(i["display"]))}</span>'
@@ -1019,8 +1022,8 @@ function _tkv(id){ const el=document.getElementById(id); return el?(el.value||''
 function toolBusy(m){ document.getElementById('tool-out').innerHTML='<div class="muted">'+(m||'Running…')+'</div>'; }
 function toolErr(m){ document.getElementById('tool-out').innerHTML='<div class="t-err">'+m+'</div>'; }
 function _pc(x){ return x>=0?'up':'down'; }
-function _ps(x){ return x==null?'—':(x>=0?'+':'')+(x*100).toFixed(1)+'%'; }
-function _usd(x){ return x==null?'—':'$'+Number(x).toLocaleString(undefined,{maximumFractionDigits:2}); }
+function _ps(x){ return x==null?'-':(x>=0?'+':'')+(x*100).toFixed(1)+'%'; }
+function _usd(x){ return x==null?'-':'$'+Number(x).toLocaleString(undefined,{maximumFractionDigits:2}); }
 function _row(l,v){ return '<div class="t-kv"><span>'+l+'</span><b>'+v+'</b></div>'; }
 function _mrow(l,v,c){ return '<div class="t-kv"><span>'+l+'</span><b class="'+c+'">'+v+'</b></div>'; }
 
@@ -1064,7 +1067,7 @@ function runLook(){ const t=_tkv('ltk'); if(!t){ toolErr('enter a ticker'); retu
       const se=Object.entries(d.sectors).sort((a,b)=>b[1]-a[1]);
       h+='<div class="t-h">Sector weights</div>'+se.map(([k,v])=>_mrow(k.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()), (v*100).toFixed(1)+'%','')).join('');
     }
-    if(d.kind==='basket') h+='<div class="t-note">Basket as of '+(d.as_of||'—')+'. Indices rebalance quarterly — confirm current weights with the issuer.'+(d.verify?' (unverified snapshot)':'')+'</div>';
+    if(d.kind==='basket') h+='<div class="t-note">Basket as of '+(d.as_of||'-')+'. Indices rebalance quarterly - confirm current weights with the issuer.'+(d.verify?' (unverified snapshot)':'')+'</div>';
     if(isEtf) h+='<div class="t-note">'+(d.note||'Top holdings, live from the fund.')+'</div>';
     document.getElementById('tool-out').innerHTML=h;
   }).catch(()=>toolErr('look-through failed'));
@@ -1117,6 +1120,7 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
         '<button class="tool-b" onclick="openTool(\'lookthrough\')">Look-through</button>'
         '<button class="tool-b" onclick="openTool(\'montecarlo\')">Monte Carlo</button>'
         '<button class="tool-b" onclick="openTab(\'/indicators\')">Indicators</button>'
+        '<button class="tool-b" onclick="openTab(\'/interpret\')">Interpret</button>'
         + _holdings_btn +
         '</span>'
         '<span id="addmsg" class="muted"></span></div>'
@@ -1180,8 +1184,10 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
 {tool_modal}
 
 <p class="muted" style="font-size:11.5px;margin-top:14px">
-Signals are rule-based indicator states, not investment advice. Free data (yfinance)
-may be delayed. All values computed by tested Python.</p>
+Signals are rule-based indicator states, not investment advice. Free data may be
+delayed. All values computed by tested Python.
+<a class="site-help" href="/interpret" onclick="openTab('/interpret');return false">How to read this →</a></p>
+<div class="site-foot">2026 SMI Investments. All rights reserved.</div>
 </div>
 <script>
 const active = {{signal:new Set(), condition:new Set(), category:new Set(), section:new Set()}};

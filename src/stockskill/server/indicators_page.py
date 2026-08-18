@@ -113,10 +113,10 @@ var C={close:'var(--ink)', sma20:'#e0a800', sma50:'#8a63d2', bb:'var(--muted)',
        adx:'#8a63d2', pdi:'var(--up)', mdi:'var(--down)', atr:'#14b8a6', obv:'#3b82f6'};
 
 function on(k){ var e=document.getElementById('c-'+k); return !!(e && e.checked); }
-function _fmt(v,d){ return v==null?'—':'$'+Number(v).toLocaleString(undefined,{minimumFractionDigits:d||2,maximumFractionDigits:d||2}); }
-function _big(v){ if(v==null)return '—'; var a=Math.abs(v); var s=v<0?'-':'';
+function _fmt(v,d){ return v==null?'-':'$'+Number(v).toLocaleString(undefined,{minimumFractionDigits:d||2,maximumFractionDigits:d||2}); }
+function _big(v){ if(v==null)return '-'; var a=Math.abs(v); var s=v<0?'-':'';
   if(a>=1e9)return s+(a/1e9).toFixed(1)+'B'; if(a>=1e6)return s+(a/1e6).toFixed(1)+'M'; if(a>=1e3)return s+(a/1e3).toFixed(1)+'k'; return ''+Math.round(v); }
-function num(v,dp){ return v==null?'—':Number(v).toFixed(dp); }
+function num(v,dp){ return v==null?'-':Number(v).toFixed(dp); }
 function _date(iso){ var d=new Date(iso); return (d.getMonth()+1)+'/'+d.getDate()+'/'+String(d.getFullYear()).slice(2); }
 function L(pts){ return pts.filter(function(p){return p;}).map(function(p){return p[0].toFixed(1)+','+p[1].toFixed(1);}).join(' '); }
 function el(tag,attr){ var e=document.createElementNS('http://www.w3.org/2000/svg',tag);

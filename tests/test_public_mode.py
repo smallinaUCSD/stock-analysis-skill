@@ -11,8 +11,9 @@ def test_public_mode_omits_holdings_only():
     for gone in ("/holdings", "/api/holdings", "/api/holdings/trade", "/api/holdings/cash"):
         assert gone not in r, gone
     # the watchlist (incl. add-ticker) and read-only tools stay
-    for kept in ("/", "/indicators", "/analysis/<ticker>", "/api/watchlist/add",
-                 "/api/watchlist/remove", "/api/lookthrough/<ticker>", "/api/search"):
+    for kept in ("/", "/indicators", "/interpret", "/analysis/<ticker>",
+                 "/api/watchlist/add", "/api/watchlist/remove",
+                 "/api/lookthrough/<ticker>", "/api/search"):
         assert kept in r, kept
 
 
