@@ -53,10 +53,10 @@ def _r(label, value, cls=""):
 
 
 def _box(title, inner, read="", help_id=""):
-    link = (f'<a class="a-help" href="/interpret#{help_id}" '
-            f'onclick="return openHelp(event)">How to read this ?</a>') if help_id else ""
+    # help_id kept for call-site compatibility; per-box links removed in favour of
+    # the single "Full guide" link at the bottom of the page.
     readhtml = f'<div class="a-read">{read}</div>' if read else ""
-    return f'<div class="asec"><div class="a-h">{title}{link}</div>{inner}{readhtml}</div>'
+    return f'<div class="asec"><div class="a-h">{title}</div>{inner}{readhtml}</div>'
 
 
 def _pctpair(x):
@@ -264,7 +264,6 @@ def analysis_html(row, closes=None, refresh_seconds: int = 900) -> str:
 <p class="a-note">Analysis, not advice. Every figure is a model estimate on free,
 possibly delayed data; the decision is yours.
 <a class="a-help" style="margin:0" href="/interpret" onclick="return openHelp(event)">Full guide &rarr;</a></p>
-<a class="a-back" href="/" onclick="return goBack(event)">&larr; back to board</a>
 <div class="a-foot">2026 SMI Investments. All rights reserved.</div>
 </div>
 <script>
