@@ -199,6 +199,18 @@ def test_apply_ext_fresh_from_yahoo_after_hours(key, monkeypatch):
     assert rows[0].market_state == "POST"
 
 
+def test_apply_ext_fetches_when_market_closed(key, monkeypatch):
+    # Outside regular hours (incl. overnight/weekend "closed") we still show the
+    # last extended price from Yahoo, not nothing.
+    from stockskill.data import yahoo_ext
+    monkeypatch.setattr(yahoo_ext, "ext_quotes",
+                        lambda tks: {"AAPL": {"market_state": "POSTPOST",
+                                              "ext_price": 310.0, "ext_change": 0.001}})
+    rows = [_row("AAPL", 300.0)]
+    _apply_ext_prices(rows, SimpleNamespace(label="closed"), live=True)
+    assert rows[0].ext_price == 310.0
+
+
 def test_apply_ext_no_yahoo_on_fast_build(key, monkeypatch):
     # The network-free cold-start build (live=False) must not fetch Yahoo.
     from stockskill.data import yahoo_ext
