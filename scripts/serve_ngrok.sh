@@ -9,11 +9,12 @@
 #   2. brew install ngrok
 #   3. sign up at ngrok.com (free), then:  ngrok config add-authtoken <your-token>
 #
-# Then just:  ./scripts/serve_ngrok.sh
+# Then just:  ./scripts/serve_ngrok.sh          (uses port 8787)
+# Or pick a port:  PORT=8899 ./scripts/serve_ngrok.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-PORT="${PORT:-8000}"
+PORT="${PORT:-8787}"
 
 # Load .env (API keys) if present.
 if [ -f .env ]; then
@@ -21,6 +22,15 @@ if [ -f .env ]; then
 else
   echo "!! No .env found. Copy .env.example to .env and add your keys first."
   echo "   (Without keys it still runs, using yfinance for data.)"
+fi
+
+# Refuse to start on a busy port (otherwise gunicorn spams "Address already in
+# use"). Show what's on it so the fix is obvious.
+if lsof -nP -iTCP:"${PORT}" -sTCP:LISTEN >/dev/null 2>&1; then
+  echo "!! Port ${PORT} is already in use:"
+  lsof -nP -iTCP:"${PORT}" -sTCP:LISTEN
+  echo "   Stop that process, or run on another port:  PORT=8899 $0"
+  exit 1
 fi
 
 # Public mode + the committed data snapshot, matching the hosted config. Added
@@ -36,7 +46,16 @@ echo ">> Starting the board on http://127.0.0.1:${PORT} ..."
 uv run gunicorn -w 1 -k gthread --threads 8 -t 120 \
   -b "127.0.0.1:${PORT}" 'stockskill.server:create_app()' &
 SERVER_PID=$!
-trap 'echo; echo ">> Stopping server (pid $SERVER_PID)"; kill $SERVER_PID 2>/dev/null || true' EXIT
+
+# Clean shutdown: kill uv, its gunicorn children, and anything still holding the
+# port (belt-and-suspenders, since we know the port was ours). Runs on Ctrl-C too.
+cleanup() {
+  echo; echo ">> Stopping server..."
+  pkill -P "$SERVER_PID" 2>/dev/null || true
+  kill "$SERVER_PID" 2>/dev/null || true
+  lsof -nP -tiTCP:"${PORT}" -sTCP:LISTEN 2>/dev/null | xargs kill 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
 
 # Wait for it to answer before opening the tunnel.
 for _ in $(seq 1 30); do
@@ -54,5 +73,5 @@ else
   echo "     http://127.0.0.1:${PORT}"
   echo "   To share it publicly:  brew install ngrok  &&  ngrok http ${PORT}"
   echo "   (Leave this running; press Ctrl-C to stop.)"
-  wait $SERVER_PID
+  wait "$SERVER_PID"
 fi
