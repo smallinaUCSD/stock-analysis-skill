@@ -127,9 +127,12 @@ def test_analysis_page_and_trimmed_modal():
     from stockskill.watchlist.render import _card_detail
     td = pickle.load(open("data/cache/GOOGL.pkl", "rb"))
     row = build_row(td, SignalConfig.from_env())
-    # full analysis page has the dense sections
-    page = analysis_html(row)
-    assert "Stock analyzer" in page and "Trade setup" in page
+    # full analysis page has one box per model + auto-refresh
+    page = analysis_html(row, td.ohlcv["close"], 900)
+    for title in ("Valuation", "Monte Carlo DCF", "Trade setup", "Position sizing",
+                  "Momentum", "Regime", "Stop study", "Virtue of Complexity"):
+        assert (">" + title) in page, title
+    assert "setInterval(refresh" in page          # auto-updates on the market cadence
     # modal is trimmed: no full method table, but has the button to the page
     modal = _card_detail(row)
     assert "analysis-btn" in modal and "/analysis/GOOGL" in modal

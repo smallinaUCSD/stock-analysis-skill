@@ -83,11 +83,20 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
         from .analysis_page import analysis_html
         from ..watchlist.pipeline import fetch_one
         from ..watchlist import build_row
+        from ..watchlist.build import _overlay_live_prices, _apply_ext_prices
         from ..signals import SignalConfig
+        from ..marketclock import market_status, refresh_seconds_for
         td = fetch_one(ticker.upper(), period=period, cache_dir=cache_dir, ttl=cache_ttl)
         if not td or not (td.ohlcv or {}).get("close"):
             return f"<p style='font-family:system-ui;padding:24px'>No data for {ticker}.</p>", 404
-        return analysis_html(build_row(td, SignalConfig.from_env()))
+        row = build_row(td, SignalConfig.from_env())
+        # Overlay the live price (Finnhub) + extended-hours (Yahoo) so the page
+        # shows the current price, not the days-old committed snapshot.
+        status = market_status()
+        _overlay_live_prices([row], status)
+        _apply_ext_prices([row], status, live=True)
+        return analysis_html(row, (td.ohlcv or {}).get("close", []),
+                             refresh_seconds_for(status))
 
     # Add-ticker stays available in public mode (shared, resets on restart);
     # only HOLDINGS is gated, since that's the personal/private data.
