@@ -93,8 +93,12 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
         # Overlay the live price (Finnhub) + extended-hours (Yahoo) so the page
         # shows the current price, not the days-old committed snapshot.
         status = market_status()
-        _overlay_live_prices([row], status)
-        _apply_ext_prices([row], status, live=True)
+        _overlay_live_prices([row], status)   # Finnhub: fast, reliable, one symbol
+        # NOT live=True: that fetches Yahoo extended-hours synchronously, which
+        # stalls on the host's datacenter IP and hangs the page (and the worker).
+        # live=False clears any stale snapshot ext price without a network call;
+        # the board still shows after-hours via its background build.
+        _apply_ext_prices([row], status, live=False)
         return analysis_html(row, (td.ohlcv or {}).get("close", []),
                              refresh_seconds_for(status))
 

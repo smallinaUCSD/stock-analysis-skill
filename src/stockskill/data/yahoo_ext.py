@@ -18,13 +18,15 @@ _HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"}
 
 def _get_crumb(session) -> str | None:
     try:
-        session.get("https://fc.yahoo.com/", headers=_HEADERS, timeout=8)  # sets cookies
+        # (connect, read) timeouts: a datacenter IP that Yahoo throttles must fail
+        # FAST, never hang the caller (the analysis page fetches this in-request).
+        session.get("https://fc.yahoo.com/", headers=_HEADERS, timeout=(3, 4))  # sets cookies
     except Exception:  # noqa: BLE001
         pass
     for host in ("query1", "query2"):
         try:
             r = session.get(f"https://{host}.finance.yahoo.com/v1/test/getcrumb",
-                            headers=_HEADERS, timeout=8)
+                            headers=_HEADERS, timeout=(3, 4))
             txt = (r.text or "").strip()
             if r.status_code == 200 and txt and "<" not in txt:
                 return txt
@@ -66,7 +68,7 @@ def ext_quotes(tickers: list[str], chunk: int = 100) -> dict[str, dict]:
         try:
             r = session.get("https://query1.finance.yahoo.com/v7/finance/quote",
                             params={"symbols": ",".join(syms[i:i + chunk]), "crumb": crumb},
-                            headers=_HEADERS, timeout=12)
+                            headers=_HEADERS, timeout=(3, 6))
             if r.status_code != 200:
                 continue
             results = (r.json().get("quoteResponse") or {}).get("result") or []
