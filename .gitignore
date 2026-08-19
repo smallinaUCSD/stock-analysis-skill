@@ -19,3 +19,9 @@ holdings.csv
 
 # Generated dynamic watchlist
 data/smart_tickers.csv
+
+# Local secrets (API keys) -- NEVER commit. Copy .env.example -> .env.
+.env
+
+# Local user-added tickers persisted to disk (see STOCKSKILL_ADDED_FILE)
+data/added.json

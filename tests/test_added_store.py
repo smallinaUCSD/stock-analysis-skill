@@ -10,9 +10,29 @@ from stockskill.server import added_store
 def test_store_disabled_without_env(monkeypatch):
     monkeypatch.delenv("UPSTASH_REDIS_REST_URL", raising=False)
     monkeypatch.delenv("UPSTASH_REDIS_REST_TOKEN", raising=False)
+    monkeypatch.delenv("STOCKSKILL_ADDED_FILE", raising=False)
     assert not added_store.enabled()
     assert added_store.load_added() is None       # unavailable -> caller keeps in-memory
     assert added_store.save_added(["NVDA"]) is False
+
+
+def test_file_backend_round_trips_and_wins(monkeypatch, tmp_path):
+    """Local-file backend (for ngrok/local dev): persists to disk, no network,
+    and takes precedence over Upstash when both are set."""
+    path = tmp_path / "added.json"
+    monkeypatch.setenv("STOCKSKILL_ADDED_FILE", str(path))
+    monkeypatch.setenv("UPSTASH_REDIS_REST_URL", "https://ex.upstash.io")
+    monkeypatch.setenv("UPSTASH_REDIS_REST_TOKEN", "tok")
+
+    def boom(*a, **k):
+        raise AssertionError("hit the network though a local file was configured")
+
+    monkeypatch.setattr("requests.get", boom)
+    monkeypatch.setattr("requests.post", boom)
+    assert added_store.enabled()
+    assert added_store.load_added() == []            # missing file -> empty
+    assert added_store.save_added(["nvda", "tsla"]) is True
+    assert added_store.load_added() == ["NVDA", "TSLA"]   # persisted + upper-cased
 
 
 class _Resp:
