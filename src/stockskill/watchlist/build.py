@@ -237,6 +237,7 @@ def build_watchlist_html(tickers_spec, *, period: str = "5y", workers: int = 5,
     background (avoids the cold-start warming spinner).
     """
     import os
+    import time
     from ..marketclock import market_status, refresh_seconds_for, ET
     from ..signals import SignalConfig
     from . import fetch_all, build_row, render_watchlist
@@ -258,7 +259,17 @@ def build_watchlist_html(tickers_spec, *, period: str = "5y", workers: int = 5,
 
     data = fetch_all(tickers, period=period, workers=workers, cache_dir=cache_dir, ttl=ttl)
     cfg = SignalConfig.from_env()
-    rows = [build_row(data[t], cfg, tag_map.get(t)) for t in tickers if t in data]
+    # Build rows, yielding the CPU periodically on the served board: the first
+    # (uncached) build runs the heavy per-ticker models, and on a small shared-CPU
+    # host that must not monopolise the core or the health check times out and the
+    # worker is killed. Cached rebuilds are cheap, so the sleeps are negligible.
+    rows = []
+    for i, t in enumerate(tickers):
+        if t not in data:
+            continue
+        rows.append(build_row(data[t], cfg, tag_map.get(t)))
+        if served and i % 6 == 5:
+            time.sleep(0.01)
     _attach_factors(rows, data)
     custom = load_custom_alerts(alerts_path) if alerts_path else []
     alerts = all_alerts(rows, custom)

@@ -71,6 +71,24 @@ def test_build_row_rising_series():
     assert len(row.sparkline) == 30
 
 
+def test_build_row_caches_on_snapshot_but_isolates_copies():
+    """Rows are cached per snapshot (so 15-min rebuilds skip the heavy models),
+    yet each call returns an independent copy a live-price overlay can mutate
+    without corrupting the cached original."""
+    from stockskill.watchlist.row import _ROW_CACHE, _snapshot_key
+    td = _rising_data(ticker="CACHETST")
+    _ROW_CACHE.pop(_snapshot_key(td), None)
+    r1 = build_row(td, SignalConfig())
+    assert _snapshot_key(td) in _ROW_CACHE            # computed + cached
+    r2 = build_row(td, SignalConfig())
+    assert r1 is not r2 and r1.changes is not r2.changes   # distinct copies
+    # mutating one (as the live overlay does) must not leak into the next build
+    r1.changes["1d"] = 42.0
+    r1.price = -1.0
+    r3 = build_row(td, SignalConfig())
+    assert r3.changes["1d"] != 42.0 and r3.price == r2.price
+
+
 def test_build_row_error():
     td = TickerData("BAD", {"close": []}, None, error="boom")
     row = build_row(td, SignalConfig())

@@ -87,8 +87,56 @@ def _downsample_history(dates, closes, daily_bars: int = 130, older_step: int = 
             "c": [round(float(closes[i]), 2) for i in idx]}
 
 
+# Per-ticker row cache keyed on the SNAPSHOT identity (not the live price). The
+# expensive parts of a row - Monte Carlo DCF valuation and the regime models -
+# derive only from the committed daily snapshot, so they are identical across
+# every intraday rebuild. Computing them once and cloning the row on each refresh
+# (the live price is overlaid AFTER build_row) keeps the 15-min board rebuild
+# cheap, which is what stops the heavy build from starving a small host's health
+# check. The key changes when the daily snapshot does, so it self-invalidates.
+_ROW_CACHE: dict = {}
+_ROW_CACHE_MAX = 800
+
+
+def _snapshot_key(td: TickerData):
+    o = td.ohlcv or {}
+    closes = o.get("close", [])
+    dates = o.get("dates") or []
+    last_date = dates[-1].isoformat() if dates else ""
+    last_close = round(float(closes[-1]), 4) if closes else 0.0
+    return (td.ticker, len(closes), last_date, last_close)
+
+
+def _clone_row(row: TickerRow, section_tags: set | None) -> TickerRow:
+    """A copy safe to overlay a live price onto without touching the cached row.
+
+    Only the containers mutated after build_row (``changes`` gets a live 1d value
+    patched in) need fresh copies; ``valuation``/``regime``/``factor`` are read-only
+    once built, so they can be shared."""
+    import dataclasses
+    return dataclasses.replace(
+        row,
+        changes=dict(row.changes),
+        flags=set(row.flags),
+        categories=set(row.categories),
+        sections=set(section_tags) if section_tags is not None else set(row.sections),
+    )
+
+
 def build_row(td: TickerData, cfg: SignalConfig | None = None,
               section_tags: set | None = None) -> TickerRow:
+    key = _snapshot_key(td)
+    hit = _ROW_CACHE.get(key)
+    if hit is None:
+        hit = _compute_row(td, cfg, section_tags)
+        if len(_ROW_CACHE) > _ROW_CACHE_MAX:      # bound memory; keys accrue daily
+            _ROW_CACHE.clear()
+        _ROW_CACHE[key] = hit
+    return _clone_row(hit, section_tags)
+
+
+def _compute_row(td: TickerData, cfg: SignalConfig | None = None,
+                 section_tags: set | None = None) -> TickerRow:
     cfg = cfg or SignalConfig()
     row = TickerRow(ticker=td.ticker, sections=set(section_tags or ()))
     if td.error:
