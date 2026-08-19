@@ -9,9 +9,12 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 WORKDIR /app
 COPY . .
 # Only the runtime deps + the deploy group (gunicorn). --no-default-groups drops
-# the dev group entirely, so production never downloads pytest et al. (smaller,
-# faster, and no dev-only PyPI hiccup can fail the deploy).
-RUN uv sync --frozen --no-default-groups --group deploy
+# the dev group entirely, so production never downloads pytest et al. Retry with
+# backoff so a momentary PyPI/network hiccup doesn't fail the whole deploy (the
+# build then fails only if all three attempts fail).
+RUN uv sync --frozen --no-default-groups --group deploy \
+ || (echo "retry 1..." && sleep 15 && uv sync --frozen --no-default-groups --group deploy) \
+ || (echo "retry 2..." && sleep 30 && uv sync --frozen --no-default-groups --group deploy)
 
 # Safe shared mode (see create_app / DEPLOYMENT.md). Override BMC via the host env.
 ENV STOCKSKILL_PUBLIC=1
