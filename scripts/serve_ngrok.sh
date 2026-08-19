@@ -66,7 +66,13 @@ done
 if command -v ngrok >/dev/null 2>&1; then
   echo ">> Opening public ngrok tunnel. Share the https URL it prints below."
   echo "   (Press Ctrl-C to stop both the tunnel and the server.)"
-  ngrok http "${PORT}"
+  # A free ngrok account includes ONE static domain (ngrok dashboard -> Domains).
+  # Set NGROK_DOMAIN in .env to keep the same shareable URL across restarts.
+  if [ -n "${NGROK_DOMAIN:-}" ]; then
+    ngrok http --url="${NGROK_DOMAIN}" "${PORT}"
+  else
+    ngrok http "${PORT}"
+  fi
 else
   echo
   echo "!! ngrok is not installed. The board is live locally at:"
