@@ -42,6 +42,12 @@ class WatchlistService:
         self._period = period
         self._cache_ttl = cache_ttl
         self._added: list[str] = []          # user-added, in order
+        # Restore adds persisted in the external store (the host's disk is
+        # ephemeral, so without this every restart/redeploy would drop them).
+        from . import added_store
+        persisted = added_store.load_added()
+        if persisted:
+            self._added = persisted
         self._html: str | None = None
         self._ts = 0.0
         self._refresh = 1800
@@ -157,6 +163,7 @@ class WatchlistService:
             if t not in self._added:
                 self._added.append(t)
             self._html = None            # force a rebuild on next fetch
+        self._persist()
         self._rebuild()
         return {"ok": True, "ticker": t}
 
@@ -168,8 +175,17 @@ class WatchlistService:
                 self._html = None
             else:
                 return {"ok": False, "error": f"{t} is not a user-added ticker"}
+        self._persist()
         self._rebuild()
         return {"ok": True, "ticker": t}
+
+    def _persist(self) -> None:
+        """Best-effort write of the added list to the external store so it
+        survives restarts. A no-op when no store is configured."""
+        from . import added_store
+        with self._lock:
+            snapshot = list(self._added)
+        added_store.save_added(snapshot)
 
     def added(self) -> list[str]:
         with self._lock:

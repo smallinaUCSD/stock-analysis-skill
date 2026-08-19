@@ -60,6 +60,22 @@ The repo already ships everything: a `Dockerfile` (gunicorn + the public app), a
 5. Deploy. Render gives you `https://stockskill.onrender.com` (HTTPS included).
    Health check: `/healthz` returns `{"ok": true, "public": true}`.
 
+#### Persist user-added tickers (so "Add" sticks forever)
+
+Render's free filesystem is **ephemeral** — reset on every restart, sleep/wake, and
+redeploy — so tickers added through the board's Add box are lost unless kept in an
+external store. Point the app at a free **Upstash Redis** database and adds persist
+across all of those:
+
+1. Sign up at **upstash.com** (free) → **Create Database** → Redis. Any region.
+2. On the database page, copy the **REST API** credentials: `UPSTASH_REDIS_REST_URL`
+   and `UPSTASH_REDIS_REST_TOKEN`.
+3. In Render → the service → **Environment**, add both as env vars. Save (redeploys).
+
+Without these two vars the app still works exactly as before — adds just live in
+memory and reset on restart. The store keeps only a JSON list of ticker symbols
+(e.g. `["NVDA","TSLA"]`), never any holdings or personal data.
+
 Locally you can run the exact same server:
 
 ```bash

@@ -27,3 +27,8 @@ services:
       - key: FINNHUB_API_KEY
         sync: false      # Finnhub key — real-time quotes for the live board overlay
                          # (FMP free tier blocks multi-symbol batch quotes)
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false      # Upstash Redis REST URL — persists user-added tickers so
+                         # they survive restarts/redeploys (host disk is ephemeral)
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false      # Upstash Redis REST token (pairs with the URL above)
