@@ -58,7 +58,7 @@ def _get(path: str, **params):
     params["token"] = key
     try:
         import requests
-        r = requests.get(_BASE + path, params=params, timeout=15)
+        r = requests.get(_BASE + path, params=params, timeout=8)
         if r.status_code != 200:
             return None
         return r.json()
@@ -74,7 +74,7 @@ def probe(path: str, **params):
     params["token"] = key
     try:
         import requests
-        r = requests.get(_BASE + path, params=params, timeout=15)
+        r = requests.get(_BASE + path, params=params, timeout=8)
         return (r.status_code, (r.text or "")[:300])
     except Exception as e:  # noqa: BLE001
         return (None, f"request failed: {e}")
