@@ -42,18 +42,39 @@ class WatchlistService:
         self._period = period
         self._cache_ttl = cache_ttl
         self._added: list[str] = []          # user-added, in order
-        # Restore adds persisted in the external store (the host's disk is
-        # ephemeral, so without this every restart/redeploy would drop them).
-        from . import added_store
-        persisted = added_store.load_added()
-        if persisted:
-            self._added = persisted
+        self._loaded = False                 # persisted adds restored yet?
         self._html: str | None = None
         self._ts = 0.0
         self._refresh = 1800
         self._building = False
         self._lock = threading.Lock()
         self._fast_lock = threading.Lock()
+
+    # --- persistence ---------------------------------------------------
+    def _ensure_loaded(self) -> None:
+        """Restore adds from the external store ONCE, off the boot path.
+
+        The host's disk is ephemeral, so persisted adds must be reloaded on every
+        start - but never inside __init__/create_app: a slow store would block
+        worker boot and 502 the health check. This runs in the background build
+        (and on the first mutation) instead, and is a no-op when no store is set.
+        A transient failure leaves it unloaded so the next build retries."""
+        if self._loaded:
+            return
+        from . import added_store
+        if not added_store.enabled():
+            self._loaded = True
+            return
+        persisted = added_store.load_added()
+        if persisted is None:                # transient failure - retry next build
+            return
+        with self._lock:
+            merged = list(persisted)
+            for t in self._added:            # keep anything added before the load
+                if t not in merged:
+                    merged.append(t)
+            self._added = merged
+        self._loaded = True
 
     # --- spec assembly -------------------------------------------------
     def _base_text(self) -> str:
@@ -109,6 +130,7 @@ class WatchlistService:
 
         def run():
             try:
+                self._ensure_loaded()   # restore persisted adds off the boot path
                 self._rebuild()
             except Exception:  # noqa: BLE001
                 pass
@@ -146,6 +168,7 @@ class WatchlistService:
         t = (ticker or "").strip().upper()
         if not _TICKER_RE.match(t):
             return {"ok": False, "error": f"invalid ticker '{ticker}'"}
+        self._ensure_loaded()            # merge with persisted before checking dupes
         if t in self._current_tickers():
             return {"ok": True, "already": True, "ticker": t}
         # verify it actually has data before committing it to the board
@@ -169,6 +192,7 @@ class WatchlistService:
 
     def remove(self, ticker: str) -> dict:
         t = (ticker or "").strip().upper()
+        self._ensure_loaded()
         with self._lock:
             if t in self._added:
                 self._added.remove(t)

@@ -78,11 +78,39 @@ def test_save_posts_json_value(monkeypatch):
     assert json.loads(sent["data"]) == ["NVDA", "TSLA"]
 
 
-def test_service_restores_persisted_added(monkeypatch):
-    """A fresh service (i.e. a restarted host) loads its adds from the store."""
+def test_init_never_blocks_on_the_store(monkeypatch):
+    """__init__ must NOT touch the network (a slow store would 502 boot)."""
     from stockskill.server.watchlist_service import WatchlistService
+
+    def boom():
+        raise AssertionError("store hit during __init__ (blocks worker boot)")
+
+    monkeypatch.setattr(added_store, "load_added", boom)
+    monkeypatch.setattr(added_store, "enabled", lambda: True)
+    svc = WatchlistService(cache_dir="data/cache")   # no exception -> no boot-path I/O
+    assert svc.added() == []
+
+
+def test_service_restores_persisted_added(monkeypatch):
+    """A restarted host restores its adds from the store on the first load."""
+    from stockskill.server.watchlist_service import WatchlistService
+    monkeypatch.setattr(added_store, "enabled", lambda: True)
     monkeypatch.setattr(added_store, "load_added", lambda: ["NVDA", "TSLA"])
     svc = WatchlistService(cache_dir="data/cache")
+    svc._ensure_loaded()                              # runs in the bg build on the host
     assert svc.added() == ["NVDA", "TSLA"]
     # and they flow into the ticker spec used to build the board
     assert "[ADDED]" in svc._spec() and "NVDA, TSLA" in svc._spec()
+
+
+def test_ensure_loaded_retries_after_transient_failure(monkeypatch):
+    """A None (failed) load leaves the service unloaded so the next build retries."""
+    from stockskill.server.watchlist_service import WatchlistService
+    monkeypatch.setattr(added_store, "enabled", lambda: True)
+    monkeypatch.setattr(added_store, "load_added", lambda: None)
+    svc = WatchlistService(cache_dir="data/cache")
+    svc._ensure_loaded()
+    assert svc._loaded is False                       # not marked done -> will retry
+    monkeypatch.setattr(added_store, "load_added", lambda: ["NVDA"])
+    svc._ensure_loaded()
+    assert svc._loaded is True and svc.added() == ["NVDA"]
