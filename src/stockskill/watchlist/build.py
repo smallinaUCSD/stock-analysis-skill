@@ -157,32 +157,32 @@ def _attach_factors(rows, data) -> None:
 
 
 def _overlay_live_prices(rows, status) -> None:
-    """Patch rows' price + 1d change from a live quote source during an active
-    session, and drop a stale extended-hours price outside pre/after sessions
-    (e.g. a frozen weekend 'after hours' showing while the market is open).
+    """Patch rows' price + 1d change from a live quote source in EVERY session.
 
-    Prefers Finnhub (free real-time US quotes, whole board) and falls back to
-    FMP's multi-symbol batch (which needs a paid FMP plan)."""
+    Finnhub returns the live price while the market is open and the *last regular
+    close* when it is shut, so overlaying in all sessions keeps the card price
+    current (today's or yesterday's close) instead of falling back to the
+    days-old committed snapshot overnight/on weekends. Prefers Finnhub (free
+    real-time US quotes, whole board); falls back to FMP's multi-symbol batch
+    (paid FMP plan)."""
     from ..data import finnhub, fmp
 
-    active = status.label in ("open", "pre-market", "after-hours")
-    if active:
-        tickers = [r.ticker for r in rows]
-        try:
-            if finnhub.has_finnhub():
-                quotes = finnhub.batch_quotes(tickers)
-            elif fmp.has_fmp():
-                quotes = fmp.batch_quotes(tickers)
-            else:
-                quotes = {}
-        except Exception:  # noqa: BLE001
+    tickers = [r.ticker for r in rows]
+    try:
+        if finnhub.has_finnhub():
+            quotes = finnhub.batch_quotes(tickers)
+        elif fmp.has_fmp():
+            quotes = fmp.batch_quotes(tickers)
+        else:
             quotes = {}
-        for r in rows:
-            q = quotes.get(r.ticker.upper())
-            if q and q.get("price"):
-                r.price = q["price"]
-                if q.get("change_pct") is not None:
-                    r.changes["1d"] = q["change_pct"]
+    except Exception:  # noqa: BLE001
+        quotes = {}
+    for r in rows:
+        q = quotes.get(r.ticker.upper())
+        if q and q.get("price"):
+            r.price = q["price"]
+            if q.get("change_pct") is not None:
+                r.changes["1d"] = q["change_pct"]
 
 
 def _apply_ext_prices(rows, status, live: bool = True) -> None:

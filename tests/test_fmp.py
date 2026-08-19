@@ -168,16 +168,14 @@ def test_overlay_patches_prices_when_open(key, monkeypatch):
     assert rows[0].price == 200.0 and rows[0].changes["1d"] == 0.03
 
 
-def test_overlay_no_fetch_when_closed(key, monkeypatch):
-    called = {"n": 0}
-
-    def bq(tks):
-        called["n"] += 1
-        return {}
-    monkeypatch.setattr(fmp, "batch_quotes", bq)
+def test_overlay_fetches_in_closed_session(key, monkeypatch):
+    # Finnhub returns the last regular close when the market is shut, so we overlay
+    # in EVERY session -> the card price stays current, not the days-old snapshot.
+    monkeypatch.setattr(fmp, "batch_quotes",
+                        lambda tks: {"AAPL": {"price": 311.0, "change_pct": -0.01}})
     rows = [_row("AAPL", 190.0)]
     _overlay_live_prices(rows, SimpleNamespace(label="closed"))
-    assert called["n"] == 0 and rows[0].price == 190.0   # no fetch, price unchanged
+    assert rows[0].price == 311.0 and rows[0].changes["1d"] == -0.01
 
 
 def test_apply_ext_clears_stale_when_no_fresh(key):
