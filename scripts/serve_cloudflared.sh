@@ -42,6 +42,11 @@ export STOCKSKILL_PERIOD="${STOCKSKILL_PERIOD:-5y}"
 export STOCKSKILL_CACHE_TTL="${STOCKSKILL_CACHE_TTL:-2592000}"
 export STOCKSKILL_ADDED_FILE="${STOCKSKILL_ADDED_FILE:-data/added.json}"
 
+# Bring the data snapshot up to today (fast, yfinance) unless told to skip.
+if [ -z "${SKIP_REFRESH:-}" ]; then
+  ./scripts/refresh_data.sh || echo "!! data refresh failed; using the existing snapshot"
+fi
+
 echo ">> Starting the board on http://127.0.0.1:${PORT} ..."
 uv run gunicorn -w 1 -k gthread --threads 8 -t 120 \
   -b "127.0.0.1:${PORT}" 'stockskill.server:create_app()' &
