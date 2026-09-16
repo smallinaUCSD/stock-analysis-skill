@@ -234,6 +234,36 @@ def _voc_box(closes):
     return _box("Virtue of Complexity (experimental)", rows, read, "voc")
 
 
+_VOL_UP = {"accumulation", "bullish-divergence"}
+_VOL_DOWN = {"distribution", "bearish-divergence"}
+
+
+def _volume_box(r):
+    vs = getattr(r, "volume_signal", None) or {}
+    mfi = getattr(r, "mfi", None)
+    rvol = getattr(r, "rvol", None)
+    if mfi is None and rvol is None and not vs:
+        return ""
+    rows = ""
+    if rvol is not None:
+        rows += _r("Relative volume", f"{rvol:.1f}x average",
+                   "up" if rvol >= 1.5 else ("muted" if rvol < 0.7 else ""))
+    if mfi is not None:
+        tag = " (oversold)" if mfi <= 20 else (" (overbought)" if mfi >= 80 else "")
+        mcls = "up" if mfi <= 20 else ("down" if mfi >= 80 else "")
+        rows += _r("Money Flow Index", f"{mfi:.0f}{tag}", mcls)
+    if vs.get("label"):
+        st = vs.get("state", "")
+        cls = "up" if st in _VOL_UP else ("down" if st in _VOL_DOWN else "muted")
+        rows += (f'<div class="a-row"><span>Read</span>'
+                 f'<b class="{cls}">{_html.escape(vs["label"])}</b></div>')
+    read = ("Volume confirms a price move when money flow agrees with it: rising OBV and "
+            "above-average volume back a trend, while a divergence (price and volume "
+            "disagreeing) is an early warning of a fakeout. MFI is a volume-weighted RSI "
+            "(over 80 overbought, under 20 oversold).")
+    return _box("Volume & money flow", rows, read, "volume")
+
+
 def analysis_html(row, closes=None, refresh_seconds: int = 900) -> str:
     closes = closes or []
     tk = _html.escape(row.ticker)
@@ -249,7 +279,8 @@ def analysis_html(row, closes=None, refresh_seconds: int = 900) -> str:
 
     boxes = "".join([
         _valuation_box(row), _mc_box(row), _trade_box(row), _sizing_box(row),
-        _momentum_box(closes), _regime_box(closes), _stops_box(closes), _voc_box(closes),
+        _momentum_box(closes), _volume_box(row), _regime_box(closes),
+        _stops_box(closes), _voc_box(closes),
     ])
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">

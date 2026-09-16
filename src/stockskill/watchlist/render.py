@@ -659,6 +659,21 @@ def _regime_summary(r):
             f'<div class="det-row muted">{html.escape(" · ".join(parts))}</div></div>')
 
 
+def _volume_summary(r):
+    """One-line volume/money-flow read for the modal."""
+    vs = getattr(r, "volume_signal", None) or {}
+    if not vs.get("label"):
+        return ""
+    st = vs.get("state", "")
+    cls = "up" if st in ("accumulation", "bullish-divergence") else \
+          ("down" if st in ("distribution", "bearish-divergence") else "muted")
+    extra = ""
+    if getattr(r, "mfi", None) is not None:
+        extra = f' <span class="muted">· MFI {r.mfi:.0f}</span>'
+    return (f'<div class="det-sec"><div class="det-h">Volume</div>'
+            f'<div class="det-row"><span class="{cls}">{html.escape(vs["label"])}</span>{extra}</div></div>')
+
+
 def _card_detail(r):
     """Modal quick-look: chart + compact summaries + news, with a button to the
     full, roomier analysis page. The dense valuation/trade/regime detail lives on
@@ -666,7 +681,7 @@ def _card_detail(r):
     btn = (f'<button type="button" class="analysis-btn" onclick="event.stopPropagation();'
            f"openTab('/analysis/{html.escape(r.ticker)}')\">🔎 Full analysis ↗</button>")
     return (f'<div class="card-detail" onclick="event.stopPropagation()">'
-            f'{_chart_html(r)}{_valuation_summary(r)}{_regime_summary(r)}{btn}'
+            f'{_chart_html(r)}{_valuation_summary(r)}{_regime_summary(r)}{_volume_summary(r)}{btn}'
             f'<div class="cardnews" data-ticker="{html.escape(r.ticker)}"></div></div>')
 
 

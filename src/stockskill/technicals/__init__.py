@@ -8,7 +8,8 @@ there isn't enough data). No network, no state -- the LLM never computes these.
 from .momentum import rsi, stochastic, williams_r, roc, cci, mfi
 from .trend import sma, ema, golden_death_cross, macd, MACDResult, adx
 from .volatility import bollinger, BollingerBands, atr, historical_volatility
-from .volume import obv, volume_roc, volume_bias, volume_spike
+from .volume import (obv, volume_roc, volume_bias, volume_spike,
+                     relative_volume, obv_slope, price_volume_divergence)
 from .ichimoku import ichimoku, Ichimoku
 from .changes import (
     CHANGE_WINDOWS, pct_change, change_metrics, ytd_change, sparkline,
@@ -24,6 +25,7 @@ __all__ = [
     "bollinger", "BollingerBands", "atr", "historical_volatility",
     # volume
     "obv", "volume_roc", "volume_bias", "volume_spike",
+    "relative_volume", "obv_slope", "price_volume_divergence",
     # ichimoku
     "ichimoku", "Ichimoku",
     # changes

@@ -23,6 +23,11 @@ class IndicatorSnapshot:
     ich_price_vs_cloud: str | None = None  # above|below|in_cloud
     ich_tk: str | None = None              # bull|bear
     change_pct: float | None = None        # latest daily % change (as %, e.g. 2.5)
+    # volume / money-flow (None when no volume series is supplied)
+    mfi: float | None = None               # Money Flow Index 0..100 (volume-weighted RSI)
+    rvol: float | None = None              # latest volume / trailing average (1.0 == avg)
+    obv_dir: str | None = None             # rising|falling|flat (OBV trend)
+    vol_divergence: str | None = None      # bullish|bearish price/volume divergence
 
 
 def build_snapshot(highs, lows, closes, volumes=None) -> IndicatorSnapshot:
@@ -54,4 +59,13 @@ def build_snapshot(highs, lows, closes, volumes=None) -> IndicatorSnapshot:
 
     ch = ta.pct_change(closes, 1)
     snap.change_pct = None if ch is None else ch * 100.0
+
+    # Volume / money-flow: only when a volume series is supplied alongside prices.
+    if volumes is not None and len(volumes) == len(closes) and len(closes) > 15:
+        snap.mfi = ta.mfi(highs, lows, closes, volumes)
+        snap.rvol = ta.relative_volume(volumes)
+        sl = ta.obv_slope(closes, volumes)
+        if sl is not None:
+            snap.obv_dir = "rising" if sl > 0.1 else ("falling" if sl < -0.1 else "flat")
+        snap.vol_divergence = ta.price_volume_divergence(closes, volumes)
     return snap

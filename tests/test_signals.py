@@ -132,3 +132,40 @@ def test_all_strategy_signals_keys():
              rsi=25, macd_state="bull_cross")
     sigs = all_strategy_signals(s, CFG)
     assert set(sigs) == {"BB", "RSI", "MACD", "Ichimoku", "Combined", "BB+Ichimoku"}
+
+
+# --- volume confirmation in the snapshot + trend --------------------------
+from stockskill.signals import build_snapshot, volume_read, trend_score, SignalConfig  # noqa: E402
+from stockskill.signals.snapshot import IndicatorSnapshot  # noqa: E402
+
+
+def test_snapshot_populates_volume_fields():
+    closes = [100.0 + i for i in range(40)]        # rising
+    highs = [c + 1 for c in closes]; lows = [c - 1 for c in closes]
+    vols = [1000.0] * 40
+    s = build_snapshot(highs, lows, closes, vols)
+    assert s.mfi is not None and 0 <= s.mfi <= 100
+    assert s.rvol is not None
+    assert s.obv_dir == "rising"                   # strictly rising -> OBV rises
+
+
+def test_volume_read_states_and_adjustment():
+    # a divergence dominates and moves the score a full point
+    div = IndicatorSnapshot(vol_divergence="bearish")
+    state, adj, label = volume_read(div)
+    assert state == "bearish-divergence" and adj == -1.0 and "divergence" in label
+    # OBV rising -> accumulation, +0.5
+    acc = IndicatorSnapshot(obv_dir="rising", rvol=1.8)
+    assert volume_read(acc)[:2] == ("accumulation", 0.5)
+    # no volume data -> no state, no adjustment (price-only snapshots unaffected)
+    assert volume_read(IndicatorSnapshot())[:2] == (None, 0.0)
+
+
+def test_trend_score_volume_term_is_additive_and_optional():
+    cfg = SignalConfig()
+    base = IndicatorSnapshot(rsi=55.0)
+    price_only = trend_score(base, "HOLD", cfg)
+    confirmed = trend_score(IndicatorSnapshot(rsi=55.0, obv_dir="rising"), "HOLD", cfg)
+    diverged = trend_score(IndicatorSnapshot(rsi=55.0, vol_divergence="bearish"), "HOLD", cfg)
+    assert confirmed == pytest.approx(price_only + 0.5)
+    assert diverged == pytest.approx(price_only - 1.0)

@@ -20,6 +20,33 @@ class Trend:
     label: str
 
 
+def volume_read(s: IndicatorSnapshot) -> tuple[str | None, float, str]:
+    """How volume relates to the price move: (state, trend-score adjustment, label).
+
+    Volume *confirms* a trend when money-flow agrees with price, and *diverges*
+    (a warning) when it doesn't -- a breakout on heavy volume is real; the same
+    move on thin/declining volume is often a fakeout. Divergences dominate; then
+    OBV direction; then a thin-volume caveat. Returns (None, 0.0, "") when there
+    is no volume data (so a price-only snapshot is unaffected)."""
+    rv = s.rvol
+    rvtxt = f", {rv:.1f}x avg" if rv else ""
+    if s.vol_divergence == "bearish":
+        return ("bearish-divergence", -1.0,
+                "bearish divergence: price up but volume isn't confirming")
+    if s.vol_divergence == "bullish":
+        return ("bullish-divergence", 1.0,
+                "bullish divergence: price down but volume is accumulating")
+    if s.obv_dir == "rising":
+        return ("accumulation", 0.5, f"volume confirms: OBV rising{rvtxt}")
+    if s.obv_dir == "falling":
+        return ("distribution", -0.5, f"volume confirms selling: OBV falling{rvtxt}")
+    if rv is not None and rv < 0.7:
+        return ("thin", 0.0, f"thin volume ({rv:.1f}x avg): move unconfirmed")
+    if s.obv_dir is None and rv is None:
+        return (None, 0.0, "")
+    return ("neutral", 0.0, "volume roughly neutral")
+
+
 def trend_score(s: IndicatorSnapshot, active: str, cfg: SignalConfig) -> float:
     score = 0.0
 
@@ -71,6 +98,10 @@ def trend_score(s: IndicatorSnapshot, active: str, cfg: SignalConfig) -> float:
             score += 1.0
         elif s.change_pct <= -cfg.trend_momentum_threshold:
             score -= 1.0
+
+    # Volume confirmation (+-0.5 for OBV agreement, +-1.0 on a divergence). Zero
+    # when there is no volume data, so price-only snapshots are unaffected.
+    score += volume_read(s)[1]
 
     return score
 

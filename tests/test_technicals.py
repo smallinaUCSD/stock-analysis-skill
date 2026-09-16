@@ -139,3 +139,52 @@ def test_pe_features():
     assert pe_relative_to_avg([10, 20, 30], current_pe=30) == pytest.approx(0.5)  # 30/20-1
     assert pe_volatility([10, 20, 30]) == pytest.approx(10.0)
     assert pe_volatility([15]) is None
+
+
+# --- volume confirmation indicators ---------------------------------------
+from stockskill.technicals import relative_volume, obv_slope, price_volume_divergence  # noqa: E402
+
+
+def _rise(n, step=1.0, start=100.0):
+    return [start + i * step for i in range(n)]
+
+
+def test_relative_volume_ratio():
+    vols = [1000.0] * 20 + [3000.0]        # last bar 3x the trailing average
+    assert relative_volume(vols, period=20) == pytest.approx(3.0)
+    assert relative_volume([1.0] * 5, period=20) is None   # too short
+
+
+def test_obv_slope_sign_tracks_accumulation():
+    closes = _rise(40)                     # strictly rising -> OBV climbs every bar
+    up = obv_slope(closes, [1000.0] * 40, period=20)
+    down = obv_slope(closes[::-1], [1000.0] * 40, period=20)   # strictly falling
+    assert up is not None and up > 0.5     # near +1: ~all volume directional up
+    assert down is not None and down < -0.5
+
+
+def test_price_volume_divergence_bearish_and_bullish():
+    # Bearish: price nets UP (big up steps) but heavy volume floods the DOWN days,
+    # so OBV falls while price rises.
+    c_up, v_up = [100.0], [100.0]
+    for i in range(24):
+        if i % 2 == 0:
+            c_up.append(c_up[-1] + 2.0); v_up.append(100.0)     # up day, light volume
+        else:
+            c_up.append(c_up[-1] - 1.0); v_up.append(5000.0)    # down day, heavy volume
+    assert price_volume_divergence(c_up, v_up, period=20) == "bearish"
+
+    # Bullish: mirror -- price nets DOWN but heavy volume is on the UP days
+    # (accumulation), so OBV rises while price falls.
+    c_dn, v_dn = [100.0], [100.0]
+    for i in range(24):
+        if i % 2 == 0:
+            c_dn.append(c_dn[-1] - 2.0); v_dn.append(100.0)     # down day, light volume
+        else:
+            c_dn.append(c_dn[-1] + 1.0); v_dn.append(5000.0)    # up day, heavy volume
+    assert price_volume_divergence(c_dn, v_dn, period=20) == "bullish"
+
+
+def test_price_volume_divergence_none_when_aligned():
+    closes = _rise(30)
+    assert price_volume_divergence(closes, [1000.0] * 30, period=20) is None

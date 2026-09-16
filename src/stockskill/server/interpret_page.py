@@ -217,6 +217,31 @@ def interpret_html() -> str:
              "Trailing 12m <b>-15%</b>: a downtrend, so momentum leans short or stand-aside. "
              "If it is also very volatile, the suggested size shrinks further."))])
 
+    volume = _section(
+        "volume", "Volume and money flow", "Is the price move backed by real buying and selling?",
+        [("What it is",
+          "<p>Volume is how many shares changed hands. A price move on <b>heavy</b> volume "
+          "means lots of conviction behind it; the same move on <b>thin</b> volume is often "
+          "a head-fake. We read it three ways: <b>relative volume</b> (today vs its average), "
+          "<b>On-Balance Volume</b> (a running tally that adds volume on up days and subtracts "
+          "it on down days), and the <b>Money Flow Index</b> (a volume-weighted RSI, 0 to 100).</p>"),
+         ("How to read it",
+          "<p><b>Volume confirms</b> a trend when OBV rises with the price (or falls with it). "
+          "A <b>divergence</b> - price making new highs while OBV does not - is an early warning "
+          "that the move is running out of buyers. MFI over 80 is overbought, under 20 oversold. "
+          "This read now nudges the trend arrow: a confirmed move counts for more, a divergence "
+          "against it.</p>"),
+         ("So what",
+          "<p>It stops you trusting a breakout that no one is actually buying, and flags quiet "
+          "accumulation before the price catches up.</p>"),
+         ("Two examples", _ex(
+             "A stock breaks to a new high and <b>OBV rises with it on 2x average volume</b>: "
+             "real buying is behind the breakout, so the uptrend is confirmed and the arrow "
+             "leans harder up.",
+             "A stock keeps grinding to new highs but <b>OBV is flat-to-down and volume is "
+             "below average</b>: a bearish divergence - the rally is thinning out, a classic "
+             "early warning that it may stall."))])
+
     regime = _section(
         "regime", "Regime (Dai-Zhang-Zhu)", "Is the stock in a bull or bear phase, as a probability?",
         [("What it is",
@@ -297,12 +322,12 @@ def interpret_html() -> str:
              "out and downside risk if it fades."))])
 
     sections = [reading, factors, dcf, montecarlo, ptarget, kelly, momentum,
-                regime, stops, voc, consensus]
+                volume, regime, stops, voc, consensus]
     toc = "".join(
         f'<a href="#{sid}">{label}</a>' for sid, label in
         [("reading", "The board"), ("factors", "Factors"), ("dcf", "DCF"),
          ("montecarlo", "Monte Carlo"), ("ptarget", "P(target before stop)"),
-         ("kelly", "Position sizing"), ("momentum", "Momentum"),
+         ("kelly", "Position sizing"), ("momentum", "Momentum"), ("volume", "Volume"),
          ("regime", "Regime"), ("stops", "Stop study"), ("voc", "Virtue of Complexity"),
          ("consensus", "Analyst consensus")])
     back = '<a class="h-back" href="/" onclick="return goBack(event)">&larr; back to board</a>'

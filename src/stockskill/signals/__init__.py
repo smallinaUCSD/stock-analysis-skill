@@ -10,7 +10,7 @@ from .strategies import (
     bb_signal, rsi_signal, macd_signal, ichimoku_signal,
     combined_signal, bb_ichimoku_signal, active_signal, all_strategy_signals,
 )
-from .trend import Trend, trend, trend_score, trend_arrow
+from .trend import Trend, trend, trend_score, trend_arrow, volume_read
 from .confidence import Confidence, signal_confidence
 
 __all__ = [
@@ -18,6 +18,6 @@ __all__ = [
     "IndicatorSnapshot", "build_snapshot",
     "bb_signal", "rsi_signal", "macd_signal", "ichimoku_signal",
     "combined_signal", "bb_ichimoku_signal", "active_signal", "all_strategy_signals",
-    "Trend", "trend", "trend_score", "trend_arrow",
+    "Trend", "trend", "trend_score", "trend_arrow", "volume_read",
     "Confidence", "signal_confidence",
 ]

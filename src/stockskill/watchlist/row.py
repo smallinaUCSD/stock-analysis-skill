@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 
 from .. import technicals as ta
 from ..signals import (SignalConfig, build_snapshot, active_signal,
-                       all_strategy_signals, trend, signal_confidence)
+                       all_strategy_signals, trend, signal_confidence, volume_read)
 from .pipeline import TickerData
 from .tickers import detect_categories
 
@@ -31,6 +31,9 @@ class TickerRow:
     ichimoku: str | None = None                          # above|below|in_cloud
     volume_bias: float | None = None
     vol_spike: bool = False
+    mfi: float | None = None                             # Money Flow Index 0..100
+    rvol: float | None = None                            # volume vs trailing average
+    volume_signal: dict = field(default_factory=dict)    # {state, label} confirm/diverge read
     # signals
     signal: str = "HOLD"
     trend_arrow: str = "→"
@@ -200,6 +203,11 @@ def _compute_row(td: TickerData, cfg: SignalConfig | None = None,
         row.trend_arrow, row.trend_label, row.trend_score = tr.arrow, tr.label, tr.score
         conf = signal_confidence(all_strategy_signals(s, cfg), row.signal)
         row.confidence = conf.level if conf else None
+        # volume / money-flow read (confirms or diverges from the price move)
+        row.mfi, row.rvol = s.mfi, s.rvol
+        vstate, _, vlabel = volume_read(s)
+        if vstate:
+            row.volume_signal = {"state": vstate, "label": vlabel}
 
     if snap:
         row.name = snap.name or td.ticker
