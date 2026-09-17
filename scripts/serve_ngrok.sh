@@ -26,10 +26,23 @@ fi
 
 # Refuse to start on a busy port (otherwise gunicorn spams "Address already in
 # use"). Show what's on it so the fix is obvious.
+# Free the port if a PREVIOUS board instance is still on it (a run that didn't
+# exit through its cleanup - closed terminal, sleep). Only ever kills our own
+# gunicorn; a different app (e.g. a node server) makes us stop and warn instead.
 if lsof -nP -iTCP:"${PORT}" -sTCP:LISTEN >/dev/null 2>&1; then
-  echo "!! Port ${PORT} is already in use:"
+  own=$(for p in $(lsof -nP -tiTCP:"${PORT}" -sTCP:LISTEN 2>/dev/null); do
+          ps -p "$p" -o command= 2>/dev/null | grep -q "stockskill.server:create_app" && echo "$p"
+        done)
+  if [ -n "$own" ]; then
+    echo ">> Port ${PORT} held by a previous board; stopping it..."
+    echo "$own" | xargs kill 2>/dev/null || true; sleep 1
+    lsof -nP -tiTCP:"${PORT}" -sTCP:LISTEN 2>/dev/null | xargs kill -9 2>/dev/null || true
+  fi
+fi
+if lsof -nP -iTCP:"${PORT}" -sTCP:LISTEN >/dev/null 2>&1; then
+  echo "!! Port ${PORT} is in use by another process:"
   lsof -nP -iTCP:"${PORT}" -sTCP:LISTEN
-  echo "   Stop that process, or run on another port:  PORT=8899 $0"
+  echo "   Stop it, or run on another port:  PORT=8899 $0"
   exit 1
 fi
 
