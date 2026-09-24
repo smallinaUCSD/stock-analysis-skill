@@ -138,11 +138,14 @@ def test_quote_cache_keeps_last_live_price_when_a_fetch_fails(monkeypatch):
 
 def test_bulk_routes(tmp_path, monkeypatch):
     from stockskill.server import create_app
-    monkeypatch.setenv("STOCKSKILL_CACHE_DIR", "data/cache")
+    import stockskill.server.watchlist_service as mod
+    # A throwaway cache and NO startup build: the app must never refetch into the
+    # real data/cache from a test (it once overwrote AAPL/MSFT/NVDA with 1y data).
+    monkeypatch.setenv("STOCKSKILL_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setattr(mod.WatchlistService, "_start_bg_build", lambda self: None)
     app = create_app(tickers_path=str(tmp_path / "missing.csv"), public=True)
     c = app.test_client()
     # stub the service method the route calls, so no network is touched
-    import stockskill.server.watchlist_service as mod
     monkeypatch.setattr(mod.WatchlistService, "add_bulk",
                         lambda self, t: {"ok": True, "job": "abc", "queued": parse_ticker_list(t),
                                          "skipped": []})
