@@ -396,8 +396,38 @@ def interpret_html() -> str:
              "means about $85k of SH (-1x), or about $28k of SPXU (-3x), which is cheaper up front "
              "but drifts more the longer it's held."))])
 
+    filings = _section(
+        "filings", "Insiders, short sellers, the accounts, and pairs",
+        "Signals from public filings, and why pairs are shown with their track record.",
+        [("Insider trades",
+          "<p>From SEC Form 4 filings. Only open-market buys and sells count; stock grants, option "
+          "exercises and tax withholding are mechanical. An insider who trades in the same month "
+          "every year is <b>routine</b> and tells you little. One who breaks pattern is "
+          "<b>opportunistic</b>; research found those trades, buys especially, carried the "
+          "information. Selling alone is weak evidence: executives sell to diversify and pay taxes.</p>"),
+         ("Short interest",
+          "<p>The share of tradable stock sold short, reported twice a month. Above about 10% means "
+          "many investors are betting against it. On average heavily shorted stocks have lagged, but "
+          "a crowded short can also squeeze sharply on good news. <b>Days to cover</b> is how long "
+          "short sellers would need to buy back at normal volume.</p>"),
+         ("Accounting quality",
+          "<p>The <b>Piotroski F-score</b> runs nine pass/fail checks on the last two annual reports: "
+          "profitable, generating cash, less debt, no dilution, better margins and efficiency. 8 or 9 "
+          "is strong, 0 to 2 weak. <b>Accruals</b> are profit not yet backed by cash; persistently high "
+          "accruals have tended to precede weaker earnings.</p>"),
+         ("Pairs",
+          "<p>On <b>Compare</b>, same-sector stocks that have tracked each other are listed by how far "
+          "apart they are now. The classic rule bets that stretched pairs snap back. We tested it on "
+          "this watchlist's own history and show the result right there: on these trending names it "
+          "has lost money on average, so the list is a map of what has moved apart, not a set of trades.</p>"),
+         ("Two examples", _ex(
+             "Two directors buy stock outside their usual pattern while the F-score is 8 of 9: "
+             "insiders with the best information are putting their own money in behind improving numbers.",
+             "Short interest is 27% of the float and rising, with 9 insider sales and no buys: many "
+             "informed participants are cautious, although a surprise could trigger a squeeze."))])
+
     sections = [reading, factors, dcf, montecarlo, ptarget, kelly, momentum,
-                volume, regime, stops, voc, consensus, risk, compare, options]
+                volume, regime, stops, voc, consensus, risk, compare, options, filings]
     toc = "".join(
         f'<a href="#{sid}">{label}</a>' for sid, label in
         [("reading", "The board"), ("factors", "Factors"), ("dcf", "DCF"),
@@ -405,7 +435,8 @@ def interpret_html() -> str:
          ("kelly", "Position sizing"), ("momentum", "Momentum"), ("volume", "Volume"),
          ("regime", "Regime"), ("stops", "Stop study"), ("voc", "Virtue of Complexity"),
          ("consensus", "Analyst consensus"), ("risk", "Beta and alpha"),
-         ("compare", "Compare"), ("options", "Options and hedging")])
+         ("compare", "Compare"), ("options", "Options and hedging"),
+         ("filings", "Insiders and pairs")])
     close = (f'<button class="page-x" onclick="return goBack(event)" title="Close" '
              f'aria-label="Close">{icon("x", 17)}</button>')
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">

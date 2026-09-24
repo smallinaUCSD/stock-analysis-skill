@@ -45,9 +45,16 @@ def compare_html(initial: str = "") -> str:
             "<section class=\"cmp-sec\"><h2>How closely they move together</h2><div id=\"t-corr\" class=\"cmp-tw\"></div>"
             "<p class=\"cmp-note\">Correlation of daily returns: 1 moves in lockstep, 0 unrelated, "
             "negative tends to move opposite.</p></section>"
+            "<section class=\"cmp-sec\" id=\"pair-sec\" style=\"display:none\"><h2>Pair spread</h2>"
+            "<p id=\"pair-read\" class=\"cmp-span\"></p>"
+            "<svg id=\"ch-z\" class=\"cmp-svg\" viewBox=\"0 0 900 170\" preserveAspectRatio=\"xMidYMid meet\"></svg>"
+            "<p class=\"cmp-note\">How far the price ratio sits from its average over the past year, in standard "
+            "deviations. Beyond &plusmn;2 is unusually stretched. That is not a prediction: see the track record below.</p></section>"
             "<section class=\"cmp-sec\"><h2>Profile</h2><div id=\"t-prof\" class=\"cmp-tw\"></div></section>"
             "<section class=\"cmp-sec\"><h2>What's inside</h2><div id=\"hold\" class=\"muted\">Loading holdings…</div></section>"
             "</div>"
+            "<section class=\"cmp-sec\" id=\"wl-pairs\"><h2>Pairs on your watchlist</h2>"
+            "<div id=\"wl-pairs-body\" class=\"muted\" style=\"font-size:14px\">Loading…</div></section>"
             "<p class=\"muted\" style=\"font-size:13px;margin-top:18px\">"
             "Past performance, not a forecast. Analysis, not advice. Free data may be delayed. "
             "All numbers computed by tested Python.</p>"
@@ -127,6 +134,11 @@ _EXTRA_CSS = """
 .hrow .bar{height:6px;border-radius:3px;background:var(--surface-3);overflow:hidden}
 .hrow .bar b{display:block;height:100%;border-radius:3px}
 .hrow .w{text-align:right;color:var(--muted);font-variant-numeric:tabular-nums}
+.pair-list{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 10px}
+.pair-chip{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 12px;border:1px solid var(--border);
+  border-radius:var(--r);background:var(--surface);font:500 14px var(--font);color:var(--ink);cursor:pointer}
+.pair-chip:hover{background:var(--surface-2)}
+.pair-chip .z{font-weight:500}
 .addsug{display:none;position:absolute;z-index:60;left:0;right:0;top:calc(100% + 4px);
   background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;
   box-shadow:var(--shadow-pop)}
@@ -253,7 +265,46 @@ function drawAll(){ if(!DATA) return; var d=DATA, log=document.getElementById('l
   hoverOff(document.getElementById('ch-g'),{ro:'ro-g',key:'growth',fmtRo:function(v){return money(v);}});
   hoverOff(document.getElementById('ch-d'),{ro:'ro-d',key:'drawdown',fmtRo:function(v){return (v*100).toFixed(1)+'%';}});
   renderTables();
+  renderPair();
 }
+function renderPair(){ var sec=document.getElementById('pair-sec'), pr=DATA.pair;
+  if(!pr||!pr.z||!pr.z.some(function(v){return v!=null;})){ sec.style.display='none'; return; }
+  sec.style.display='';
+  var zn=pr.z_now, rich=zn>0?pr.a:pr.b, cheap=zn>0?pr.b:pr.a;
+  document.getElementById('pair-read').innerHTML=zn==null?'':('<b>'+esc(rich)+'</b> is '+Math.abs(zn).toFixed(1)+
+    ' standard deviations rich relative to <b>'+esc(cheap)+'</b> versus the past year'+(Math.abs(zn)>=2?' (stretched).':'.'));
+  var svg=document.getElementById('ch-z'); svg.innerHTML=''; var Wz=(svg.parentNode.clientWidth||900)<640?520:900, H=170;
+  svg.setAttribute('viewBox','0 0 '+Wz+' '+H);
+  var n=pr.z.length, lo=-3.5, hi=3.5; pr.z.forEach(function(v){ if(v!=null){ lo=Math.min(lo,v-0.3); hi=Math.max(hi,v+0.3); } });
+  var X=function(i){ return ML+(n<2?0:i/(n-1)*(Wz-ML-MR)); }, Y=function(v){ return (H-MB)-(v-lo)/(hi-lo)*((H-MB)-MT); };
+  [-2,0,2].forEach(function(v){ svg.appendChild(svgEl('line',{x1:ML,y1:Y(v),x2:Wz-MR,y2:Y(v),stroke:v?'var(--down)':'var(--muted)','stroke-width':0.8,'stroke-dasharray':v?'4 4':'',opacity:v?0.6:0.8}));
+    var t=svgEl('text',{x:ML-6,y:Y(v)+4,'text-anchor':'end'}); t.textContent=(v>0?'+':'')+v+'σ'; svg.appendChild(t); });
+  var pts=[]; pr.z.forEach(function(v,i){ if(v!=null) pts.push(X(i).toFixed(1)+','+Y(v).toFixed(1)); });
+  svg.appendChild(svgEl('polyline',{points:pts.join(' '),fill:'none',stroke:'var(--accent)','stroke-width':1.6}));
+  [0,Math.floor((n-1)/2),n-1].forEach(function(i,k){ var t=svgEl('text',{x:X(i),y:H-6,'text-anchor':k===0?'start':(k===2?'end':'middle')});
+    t.textContent=fdate(pr.dates[i]); svg.appendChild(t); });
+}
+function loadWlPairs(){ fetch('/api/pairs').then(function(r){return r.json();}).then(function(d){
+    var box=document.getElementById('wl-pairs-body');
+    if(!d.ok){ box.textContent='Not available until the watchlist history is cached.'; return; }
+    var bt=d.backtest, pairs=(d.pairs||[]).filter(function(x){return Math.abs(x.z)>=1.5;}).slice(0,8);
+    var chips=pairs.length?('<div class="pair-list">'+pairs.map(function(x){
+      return '<button class="pair-chip" onclick="preset(\''+esc(x.rich)+','+esc(x.cheap)+'\')">'+esc(x.rich)+' / '+esc(x.cheap)+
+        ' <span class="z '+(Math.abs(x.z)>=2?'down':'')+'">'+Math.abs(x.z).toFixed(1)+'σ</span></button>'; }).join('')+'</div>')
+      :'<p>No same-sector pairs are unusually far apart right now.</p>';
+    var track='';
+    if(bt&&bt.trades){
+      var good=bt.mean>0;
+      track='<p class="cmp-note" style="font-size:14px;color:var(--ink-2)"><b>How this has worked here:</b> testing the classic pairs rule '+
+        '(Gatev, Goetzmann &amp; Rouwenhorst, 2006) on this watchlist over the past '+bt.years.toFixed(0)+' years: '+bt.trades+' trades, '+
+        '<span class="'+(good?'up':'down')+'">'+(bt.mean>=0?'+':'')+(bt.mean*100).toFixed(1)+'% per trade on average</span> '+
+        '(median '+(bt.median>=0?'+':'')+(bt.median*100).toFixed(1)+'%), '+Math.round(bt.win_rate*100)+'% winners, and only '+
+        Math.round(bt.converged*100)+'% of spreads closed back within six months. '+
+        (good?'A thin edge before trading costs and short-borrow fees.':'On these trending names, stretched pairs have tended to keep drifting rather than snap back, so treat this list as "what has moved apart", not as trades.')+'</p>';
+    }
+    box.className=''; box.innerHTML='<p class="cmp-note" style="margin-top:0">Same-sector stocks that have tracked each other over the past year, '+
+      'sorted by how far apart they are now (click one to compare).</p>'+chips+track;
+  }).catch(function(){ document.getElementById('wl-pairs-body').textContent='Pairs unavailable right now.'; }); }
 var _rsz=null; window.addEventListener('resize',function(){ clearTimeout(_rsz); _rsz=setTimeout(drawAll,150); });
 
 // ---- tables ----------------------------------------------------------------
@@ -291,6 +342,9 @@ function renderTables(){ var d=DATA;
 }
 function renderHoldings(){ var d=HOLD, box=document.getElementById('hold');
   if(!d||!d.ok){ box.textContent='Holdings unavailable right now.'; return; }
+  var sec=box.closest('section');
+  if(!d.funds.some(function(f){ return f.kind!=='stock'; })){ sec.style.display='none'; return; }
+  sec.style.display='';
   box.className='';
   var cards=d.funds.map(function(f){
     var mx=Math.max.apply(null,f.holdings.map(function(h){return h.weight;}).concat([0.0001]));
@@ -332,7 +386,7 @@ document.getElementById('perseg').addEventListener('click', function(e){ var b=e
   var q=new URLSearchParams(location.search), p=q.get('p');
   if(p && ['1y','3y','5y','max'].indexOf(p)>=0){ PERIOD=p;
     [].forEach.call(document.querySelectorAll('#perseg button'),function(x){x.classList.toggle('on',x.dataset.p===p);}); }
-  TICKERS=(INIT||[]).slice(0,4); renderChips(); load();
+  TICKERS=(INIT||[]).slice(0,4); renderChips(); load(); loadWlPairs();
   if(TICKERS.length<4) document.getElementById('ctk').focus();
 })();
 """

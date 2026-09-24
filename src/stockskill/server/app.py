@@ -371,6 +371,40 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
             "var_95": r.var_95, "pctiles": r.pctiles,
         })
 
+    _SIG_CACHE: dict = {}
+
+    @app.get("/api/signals/<ticker>")
+    def extra_signals(ticker: str):
+        """Insider trades (Form 4), short interest and accounting quality."""
+        if not _TICKER_RE.match(ticker):
+            return jsonify({"error": "invalid ticker"}), 400
+        import time as _t
+        from concurrent.futures import ThreadPoolExecutor
+        from ..data import signals_extra as X
+        from ..signals.insiders import summarize
+        from ..valuation.quality import quality_read
+        tk = ticker.upper()
+        hit = _SIG_CACHE.get(tk)
+        if hit and _t.time() - hit[0] < 6 * 3600:
+            return jsonify(hit[1])
+
+        def safe(fn):
+            try:
+                return fn(tk)
+            except Exception:  # noqa: BLE001
+                return None
+        with ThreadPoolExecutor(max_workers=3) as ex:
+            f_ins, f_si, f_st = (ex.submit(safe, fn) for fn in
+                                 (X.insider_trades, X.short_interest, X.annual_statements))
+            trades, si, st = f_ins.result(), f_si.result(), f_st.result()
+        out = {"ticker": tk,
+               "insiders": summarize(trades) if trades is not None else None,
+               "short": si,
+               "quality": quality_read(*st) if st else None}
+        if any(out[k] is not None for k in ("insiders", "short", "quality")):
+            _SIG_CACHE[tk] = (_t.time(), out)
+        return jsonify(out)
+
     _OPT_CACHE: dict = {}
 
     @app.get("/api/options/<ticker>")
@@ -511,7 +545,9 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
             price = td.ohlcv["close"][-1]
             profiles.append({
                 "ticker": t, "name": (s.name if s else None) or (lev.name if lev else t),
-                "type": ("Leveraged " + lev.structure) if lev else ((s.quote_type or "") if s else ""),
+                "type": ("Leveraged " + lev.structure) if lev else
+                        {"EQUITY": "Stock", "ETF": "ETF", "MUTUALFUND": "Mutual fund"}.get(
+                            ((s.quote_type or "") if s else "").upper(), (s.quote_type or "") if s else ""),
                 "sector": s.sector if s else None,
                 "market_cap": s.market_cap if s else None,
                 "pe": (price / s.eps) if (s and s.eps and s.eps > 0) else None,
@@ -520,6 +556,68 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
                 "expense_ratio": (lev.expense_ratio or None) if lev else None,
             })
         out["profiles"] = profiles
+        if len(tks) == 2:                 # a pair: the spread's z-score over time
+            from ..performance.metrics import align_closes
+            from ..signals.pairs import spread_z_series
+            a_, b_ = tks
+            d_, ca, cb = align_closes(series[a_]["dates"], series[a_]["closes"],
+                                      series[b_]["dates"], series[b_]["closes"])
+            z = spread_z_series(ca, cb)
+            keep = [i for i, d in enumerate(d_) if d >= out["start"]]
+            if keep:
+                step = max(1, len(keep) // 420)
+                idx = keep[::step] + ([keep[-1]] if keep[-1] not in keep[::step] else [])
+                out["pair"] = {"a": a_, "b": b_, "dates": [d_[i] for i in idx],
+                               "z": [None if z[i] is None else round(z[i], 3) for i in idx],
+                               "z_now": z[-1]}
+        return jsonify(out)
+
+    _PAIRS_CACHE: dict = {}
+    _PAIR_EXCLUDE = {"LEVERAGED", "LEVERAGED-BEAR", "DOW", "NASDAQ100", "TICKERS", "ADDED"}
+
+    def _pair_universe():
+        """{ticker: industry section} for plain stocks on the board, and their
+        closes aligned to SPY's dates. Read from the cache only (no network)."""
+        from ..leverage import registry
+        from ..signals.pairs import align_to
+        from ..watchlist.pipeline import _load_cached
+        from ..watchlist.tickers import parse_tickers
+        groups = {}
+        try:
+            parsed = parse_tickers(tickers_path)
+        except Exception:  # noqa: BLE001
+            return {}, {}
+        for sec, tks in parsed["sections"].items():
+            if sec.upper() in _PAIR_EXCLUDE:
+                continue
+            for t in tks:
+                if registry.get(t) is None:
+                    groups.setdefault(t, sec)
+        spy = _load_cached(cache_dir, "SPY") if cache_dir else None
+        if not spy:
+            return groups, {}
+        series = {}
+        for t in groups:
+            td = _load_cached(cache_dir, t)
+            if td and (td.ohlcv or {}).get("close"):
+                series[t] = (td.ohlcv["dates"], td.ohlcv["close"])
+        return groups, align_to(spy.ohlcv["dates"], series)
+
+    @app.get("/api/pairs")
+    def pairs_api():
+        """Pairs on the watchlist that have drifted apart, plus how the classic
+        pairs rule actually did on this watchlist's history."""
+        import time as _t
+        from ..signals.pairs import backtest, stretched_now
+        hit = _PAIRS_CACHE.get("v")
+        if hit and _t.time() - hit[0] < 12 * 3600:
+            return jsonify(hit[1])
+        groups, closes = _pair_universe()
+        if not closes:
+            return jsonify({"ok": False, "error": "no cached price history yet"}), 503
+        out = {"ok": True, "pairs": [x for x in stretched_now(closes, groups, top=30)][:12],
+               "backtest": backtest(closes, groups, top=20)}
+        _PAIRS_CACHE["v"] = (_t.time(), out)
         return jsonify(out)
 
     @app.get("/api/compare/holdings")

@@ -28,3 +28,11 @@ def _no_network_board_builds(monkeypatch):
     nothing: no test needs it. Tests drive builds directly instead."""
     from stockskill.server.watchlist_service import WatchlistService
     monkeypatch.setattr(WatchlistService, "_start_bg_build", lambda self: None)
+
+
+@pytest.fixture(autouse=True)
+def _no_api_keys(monkeypatch):
+    """Tests never call the paid/keyed providers, even when run from a shell with
+    the .env loaded; a test that needs a key sets a fake one itself."""
+    for k in ("FMP_API_KEY", "FINNHUB_API_KEY", "UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"):
+        monkeypatch.delenv(k, raising=False)

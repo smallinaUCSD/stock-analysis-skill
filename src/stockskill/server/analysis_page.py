@@ -46,7 +46,7 @@ body{font-size:14px}
 .a-row{display:flex;justify-content:space-between;align-items:baseline;gap:16px;font-size:14px;
   padding:6px 0;border-top:1px solid var(--border)}
 .a-row:first-of-type{border-top:none}
-.a-row span{color:var(--ink-2)}
+.a-row>span{color:var(--ink-2)}
 .a-row b{color:var(--ink);font-weight:500;text-align:right;text-wrap:balance}
 .a-read{font-size:13px;color:var(--muted);line-height:1.55;margin-top:10px;padding-top:10px;
   border-top:1px solid var(--border);max-width:68ch;text-wrap:pretty}
@@ -305,6 +305,14 @@ _OPTIONS_BOX = ('<div class="asec" data-opt="1"><div class="a-h">Options market<
                 '<div class="opt-body muted">Loading option prices…</div></div>')
 
 
+# Filled in the browser from /api/signals/<ticker> (Finnhub Form 4 + Yahoo).
+_SIGNAL_BOXES = tuple(
+    f'<div class="asec" data-sig="{k}"><div class="a-h">{t}</div>'
+    f'<div class="sig-body muted">Loading…</div></div>'
+    for k, t in (("insiders", "Insider trades"), ("short", "Short interest"),
+                 ("quality", "Accounting quality")))
+
+
 _VOL_UP = {"accumulation", "bullish-divergence"}
 _VOL_DOWN = {"distribution", "bearish-divergence"}
 
@@ -363,6 +371,7 @@ def analysis_html(row, closes=None, refresh_seconds: int = 900) -> str:
     sections = (
         group("Valuation", "what the business is worth", _valuation_box(row), _mc_box(row))
         + group("Risk", "how it moves with the market", _risk_box(row))
+        + group("Filings and positioning", "insiders, short sellers, the accounts", *_SIGNAL_BOXES)
         + group("Trade plan", "entry, exits and size", _trade_box(row), _sizing_box(row),
                 _OPTIONS_BOX)
         + group("Trend and flow", "is the move backed?", _momentum_box(closes),
@@ -410,6 +419,7 @@ function refresh(){{ if(_busy) return; _busy=true;
       const n=d.querySelector(sel), o=document.querySelector(sel);
       if(n&&o){{ o.innerHTML=n.innerHTML; }} }});
     if(window.optRender) optRender();
+    if(window.sigRender) sigRender();
     const nb=d.querySelector('.a-head .badge'), ob=document.querySelector('.a-head .badge');
     if(nb&&ob){{ ob.className=nb.className; ob.textContent=nb.textContent; }}
   }}).catch(function(){{}}).finally(function(){{ _busy=false; }});
@@ -417,7 +427,7 @@ function refresh(){{ if(_busy) return; _busy=true;
 if(REFRESH>0 && REFRESH<=3600000) setInterval(refresh, Math.max(60000,REFRESH));
 </script>
 <script>var TK="{tk}", RVOL={rvol};
-""" + _PRICE_JS + _OPT_JS + """</script>
+""" + _PRICE_JS + _OPT_JS + _SIG_JS + """</script>
 </body></html>"""
 
 
@@ -519,4 +529,59 @@ function optRender(){
 }
 (function(){ fetch('/api/options/'+encodeURIComponent(TK)).then(function(r){return r.json();})
   .then(function(d){ OPT=d; optRender(); }).catch(function(){ OPT={available:false}; optRender(); }); })();
+"""
+
+_SIG_JS = r"""
+var SIG=null;
+function sigEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+function sigMoney(v){ var a=Math.abs(v||0); return a>=1e9?'$'+(v/1e9).toFixed(2)+'B':(a>=1e6?'$'+(v/1e6).toFixed(1)+'M':(a>=1e3?'$'+(v/1e3).toFixed(0)+'k':'$'+Math.round(v||0))); }
+function sigRow(k,v){ return '<div class="a-row"><span>'+k+'</span><b>'+v+'</b></div>'; }
+function sigSet(key, html, muted){ var b=document.querySelector('[data-sig="'+key+'"] .sig-body'); if(!b) return;
+  b.className='sig-body'+(muted?' muted':''); b.innerHTML=html; }
+function sigRender(){
+  if(!SIG) return;
+  var ins=SIG.insiders;
+  if(!ins){ sigSet('insiders','Insider data unavailable right now.',true); }
+  else {
+    var h='<div class="a-row"><span>Last '+ins.days+' days</span><b class="'+(ins.tone==='up'?'up':(ins.tone==='down'?'down':''))+'">'+sigEsc(ins.label)+'</b></div>'+
+      sigRow('Open-market buys', ins.buys+(ins.buys?' <span class="muted">('+sigMoney(ins.buy_value)+', '+ins.opportunistic_buys+' opportunistic)</span>':''))+
+      sigRow('Open-market sells', ins.sells+(ins.sells?' <span class="muted">('+sigMoney(ins.sell_value)+')</span>':''));
+    if(ins.buyers&&ins.buyers.length) h+=sigRow('Buyers', '<span style="font-weight:400">'+ins.buyers.slice(0,4).map(sigEsc).join(', ')+'</span>');
+    h+='<div class="a-read">From SEC Form 4 filings. Only open-market trades count; grants, option exercises and tax '+
+      'withholding are ignored. Insiders who trade in the same month every year are routine and tell you little. '+
+      'Research (Cohen, Malloy &amp; Pomorski, 2012) found the out-of-pattern, opportunistic trades carried the information, '+
+      'buys especially. Selling is common for diversification and taxes.</div>';
+    sigSet('insiders', h);
+  }
+  var si=SIG.short;
+  if(!si){ sigSet('short','Short interest unavailable for this ticker.',true); }
+  else {
+    var pf=si.pct_float, cls=pf==null?'':(pf>=0.10?'down':'');
+    var h2=sigRow('Short interest', pf==null?'n/a':'<span class="'+cls+'">'+(pf*100).toFixed(1)+'% of float</span>')+
+      sigRow('Days to cover', si.days_to_cover==null?'n/a':si.days_to_cover.toFixed(1)+' days of volume')+
+      (si.change_vs_prior==null?'':sigRow('vs prior month', (si.change_vs_prior>=0?'+':'')+(si.change_vs_prior*100).toFixed(1)+'%'))+
+      (si.as_of?sigRow('As of', si.as_of):'')+
+      '<div class="a-read">Shares sold short as a share of the tradable float, reported twice a month. Above about 10% '+
+      'means a lot of investors are betting against it: on average heavily shorted stocks have lagged, but a crowded '+
+      'short can also force a sharp squeeze when news turns good. Days to cover is how long shorts would need to buy '+
+      'back at normal volume.</div>';
+    sigSet('short', h2);
+  }
+  var q=SIG.quality;
+  if(!q){ sigSet('quality','Financial statements unavailable (funds and some foreign listings have none).',true); }
+  else {
+    var h3='<div class="a-row"><span>Piotroski F-score</span><b class="'+(q.tone==='up'?'up':(q.tone==='down'?'down':''))+'">'+
+      q.score+' of '+q.max+'</b></div><div class="a-row"><span>Read</span><b style="font-weight:400">'+sigEsc(q.label)+'</b></div>';
+    h3+=q.checks.map(function(c){ var mark=c[1]===true?'<span class="up">&#10003;</span>':(c[1]===false?'<span class="down">&#10007;</span>':'<span class="muted">&ndash;</span>');
+      return '<div class="a-row"><span>'+mark+' '+sigEsc(c[0])+'</span><b class="muted" style="font-weight:400">'+sigEsc(c[2])+'</b></div>'; }).join('');
+    if(q.accruals!=null) h3+=sigRow('Accruals (Sloan)', '<span class="'+(q.accruals>0.10?'down':(q.accruals<0?'up':''))+'">'+(q.accruals*100).toFixed(1)+'% of assets</span>');
+    h3+='<div class="a-read">Nine pass/fail checks on the last two annual reports (Piotroski, 2000): profitable, '+
+      'cash-generating, less indebted, not diluting, and getting more efficient. 8 or 9 is strong, 0 to 2 weak. '+
+      'Accruals are profit not yet backed by cash; high accruals have tended to precede weaker earnings (Sloan, 1996). '+
+      'A dash means the data isn\'t reported (banks have no gross margin, for example).</div>';
+    sigSet('quality', h3);
+  }
+}
+(function(){ fetch('/api/signals/'+encodeURIComponent(TK)).then(function(r){return r.json();})
+  .then(function(d){ SIG=d; sigRender(); }).catch(function(){ SIG={}; sigRender(); }); })();
 """

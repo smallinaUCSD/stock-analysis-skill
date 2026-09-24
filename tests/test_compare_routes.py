@@ -113,3 +113,45 @@ def test_holdings_risk_route_is_private_and_sizes_hedges(tmp_path, monkeypatch):
     assert d["lookthrough"]["leverage"] > 1.0
     public = create_app(tickers_path=str(tmp_path / "t.csv"), public=True).test_client()
     assert public.get("/api/holdings/risk").status_code == 404
+
+
+def test_pairs_signals_and_options_routes(tmp_path, monkeypatch):
+    import pickle
+    from stockskill.server import create_app
+    import stockskill.watchlist.pipeline as pipe
+    import stockskill.data.signals_extra as X
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    base = _td("SPY", 1.0, n=600, quote_type="ETF")
+    book = {"SPY": base, "AAA": _td("AAA", 1.0, n=600, seed=3), "BBB": _td("BBB", 1.05, n=600, seed=3),
+            "CCC": _td("CCC", 1.0, n=600, seed=11)}
+    for t, td in book.items():
+        (cache / f"{t}.pkl").write_bytes(pickle.dumps(td))
+    tf = tmp_path / "t.csv"
+    tf.write_text("[SEMIS]\nAAA, BBB, CCC\n\n[LEVERAGED]\nNVDL\n")
+    monkeypatch.setenv("STOCKSKILL_CACHE_DIR", str(cache))
+    monkeypatch.setattr(pipe, "fetch_one", lambda t, **k: book.get(t) or TickerData(t, {"close": []}, None))
+    monkeypatch.setattr(X, "insider_trades", lambda t: [
+        {"name": "CEO", "date": "2026-09-01", "code": "P", "shares": 100, "price": 10.0}])
+    monkeypatch.setattr(X, "short_interest", lambda t: {"pct_float": 0.12, "days_to_cover": 3.0,
+                                                         "shares_short": 1, "as_of": None,
+                                                         "change_vs_prior": None})
+    monkeypatch.setattr(X, "annual_statements", lambda t: None)
+    monkeypatch.setattr("stockskill.data.options.expected_moves",
+                        lambda t, spot, earn: {"available": True, "moves": [{"label": "Next week"}],
+                                               "stale": False, "note": ""})
+    c = create_app(tickers_path=str(tf), public=True).test_client()
+
+    pr = c.get("/api/pairs").get_json()
+    assert pr["ok"] and pr["backtest"]["periods"] >= 1
+    assert all(p["group"] == "SEMIS" for p in pr["pairs"])
+
+    sg = c.get("/api/signals/AAA").get_json()
+    assert sg["insiders"]["buys"] == 1 and sg["short"]["pct_float"] == 0.12
+    assert sg["quality"] is None
+
+    op = c.get("/api/options/AAA").get_json()
+    assert op["available"] and op["spot"] and op["moves"][0]["label"] == "Next week"
+
+    cmp = c.get("/api/compare?t=AAA,BBB&period=1y").get_json()
+    assert cmp["pair"]["a"] == "AAA" and len(cmp["pair"]["z"]) == len(cmp["pair"]["dates"])
