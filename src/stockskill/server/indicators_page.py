@@ -20,21 +20,20 @@ def indicators_html(initial: str = "") -> str:
             "</style></head><body><div class=\"wrap\">"
             "<header><h1>Technical indicators</h1>"
             "<span class=\"sub\" style=\"margin:0\">Bollinger, Ichimoku, RSI, Stochastic, MACD, ADX, ATR and OBV</span>"
-            "<button class=\"h-close\" onclick=\"window.close()\" title=\"Close tab\" "
-            "style=\"margin-left:auto\" aria-label=\"Close tab\">" + icon("x", 17) + "</button></header>"
-            "<p style=\"font-size:13px;margin:-6px 0 12px\">"
-            "<a class=\"h-back\" href=\"/\" onclick=\"return goBack(event)\">← back to watchlist</a></p>"
+            "<button class=\"page-x\" onclick=\"return goBack(event)\" title=\"Close\" "
+            "aria-label=\"Close\">" + icon("x", 17) + "</button></header>"
             + _CONTROLS +
-            "<div id=\"ind-msg\" class=\"muted\" style=\"font-size:14px;margin:8px 0\"></div>"
+            "<div id=\"ind-msg\" class=\"muted\" style=\"font-size:14px;margin:8px 0\">"
+            "Choose a ticker, tick the overlays and panels you want, then press Plot.</div>"
             "<div id=\"readout\" class=\"ind-readout\"></div>"
             "<div id=\"panels\">"
-            "<svg id=\"p-price\" class=\"ind-svg\" viewBox=\"0 0 900 330\" preserveAspectRatio=\"xMidYMid meet\"></svg>"
-            "<svg id=\"p-rsi\" class=\"ind-svg\" viewBox=\"0 0 900 120\" preserveAspectRatio=\"xMidYMid meet\"></svg>"
-            "<svg id=\"p-stoch\" class=\"ind-svg\" viewBox=\"0 0 900 120\" preserveAspectRatio=\"xMidYMid meet\"></svg>"
-            "<svg id=\"p-macd\" class=\"ind-svg\" viewBox=\"0 0 900 150\" preserveAspectRatio=\"xMidYMid meet\"></svg>"
-            "<svg id=\"p-adx\" class=\"ind-svg\" viewBox=\"0 0 900 120\" preserveAspectRatio=\"xMidYMid meet\"></svg>"
-            "<svg id=\"p-atr\" class=\"ind-svg\" viewBox=\"0 0 900 110\" preserveAspectRatio=\"xMidYMid meet\"></svg>"
-            "<svg id=\"p-obv\" class=\"ind-svg\" viewBox=\"0 0 900 120\" preserveAspectRatio=\"xMidYMid meet\"></svg>"
+            "<svg id=\"p-price\" class=\"ind-svg\" style=\"display:none\" viewBox=\"0 0 900 330\" preserveAspectRatio=\"xMidYMid meet\"></svg>"
+            "<svg id=\"p-rsi\" class=\"ind-svg\" style=\"display:none\" viewBox=\"0 0 900 120\" preserveAspectRatio=\"xMidYMid meet\"></svg>"
+            "<svg id=\"p-stoch\" class=\"ind-svg\" style=\"display:none\" viewBox=\"0 0 900 120\" preserveAspectRatio=\"xMidYMid meet\"></svg>"
+            "<svg id=\"p-macd\" class=\"ind-svg\" style=\"display:none\" viewBox=\"0 0 900 150\" preserveAspectRatio=\"xMidYMid meet\"></svg>"
+            "<svg id=\"p-adx\" class=\"ind-svg\" style=\"display:none\" viewBox=\"0 0 900 120\" preserveAspectRatio=\"xMidYMid meet\"></svg>"
+            "<svg id=\"p-atr\" class=\"ind-svg\" style=\"display:none\" viewBox=\"0 0 900 110\" preserveAspectRatio=\"xMidYMid meet\"></svg>"
+            "<svg id=\"p-obv\" class=\"ind-svg\" style=\"display:none\" viewBox=\"0 0 900 120\" preserveAspectRatio=\"xMidYMid meet\"></svg>"
             "</div>"
             "<p class=\"muted\" style=\"font-size:13px;margin-top:12px\">"
             "Indicator states, not advice. Free data (yfinance) may be delayed. "
@@ -58,13 +57,13 @@ _CONTROLS = """
 </div>
 <div class="ind-bar" style="gap:6px 14px">
   <span class="ind-grp">Overlays:</span>
-  <label class="ind-chk"><input type="checkbox" id="c-bb" checked onchange="redraw()"> Bollinger</label>
-  <label class="ind-chk"><input type="checkbox" id="c-sma" checked onchange="redraw()"> SMA 20/50</label>
+  <label class="ind-chk"><input type="checkbox" id="c-bb" onchange="redraw()"> Bollinger</label>
+  <label class="ind-chk"><input type="checkbox" id="c-sma" onchange="redraw()"> SMA 20/50</label>
   <label class="ind-chk"><input type="checkbox" id="c-ich" onchange="redraw()"> Ichimoku</label>
   <span class="ind-grp">Panels:</span>
-  <label class="ind-chk"><input type="checkbox" id="c-rsi" checked onchange="redraw()"> RSI</label>
+  <label class="ind-chk"><input type="checkbox" id="c-rsi" onchange="redraw()"> RSI</label>
   <label class="ind-chk"><input type="checkbox" id="c-stoch" onchange="redraw()"> Stochastic</label>
-  <label class="ind-chk"><input type="checkbox" id="c-macd" checked onchange="redraw()"> MACD</label>
+  <label class="ind-chk"><input type="checkbox" id="c-macd" onchange="redraw()"> MACD</label>
   <label class="ind-chk"><input type="checkbox" id="c-adx" onchange="redraw()"> ADX</label>
   <label class="ind-chk"><input type="checkbox" id="c-atr" onchange="redraw()"> ATR</label>
   <label class="ind-chk"><input type="checkbox" id="c-obv" onchange="redraw()"> OBV</label>
@@ -76,11 +75,11 @@ _EXTRA_CSS = """
 .ind-bar #itk{width:100%;padding:8px 11px;border-radius:9px;border:1px solid var(--border);
   background:var(--surface);color:var(--ink);font-size:14px}
 .ind-bar .seg{display:inline-flex;border:1px solid var(--border);border-radius:9px;overflow:hidden}
-.ind-bar .seg button{font:500 13px inherit;padding:7px 12px;border:none;background:var(--surface);
+.ind-bar .seg button{font:500 13px var(--font);padding:7px 12px;border:none;background:var(--surface);
   color:var(--muted);cursor:pointer}
 .ind-bar .seg button:hover{color:var(--ink)}
-.ind-bar .seg button.on{background:var(--accent);color:#fff}
-.ind-bar .tbtn{font:500 13px inherit;line-height:1;padding:8px 15px;border-radius:9px;cursor:pointer;
+.ind-bar .seg button.on{background:var(--surface-3);color:var(--ink)}
+.ind-bar .tbtn{font:500 13px var(--font);line-height:1;padding:8px 15px;border-radius:9px;cursor:pointer;
   background:var(--accent);color:#fff;border:1px solid transparent}
 .ind-bar .tbtn:hover{filter:brightness(1.08)}
 .ind-grp{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px}

@@ -15,6 +15,7 @@ numbers of its own, and emits analysis, not buy/sell/hold advice.
 
 from __future__ import annotations
 
+import html
 import re
 
 from flask import Flask, jsonify, request
@@ -88,7 +89,8 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
         from ..marketclock import market_status, refresh_seconds_for
         td = fetch_one(ticker.upper(), period=period, cache_dir=cache_dir, ttl=cache_ttl)
         if not td or not (td.ohlcv or {}).get("close"):
-            return f"<p style='font-family:system-ui;padding:24px'>No data for {ticker}.</p>", 404
+            return (f"<p style='font-family:Georgia,serif;padding:24px'>No data for "
+                    f"{html.escape(ticker)}.</p>", 404)
         row = build_row(td, SignalConfig.from_env())
         # Overlay the live price (Finnhub) + extended-hours (Yahoo) so the page
         # shows the current price, not the days-old committed snapshot.

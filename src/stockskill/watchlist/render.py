@@ -18,7 +18,10 @@ from ..trade import atr_trade_setup, position_size, suggest_options
 _SIG_CLASS = {"BUY": "buy", "SELL": "sell", "SHORT": "short", "HOLD": "hold"}
 # human labels for ticker-file sections (acronyms kept, everything else sentence case)
 _SECTION_LABEL = {"M7": "M7", "AI-DATACENTER": "AI datacenter", "NASDAQ100": "Nasdaq 100",
-                  "DOW": "Dow", "INTL": "International", "LEVERAGED-BEAR": "Leveraged bear"}
+                  "DOW": "Dow", "INTL": "International", "SEMIS": "Semiconductors",
+                  "LEVERAGED": "Leveraged long", "LEVERAGED-BEAR": "Leveraged bear"}
+# sections that stay on the board but get no filter chip
+_HIDDEN_SECTION_CHIPS = {"TICKERS", "ADDED", "DOW"}
 
 
 def _section_label(sec: str) -> str:
@@ -239,7 +242,15 @@ table.wl th:nth-child(15),table.wl td:nth-child(15){text-align:left}
 #modal-body .card-detail{display:block}
 #modal-body .details-cta,#modal-body .card-spark{display:none}
 #modal-body .card-item{cursor:default;border:none;padding:0;box-shadow:none}
-#modal-body .card-top{padding-right:40px}
+#modal-body .card-top{padding-right:44px}
+#modal .modal-card{max-width:1100px;padding:24px 26px}
+.mx-top{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:28px;align-items:start}
+.mx-chart .chart-sec{margin-top:0}
+.mx-meta{min-width:0}
+.mx-meta .det-sec:first-of-type{margin-top:14px}
+.mx-news{margin-top:22px;padding-top:16px;border-top:1px solid var(--border)}
+.mx .analysis-btn{margin:22px 0 2px}
+@media (max-width:820px){.mx-top{grid-template-columns:1fr;gap:18px}.mx-meta{order:-1}}
 .bmc{display:inline-flex;align-items:center;height:32px;font-size:13px;font-weight:500;padding:0 12px;
   border-radius:var(--r);text-decoration:none;background:#ffdd57;color:#3a2f00;border:1px solid #e6c200;white-space:nowrap}
 .bmc:hover{filter:brightness(1.04)}
@@ -865,7 +876,7 @@ def _chip_bar(rows):
         flags |= set(r.flags)
         cats |= set(r.categories)
         secs |= set(r.sections)
-    secs.discard("TICKERS")
+    secs -= _HIDDEN_SECTION_CHIPS
 
     def chip(group, match, label, dot=""):
         d = f'<span class="dot {dot}"></span>' if dot else ""
@@ -1399,8 +1410,27 @@ function setView(v){{
   applyFilter();
 }}
 function openCard(card){{
+  // Lay the quick-look out wide: price history (range filters on top) top-left,
+  // every metric top-right, recent news below, Full analysis at the very bottom.
   const body=document.getElementById('modal-body');
-  body.innerHTML='<div class="card-item">'+card.innerHTML+'</div>';
+  const src=document.createElement('div'); src.innerHTML=card.innerHTML;
+  const detail=src.querySelector('.card-detail');
+  const pick=sel=>detail?detail.querySelector(sel):null;
+  const chart=pick('.chart-sec'), news=pick('.cardnews'), cta=pick('.analysis-btn');
+  if(detail) detail.remove();
+  const meta=document.createElement('div'); meta.className='mx-meta';
+  while(src.firstChild) meta.appendChild(src.firstChild);          // price, trend, stats, links
+  if(detail) Array.from(detail.children).forEach(c=>{{              // valuation, regime, volume
+    if(c!==chart && c!==news && c!==cta) meta.appendChild(c); }});
+  const left=document.createElement('div'); left.className='mx-chart';
+  if(chart) left.appendChild(chart);
+  const top=document.createElement('div'); top.className='mx-top';
+  top.append(left, meta);
+  const wrap=document.createElement('div'); wrap.className='card-item mx';
+  wrap.appendChild(top);
+  if(news){{ news.classList.add('mx-news'); wrap.appendChild(news); }}
+  if(cta) wrap.appendChild(cta);
+  body.innerHTML=''; body.appendChild(wrap);
   document.getElementById('modal').classList.add('show');
   drawCharts(body);
   if(typeof loadNews==='function') loadNews(body);

@@ -8,10 +8,11 @@ just prose; the tested engines produce the numbers elsewhere.
 
 from __future__ import annotations
 
-from ..dashboard.render import _CSS, _THEME_BOOT
+from ..dashboard.render import _CSS, _THEME_BOOT, icon
 
 _INTERPRET_CSS = """
 .wrap{max-width:min(900px,100%);padding:22px clamp(16px,3vw,40px)}
+header{display:flex;align-items:flex-start;gap:16px}
 header h1{margin:0 0 6px;font-size:48px}
 header .sub{color:var(--muted);font-size:14px;margin:0}
 .toc{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 8px}
@@ -330,14 +331,15 @@ def interpret_html() -> str:
          ("kelly", "Position sizing"), ("momentum", "Momentum"), ("volume", "Volume"),
          ("regime", "Regime"), ("stops", "Stop study"), ("voc", "Virtue of Complexity"),
          ("consensus", "Analyst consensus")])
-    back = '<a class="h-back" href="/" onclick="return goBack(event)">&larr; back to board</a>'
+    close = (f'<button class="page-x" onclick="return goBack(event)" title="Close" '
+             f'aria-label="Close">{icon("x", 17)}</button>')
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>How to read the dashboard</title>{_THEME_BOOT}<style>{_CSS}{_INTERPRET_CSS}</style></head>
 <body><div class="wrap">
-<header><h1>How to read the dashboard</h1>
-<p class="sub">A plain-language guide to the numbers on each card, with worked examples. Analysis, not advice.</p></header>
-{back}
+<header><div><h1>How to read the dashboard</h1>
+<p class="sub">A plain-language guide to the numbers on each card, with worked examples. Analysis, not advice.</p></div>
+{close}</header>
 <nav class="toc">{toc}</nav>
 {"".join(sections)}
 <p class="disc">This is educational analysis, not investment advice, and not a

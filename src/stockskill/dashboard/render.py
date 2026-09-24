@@ -108,7 +108,7 @@ _LIGHT_TOKENS = """color-scheme:light;
   --ink:#141413; --ink-2:#3d3d3a; --muted:#66645e;
   --up:#2a7148; --down:#b83c3c; --good:#2a7148; --warn:#7d6000; --crit:#b83c3c; --axis:#d6cdbf;
   --accent:#cc785c; --accent-press:#a9583e; --accent-ink:#ffffff; --link:#a9583e;
-  --band:#181715; --on-band:#faf9f5; --on-band-soft:#a09d96;
+  --band:#efe9de; --on-band:#141413; --on-band-soft:#3d3d3a;
   --shadow-pop:0 1px 3px rgba(20,20,19,.08),0 14px 30px -14px rgba(20,20,19,.20);
   --shadow-modal:0 26px 64px -22px rgba(20,20,19,.32);"""
 _DARK_TOKENS = """color-scheme:dark;
@@ -117,26 +117,26 @@ _DARK_TOKENS = """color-scheme:dark;
   --ink:#faf9f5; --ink-2:#d3d0c8; --muted:#a09d96;
   --up:#5db872; --down:#e0736a; --good:#5db872; --warn:#e0b34a; --crit:#e0736a; --axis:#3e3b36;
   --accent:#cc785c; --accent-press:#a9583e; --accent-ink:#ffffff; --link:#cc785c;
-  --band:#131210; --on-band:#faf9f5; --on-band-soft:#a09d96;
+  --band:#252320; --on-band:#faf9f5; --on-band-soft:#d3d0c8;
   --shadow-pop:0 14px 34px -12px rgba(0,0,0,.6);
   --shadow-modal:0 30px 72px -20px rgba(0,0,0,.72);"""
 _THEME_BOOT = ("<script>try{var t=localStorage.getItem('wl_theme');"
                "if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>")
 
 _CSS = ("@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600"
-        "&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap');\n"
+        "&family=Source+Serif+4:ital,opsz,wght@0,8..60,400..600;1,8..60,400..600&display=swap');\n"
         ":root{" + _LIGHT_TOKENS + """
   --r-sm:6px; --r:8px; --r-lg:12px; --r-xl:16px;
   --ease-out:cubic-bezier(.22,1,.36,1);
-  --font:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  --font:"Source Serif 4","Tiempos Text",Georgia,"Times New Roman",serif;
   --font-display:"Cormorant Garamond","Tiempos Headline",Garamond,"Times New Roman",serif;
-  --font-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;}
+  --font-mono:"Source Serif 4","Tiempos Text",Georgia,"Times New Roman",serif;}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){""" + _DARK_TOKENS + """}}
 :root[data-theme="dark"]{""" + _DARK_TOKENS + """}
 *{box-sizing:border-box}
 html{scrollbar-color:var(--border-strong) transparent;accent-color:var(--accent)}
 body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 var(--font);
-  font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+  font-variant-numeric:lining-nums tabular-nums;font-optical-sizing:auto;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
 ::selection{background:color-mix(in srgb,var(--accent) 28%,transparent);color:var(--ink)}
 input,textarea,select,button{font:inherit;color:inherit}
 input,textarea{caret-color:var(--accent)}
@@ -145,6 +145,10 @@ a{color:var(--link);text-underline-offset:3px}
 button{-webkit-tap-highlight-color:transparent}
 .ic{display:inline-block;vertical-align:-.18em;flex:0 0 auto}
 b,strong{font-weight:500}
+.page-x{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;flex:0 0 auto;
+  margin-left:auto;padding:0;border-radius:50%;border:1px solid var(--border);background:var(--bg);
+  color:var(--ink);cursor:pointer;transition:border-color .15s var(--ease-out),transform .12s var(--ease-out)}
+.page-x:hover{border-color:var(--border-strong)} .page-x:active{transform:scale(.97)}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;
   animation-iteration-count:1!important;transition-duration:.01ms!important}}
 .wrap{max-width:1180px;margin:0 auto;padding:20px}
