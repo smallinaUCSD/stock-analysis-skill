@@ -211,7 +211,7 @@ table.wl th:nth-child(15),table.wl td:nth-child(15){text-align:left}
   border-radius:var(--r);cursor:pointer;font:500 14px var(--font);border:1px solid transparent}
 .analysis-btn .cta-1{background:var(--accent);color:var(--accent-ink)}
 .analysis-btn .cta-1:active{background:var(--accent-press)}
-.analysis-btn .cta-2{flex:0 0 38%;background:var(--surface);color:var(--ink);border-color:var(--border)}
+.analysis-btn .cta-2{background:var(--surface);color:var(--ink);border-color:var(--border)}
 .analysis-btn .cta-2:hover{background:var(--surface-2)}
 .site-help{color:var(--link);text-decoration:none;font-weight:500}.site-help:hover{text-decoration:underline}
 .site-note{color:var(--muted);font-size:13px;margin-top:18px;line-height:1.5}
@@ -246,17 +246,20 @@ table.wl th:nth-child(15),table.wl td:nth-child(15){text-align:left}
   color:var(--ink);cursor:pointer}
 .modal-x:hover{border-color:var(--border-strong)}
 #modal-body .card-detail{display:block}
-#modal-body .details-cta,#modal-body .card-spark{display:none}
+#modal-body .details-cta,#modal-body .card-spark,#modal-body .erow:empty,#modal-body .exthrs:empty{display:none}
 #modal-body .card-item{cursor:default;border:none;padding:0;box-shadow:none}
 #modal-body .card-top{padding-right:44px}
 #modal .modal-card{max-width:1100px;padding:24px 26px}
-.mx-top{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:28px;align-items:start}
+.mx-head{margin-bottom:12px}
 .mx-chart .chart-sec{margin-top:0}
-.mx-meta{min-width:0}
-.mx-meta .det-sec:first-of-type{margin-top:14px}
+.mx-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px 30px;align-items:start;
+  margin-top:20px;padding-top:18px;border-top:1px solid var(--border)}
+.mx-grid>div{min-width:0}
+.mx-grid .det-sec:first-child,.mx-sum>:first-child{margin-top:0}
 .mx-news{margin-top:22px;padding-top:16px;border-top:1px solid var(--border)}
 .mx .analysis-btn{margin:22px 0 2px}
-@media (max-width:820px){.mx-top{grid-template-columns:1fr;gap:18px}.mx-meta{order:-1}}
+@media (max-width:900px){.mx-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:620px){.mx-grid{grid-template-columns:1fr}}
 .bmc{display:inline-flex;align-items:center;height:32px;font-size:13px;font-weight:500;padding:0 12px;
   border-radius:var(--r);text-decoration:none;background:#ffdd57;color:#3a2f00;border:1px solid #e6c200;white-space:nowrap}
 .bmc:hover{filter:brightness(1.04)}
@@ -320,6 +323,8 @@ a.macro-ev:hover{color:var(--link)}
 .det-h{font-size:13px;font-weight:500;color:var(--ink-2);margin-bottom:5px}
 .det-row{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:1px 0}
 .det-row b{text-align:right;font-weight:500}
+.det-line{font-size:13px;line-height:1.5;padding:1px 0}
+.det-line b{font-weight:500}
 .det-note{font-size:13px;color:var(--muted);margin-top:4px;line-height:1.45}
 .ts-sub{font-size:13px;color:var(--muted);margin-bottom:4px}
 .stance{font-size:13px;font-weight:500;padding:2px 8px;border-radius:999px;margin-left:6px}
@@ -726,10 +731,10 @@ def _valuation_summary(r):
         src = (asm.get("growth_source") or "").split(",")[0]
         vs = (f' <span class="muted">vs {grew*100:.0f}% reported {html.escape(src)}</span>'
               if grew is not None and src and not src.startswith("default") else "")
-        implied = (f'<div class="det-row" title="Reverse DCF: the 10-year growth rate that '
+        implied = (f'<div class="det-line" title="Reverse DCF: the 10-year growth rate that '
                    f'justifies today\'s price">Price assumes <b>{ig*100:.0f}%/yr</b> growth{vs}</div>')
     return (f'<div class="det-sec"><div class="det-h">Valuation</div>'
-            f'<div class="det-row"><b class="{scls}">{stance}</b>{tail}</div>{implied}</div>')
+            f'<div class="det-line"><b class="{scls}">{stance}</b>{tail}</div>{implied}</div>')
 
 
 def _regime_summary(r):
@@ -744,7 +749,7 @@ def _regime_summary(r):
     if not parts:
         return ""
     return (f'<div class="det-sec"><div class="det-h">Regime &amp; trend</div>'
-            f'<div class="det-row muted">{html.escape(" · ".join(parts))}</div></div>')
+            f'<div class="det-line muted">{html.escape(" · ".join(parts))}</div></div>')
 
 
 def _volume_summary(r):
@@ -759,7 +764,7 @@ def _volume_summary(r):
     if getattr(r, "mfi", None) is not None:
         extra = f' <span class="muted">· MFI {r.mfi:.0f}</span>'
     return (f'<div class="det-sec"><div class="det-h">Volume</div>'
-            f'<div class="det-row"><span class="{cls}">{html.escape(vs["label"])}</span>{extra}</div></div>')
+            f'<div class="det-line"><span class="{cls}">{html.escape(vs["label"])}</span>{extra}</div></div>')
 
 
 _BETA_TIP = ("Beta vs the S&P 500 over the last year (Welch slope-winsorized estimate). "
@@ -795,7 +800,7 @@ def _risk_summary(r):
     up, dn = spy.get("up_capture"), spy.get("down_capture")
     if up is not None and dn is not None:
         rows.append(line("Up · down capture", f"{up*100:.0f}% · {dn*100:.0f}%"))
-    return (f'<div class="det-sec"><div class="det-h">Risk vs the market '
+    return (f'<div class="det-sec risk-sec"><div class="det-h">Risk vs the market '
             f'<span class="muted" style="font-weight:400">(1 year)</span></div>'
             f'{"".join(rows)}</div>')
 
@@ -1474,41 +1479,41 @@ function setView(v){{
   applyFilter();
 }}
 function openCard(card){{
-  // Lay the quick-look out wide: price history (range filters on top) top-left,
-  // every metric top-right, recent news below, Full analysis at the very bottom.
+  // Quick-look, top to bottom: ticker and price, the chart across the full width,
+  // every metric in a grid below it, recent news, then Compare / Full analysis.
   const body=document.getElementById('modal-body');
   const src=document.createElement('div'); src.innerHTML=card.innerHTML;
   const detail=src.querySelector('.card-detail');
   const pick=sel=>detail?detail.querySelector(sel):null;
-  const chart=pick('.chart-sec'), news=pick('.cardnews'), cta=pick('.analysis-btn');
+  const chart=pick('.chart-sec'), news=pick('.cardnews'), cta=pick('.analysis-btn'), risk=pick('.risk-sec');
   if(detail) detail.remove();
-  const meta=document.createElement('div'); meta.className='mx-meta';
-  while(src.firstChild) meta.appendChild(src.firstChild);          // price, trend, stats, links
-  if(detail) Array.from(detail.children).forEach(c=>{{              // valuation, regime, volume
-    if(c!==chart && c!==news && c!==cta) meta.appendChild(c); }});
-  const left=document.createElement('div'); left.className='mx-chart';
-  if(chart) left.appendChild(chart);
-  const top=document.createElement('div'); top.className='mx-top';
-  top.append(left, meta);
+  const head=document.createElement('div'); head.className='mx-head';
+  ['.card-top','.nm','.exthrs'].forEach(sel=>{{ const n=src.querySelector(sel); if(n) head.appendChild(n); }});
+  const sum=document.createElement('div'); sum.className='mx-sum';     // trend, factors, stats, links
+  while(src.firstChild) sum.appendChild(src.firstChild);
+  const more=document.createElement('div'); more.className='mx-more';  // valuation, regime, volume
+  if(detail) Array.from(detail.children).forEach(c=>{{
+    if(c!==chart && c!==news && c!==cta && c!==risk) more.appendChild(c); }});
+  const grid=document.createElement('div'); grid.className='mx-grid';
+  grid.appendChild(sum);
+  if(risk){{ const r=document.createElement('div'); r.appendChild(risk); grid.appendChild(r); }}
+  if(more.children.length) grid.appendChild(more);
+  const top=document.createElement('div'); top.className='mx-chart';
+  if(chart) top.appendChild(chart);
   const wrap=document.createElement('div'); wrap.className='card-item mx';
-  wrap.appendChild(top);
+  wrap.append(head, top, grid);
   if(news){{ news.classList.add('mx-news'); wrap.appendChild(news); }}
   if(cta) wrap.appendChild(cta);
   body.innerHTML=''; body.appendChild(wrap);
   document.getElementById('modal').classList.add('show');
-  drawCharts(body);
   fitChart(body);
+  drawCharts(body);
   if(typeof loadNews==='function') loadNews(body);
 }}
 function fitChart(body){{
-  // Stretch the quick-look chart to the height of the metrics column beside it
-  // (side-by-side layout only; stacked on phones it keeps its natural height).
-  const el=body.querySelector('.mx-chart .pricechart'), meta=body.querySelector('.mx-meta');
-  if(!el||!meta||!el._series||window.matchMedia('(max-width:820px)').matches) return;
-  const sec=el.closest('.chart-sec'), extra=sec.offsetHeight-el.offsetHeight;
-  el._h=Math.max(176, Math.min(720, meta.offsetHeight-extra));
-  const on=sec.querySelector('.tfb.on')||sec.querySelector('.tfb');
-  renderChart(el, on?on.dataset.tf:'1y');
+  // A taller chart now that it spans the whole quick-look (phones keep the default).
+  const el=body.querySelector('.mx-chart .pricechart');
+  if(el) el._h=window.matchMedia('(max-width:820px)').matches?0:300;
 }}
 const TF_DAYS={{'5d':8,'1mo':31,'3mo':92,'6mo':183,'1y':366,'2y':731,'5y':1827,'max':1e9}};
 function drawCharts(root){{
