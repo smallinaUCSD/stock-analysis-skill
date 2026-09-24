@@ -124,6 +124,12 @@ def holdings_html(snap: dict, updated: str = "") -> str:
 
 <div class="h-accounts">{cards}</div>
 
+<section class="h-risk">
+  <div class="h-risk-h"><h2>Market risk and hedging</h2>
+    <span class="seg" id="rk-bench"><button data-b="SPY" class="on">vs S&amp;P 500</button><button data-b="QQQ">vs Nasdaq-100</button></span></div>
+  <div id="rk-body" class="muted">Measuring your portfolio's market risk…</div>
+</section>
+
 <div class="h-forms">
   <section class="h-form">
     <div class="h-form-h">Record a trade</div>
@@ -191,6 +197,7 @@ function doCash(){{
   }}).catch(()=>_msg('cmsg','network error',false));
 }}
 </script>
+<script>""" + _RISK_JS + """</script>
 </body></html>"""
 
 
@@ -238,4 +245,81 @@ _EXTRA_CSS = """
 .tbtn.add{background:var(--accent);color:#fff;border:none;font-weight:500;padding:8px 14px;border-radius:8px;cursor:pointer}
 .h-msg{font-size:13px;min-height:16px;margin-top:2px}
 .h-msg.ok{color:var(--up)} .h-msg.bad{color:var(--down)}
+.h-risk{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:18px}
+.h-risk-h{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.h-risk-h h2{font-family:var(--font-display);font-weight:500;font-size:28px;margin:0}
+.h-risk .seg{display:inline-flex;border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-left:auto}
+.h-risk .seg button{font:500 13px var(--font);padding:0 12px;height:34px;border:none;background:var(--bg);color:var(--muted);cursor:pointer}
+.h-risk .seg button.on{background:var(--surface-3);color:var(--ink)}
+.rk-tiles{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.rk-tiles .h-tile{background:var(--bg)}
+.rk-tiles .h-tile small{display:block;font-size:13px;color:var(--muted);margin-top:2px}
+.rk-cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:760px){.rk-cols{grid-template-columns:1fr}}
+.rk-h{font-size:16px;font-weight:500;margin:4px 0 8px}
+.rk-row{display:grid;grid-template-columns:70px 1fr 64px 76px;gap:8px;align-items:center;font-size:13px;margin:5px 0;font-variant-numeric:tabular-nums}
+.rk-row.lt{grid-template-columns:70px 1fr 56px}
+.rk-row .bar{height:6px;border-radius:3px;background:var(--surface-3);overflow:hidden}
+.rk-row .bar b{display:block;height:100%;background:var(--accent);border-radius:3px}
+.rk-row .r{text-align:right;color:var(--muted)}
+.rk-hedge{margin-top:16px;padding-top:14px;border-top:1px solid var(--border)}
+.rk-slider{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:14px;margin-bottom:10px}
+.rk-slider input{width:220px;accent-color:var(--accent)}
+.rk-t{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+.rk-t th{text-align:right;color:var(--muted);font-size:12px;font-weight:500;text-transform:uppercase;letter-spacing:1.5px;padding:4px 8px;border-bottom:1px solid var(--border)}
+.rk-t td{text-align:right;padding:7px 8px;border-bottom:1px dashed var(--border)}
+.rk-t th:first-child,.rk-t td:first-child{text-align:left}
+.rk-note{font-size:13px;color:var(--muted);line-height:1.55;margin-top:10px}
+"""
+
+_RISK_JS = r"""
+var RK={bench:'SPY', pct:50, t:null, d:null};
+function rkMoney(v){ return (v<0?'-$':'$')+Math.round(Math.abs(v)).toLocaleString(); }
+function rkEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+function rkLoad(){
+  fetch('/api/holdings/risk?bench='+RK.bench+'&pct='+RK.pct).then(function(r){return r.json();}).then(function(d){
+    if(!d.ok){ document.getElementById('rk-body').textContent='Risk view unavailable.'; return; }
+    RK.d=d; rkRender(); }).catch(function(){ document.getElementById('rk-body').textContent='Risk view unavailable right now.'; });
+}
+function rkRender(){
+  var d=RK.d, p=d.portfolio, lt=d.lookthrough, body=document.getElementById('rk-body'); body.className='';
+  var topU=lt.top.length?lt.top[0]:null;
+  var tiles='<div class="rk-tiles">'+
+    '<div class="h-tile"><span>Portfolio beta</span><b>'+(p.beta==null?'n/a':p.beta.toFixed(2))+'</b><small>vs the '+d.bench_name+', cash counted as 0</small></div>'+
+    '<div class="h-tile"><span>Moves like</span><b>'+rkMoney(p.exposure)+'</b><small>of the '+d.bench_name+'</small></div>'+
+    '<div class="h-tile"><span>Look-through leverage</span><b>'+(lt.leverage?lt.leverage.toFixed(2)+'x':'n/a')+'</b><small>'+rkMoney(lt.notional)+' of underlying stock</small></div>'+
+    (topU?'<div class="h-tile"><span>Largest underlying</span><b>'+rkEsc(topU.underlying)+' '+(topU.share*100).toFixed(0)+'%</b><small>of look-through exposure</small></div>':'')+
+    '</div>';
+  var mx=Math.max.apply(null,p.rows.map(function(r){return r.share;}).concat([0.0001]));
+  var risk='<div><div class="rk-h">Where the market risk comes from</div>'+p.rows.slice(0,10).map(function(r){
+    return '<div class="rk-row"><b>'+rkEsc(r.ticker)+'</b><span class="bar"><b style="width:'+(r.share/mx*100).toFixed(1)+'%"></b></span>'+
+      '<span class="r">beta '+r.beta.toFixed(2)+'</span><span class="r">'+(r.share*100).toFixed(0)+'%</span></div>'; }).join('')+
+    (p.missing.length?'<div class="rk-note">No price history to measure: '+p.missing.map(rkEsc).join(', ')+' (left out).</div>':'')+'</div>';
+  var mx2=Math.max.apply(null,lt.top.map(function(r){return r.share;}).concat([0.0001]));
+  var own='<div><div class="rk-h">What you really own (look-through)</div>'+lt.top.map(function(u){
+    return '<div class="rk-row lt"><b>'+rkEsc(u.underlying)+'</b><span class="bar"><b style="width:'+(u.share/mx2*100).toFixed(1)+'%"></b></span>'+
+      '<span class="r">'+(u.share*100).toFixed(1)+'%</span></div>'; }).join('')+
+    '<div class="rk-note">Leveraged funds expanded into the stocks they hold, times their leverage.</div></div>';
+  var rows=d.hedges.map(function(h){ var dr=h.drag_1y;
+    var drag=dr?('<span class="'+(dr.drag<0?'down':'up')+'">'+(dr.drag*100>0?'+':'')+(dr.drag*100).toFixed(1)+' pts</span>'):'<span class="muted">-</span>';
+    return '<tr><td>'+rkEsc(h.label)+'</td><td>'+h.action+'</td><td>'+rkMoney(h.dollars)+'</td><td>'+(h.shares==null?'-':Math.round(h.shares).toLocaleString())+'</td><td>'+drag+'</td></tr>'; }).join('');
+  var puts=d.puts&&d.puts.contracts!=null?('<div class="rk-note">Or with options: about <b>'+d.puts.contracts.toFixed(1)+'</b> at-the-money '+d.bench+
+    ' put contracts (delta about 0.5, so approximate; the count drifts as the market moves, and puts cost a premium).</div>'):'';
+  var hedge='<div class="rk-hedge"><div class="rk-h">Hedge calculator</div>'+
+    '<div class="rk-slider"><span>Offset</span><input type="range" id="rk-pct" min="0" max="100" step="5" value="'+RK.pct+'">'+
+    '<b id="rk-pv">'+RK.pct+'%</b><span class="muted">of your '+rkMoney(p.exposure)+' market exposure ('+rkMoney(p.exposure*RK.pct/100)+')</span></div>'+
+    '<div class="htable-wrap"><table class="rk-t"><thead><tr><th>Instrument</th><th>Action</th><th>Amount</th><th>&asymp; Shares</th><th>Past-year reset effect</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+puts+
+    '<div class="rk-note">Any one row does the job on its own; they are alternatives, not a combination. Inverse funds reset daily, so '+
+    'held for weeks they drift from their multiple: the "reset effect" is how far each landed from its multiple of the index over the past year '+
+    '(negative means the reset cost you, as in choppy markets; it can help in a steady trend). '+
+    'A hedge cuts the downside and the upside alike. Analysis only; nothing here places a trade.</div></div>';
+  body.innerHTML=tiles+'<div class="rk-cols">'+risk+own+'</div>'+hedge;
+  var sl=document.getElementById('rk-pct');
+  sl.addEventListener('input',function(){ RK.pct=+this.value; document.getElementById('rk-pv').textContent=RK.pct+'%';
+    clearTimeout(RK.t); RK.t=setTimeout(rkLoad,200); });
+}
+document.getElementById('rk-bench').addEventListener('click',function(e){ var b=e.target.closest('button'); if(!b) return;
+  [].forEach.call(this.querySelectorAll('button'),function(x){x.classList.toggle('on',x===b);}); RK.bench=b.dataset.b;
+  document.getElementById('rk-body').className='muted'; document.getElementById('rk-body').textContent='Measuring…'; rkLoad(); });
+rkLoad();
 """

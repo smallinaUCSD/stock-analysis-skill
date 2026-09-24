@@ -91,12 +91,16 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
         if not td or not (td.ohlcv or {}).get("close"):
             return (f"<p style='font-family:Georgia,serif;padding:24px'>No data for "
                     f"{html.escape(ticker)}.</p>", 404)
-        row = build_row(td, SignalConfig.from_env())
         try:                              # beta/alpha vs SPY and QQQ (cached benchmarks)
             from ..performance.benchmarks import load_benchmarks, risk_vs_benchmarks
-            row.risk = risk_vs_benchmarks(td, load_benchmarks(cache_dir, period, cache_ttl, fetch=True))
+            risk = risk_vs_benchmarks(td, load_benchmarks(cache_dir, period, cache_ttl, fetch=True))
         except Exception:  # noqa: BLE001
-            row.risk = {}
+            risk = {}
+        row = build_row(td, SignalConfig.from_env(),
+                        beta=(risk.get("SPY") or {}).get("beta"))
+        row.risk = risk
+        if (risk.get("SPY") or {}).get("beta") is not None:
+            row.beta = risk["SPY"]["beta"]
         # Overlay the live price (Finnhub) + extended-hours (Yahoo) so the page
         # shows the current price, not the days-old committed snapshot.
         status = market_status()
@@ -166,6 +170,70 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
                                  request.args.get("side", ""), amt or 0.0,
                                  settle_cash=settle, price=price)
             return jsonify(res), (200 if res.get("ok") else 400)
+
+        _HEDGES = {"SPY": [("SPY", "Short the S&P 500 (SPY)"), ("SH", "Inverse S&P 500, -1x (SH)"),
+                           ("SPXU", "Inverse S&P 500, -3x (SPXU)")],
+                   "QQQ": [("QQQ", "Short the Nasdaq-100 (QQQ)"), ("PSQ", "Inverse Nasdaq-100, -1x (PSQ)"),
+                           ("SQQQ", "Inverse Nasdaq-100, -3x (SQQQ)")]}
+        _MULT = {"SH": -1.0, "SPXU": -3.0, "PSQ": -1.0, "SQQQ": -3.0}
+        _RISK_CACHE: dict = {}
+
+        @app.get("/api/holdings/risk")
+        def holdings_risk():
+            """Portfolio beta, where the market risk sits, look-through exposure,
+            and hedge sizing for ``pct`` percent of it. Local only (holdings)."""
+            import time as _t
+            from ..performance.metrics import align_closes, risk_stats
+            from ..portfolio.hedge import hedge_plan, portfolio_beta, put_contracts, reset_drag
+            from ..portfolio.lookthrough import Holding, expand
+            bench = request.args.get("bench", "SPY").upper()
+            if bench not in _HEDGES:
+                bench = "SPY"
+            pct = max(0.0, min(100.0, request.args.get("pct", default=50.0, type=float) or 0.0))
+            snap = holdings.snapshot()
+            positions = [(p["ticker"], p["market_value"]) for a in snap["accounts"]
+                         for p in a["positions"] if p.get("market_value")]
+            held = sorted({t for t, _ in positions})
+            key = (bench, tuple(held))
+            hit = _RISK_CACHE.get(key)
+            if not hit or _t.time() - hit[0] > 600:
+                tks = sorted(set(held) | {bench} | {h for h, _ in _HEDGES[bench]})
+                data = _fetch_many(tks)
+                bo = (data.get(bench).ohlcv if data.get(bench) else None) or {}
+                betas, prices, drag = {bench: 1.0}, {}, {}
+                for t, td in data.items():
+                    o = td.ohlcv or {}
+                    if o.get("close"):
+                        prices[t] = o["close"][-1]
+                    if t != bench and o.get("close") and bo.get("close"):
+                        rs = risk_stats(o.get("dates"), o["close"], bo.get("dates"), bo["close"],
+                                        benchmark=bench)
+                        betas[t] = rs.beta if rs else None
+                        if t in _MULT:
+                            _, f, i = align_closes(o.get("dates"), o["close"], bo.get("dates"), bo["close"])
+                            drag[t] = reset_drag(f[-253:], i[-253:], _MULT[t])
+                hit = (_t.time(), {"betas": betas, "prices": prices, "drag": drag})
+                _RISK_CACHE[key] = hit
+            cached = hit[1]
+            port = portfolio_beta(positions, cached["betas"], snap.get("grand_cash") or 0.0)
+            lt = expand([Holding(t, v) for t, v in positions])
+            top = [{"underlying": u, "dollars": d, "share": (d / lt.total_notional) if lt.total_notional else 0}
+                   for u, d in lt.top(10)]
+            plan = hedge_plan(port["exposure"], pct / 100.0,
+                              [{"ticker": h, "label": lbl, "beta": cached["betas"].get(h),
+                                "price": cached["prices"].get(h)} for h, lbl in _HEDGES[bench]])
+            for x in plan:
+                x["drag_1y"] = cached["drag"].get(x["ticker"])
+            return jsonify({
+                "ok": True, "bench": bench, "bench_name": "S&P 500" if bench == "SPY" else "Nasdaq-100",
+                "pct": pct, "portfolio": port,
+                "lookthrough": {"leverage": lt.effective_leverage, "notional": lt.total_notional,
+                                "top": top},
+                "hedges": plan,
+                "puts": {"contracts": put_contracts(port["exposure"], pct / 100.0,
+                                                   cached["prices"].get(bench)),
+                         "index_price": cached["prices"].get(bench), "delta": 0.5},
+            })
 
         @app.post("/api/holdings/cash")
         def holdings_cash():
@@ -302,6 +370,39 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
             "gain_threshold": r.gain_threshold, "loss_threshold": r.loss_threshold,
             "var_95": r.var_95, "pctiles": r.pctiles,
         })
+
+    _OPT_CACHE: dict = {}
+
+    @app.get("/api/options/<ticker>")
+    def options_moves(ticker: str):
+        """Options-implied expected moves (next week / ~month / through earnings)."""
+        if not _TICKER_RE.match(ticker):
+            return jsonify({"error": "invalid ticker"}), 400
+        import time as _t
+        from ..data.options import expected_moves
+        from ..watchlist.pipeline import fetch_one
+        tk = ticker.upper()
+        hit = _OPT_CACHE.get(tk)
+        if hit and _t.time() - hit[0] < 600:
+            return jsonify(hit[1])
+        td = fetch_one(tk, period=period, cache_dir=cache_dir, ttl=cache_ttl)
+        spot = None
+        try:
+            from ..data import finnhub
+            q = finnhub.quote(tk) if finnhub.has_finnhub() else None
+            spot = q["price"] if q else None
+        except Exception:  # noqa: BLE001
+            spot = None
+        closes = (td.ohlcv or {}).get("close") or []
+        spot = spot or (closes[-1] if closes else None)
+        if not spot:
+            return jsonify({"available": False, "moves": [], "note": "no price"}), 404
+        earn = td.snapshot.next_earnings if td.snapshot else None
+        out = expected_moves(tk, float(spot), earn)
+        out.update({"ticker": tk, "spot": spot, "next_earnings": earn})
+        if out.get("available"):
+            _OPT_CACHE[tk] = (_t.time(), out)
+        return jsonify(out)
 
     @app.get("/api/ohlc/<ticker>")
     def ohlc(ticker: str):

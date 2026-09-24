@@ -77,3 +77,49 @@ def fetch_options_snapshot(ticker: str, spot: float | None = None) -> OptionsSna
         )
     except Exception as e:  # noqa: BLE001
         return OptionsSnapshot(available=False, note=f"fetch failed: {e}")
+
+
+def expected_moves(ticker: str, spot: float, earnings: str | None = None,
+                   today=None) -> dict:
+    """Options-implied moves to a few upcoming expiries (next week, ~a month,
+    through earnings), from at-the-money straddle prices on Yahoo's chains.
+
+    {"available", "moves": [{label, expiry, days, strike, straddle, move_pct,
+    low, high, iv, source}], "stale", "note"}. Best-effort; never raises."""
+    from datetime import date
+
+    from ..trade.expected_move import option_price, pick_expiries, straddle_move
+    import yfinance as yf
+
+    today = today or date.today()
+    try:
+        t = yf.Ticker(ticker)
+        chosen = pick_expiries(t.options, today, earnings)
+    except Exception as e:  # noqa: BLE001
+        return {"available": False, "moves": [], "note": f"options unavailable ({e})"}
+    if not chosen:
+        return {"available": False, "moves": [], "note": "no listed options"}
+    moves, stale = [], False
+    for label, exp in chosen:
+        try:
+            ch = t.option_chain(exp)
+            c, p = _nearest_row(ch.calls, spot), _nearest_row(ch.puts, spot)
+            if c is None or p is None:
+                continue
+            cp, cs = option_price(c.get("bid"), c.get("ask"), c.get("lastPrice"))
+            pp, ps = option_price(p.get("bid"), p.get("ask"), p.get("lastPrice"))
+            y, m, d = (int(x) for x in exp.split("-"))
+            days = (date(y, m, d) - today).days
+            mv = straddle_move(spot, cp, pp, days)
+            if not mv:
+                continue
+            src = "mid" if (cs == "mid" and ps == "mid") else "last trade"
+            stale = stale or src != "mid"
+            mv.update({"label": label, "expiry": exp, "days": days,
+                       "strike": float(c["strike"]), "source": src})
+            moves.append(mv)
+        except Exception:  # noqa: BLE001
+            continue
+    return {"available": bool(moves), "moves": moves, "stale": stale,
+            "note": ("Priced from last trades (the market is closed), so treat these as "
+                     "approximate." if stale else "")}

@@ -701,12 +701,14 @@ def _chart_html(r):
 
 
 def _valuation_summary(r):
-    """One-line valuation stance + Monte Carlo P(undervalued) for the modal."""
-    v = r.valuation or {}
+    """Valuation stance + Monte Carlo P(undervalued) for the modal, and the
+    reverse DCF: the growth today's price already assumes, next to the growth
+    the company actually reported."""
+    payload = r.valuation or {}
+    v = payload.get("valuation") if "valuation" in payload else payload
+    v = v or {}
     if not v.get("reliable"):
-        sig = v.get("signal") or ""
-        return (f'<div class="det-sec"><div class="det-h">Valuation</div>'
-                f'<div class="muted" style="font-size:13px">{html.escape(sig)}</div></div>') if sig else ""
+        return ""                      # ETFs / no cash flows: the full analysis explains why
     mos = v.get("margin_of_safety") or 0.0
     stance = "Undervalued" if mos >= 0.10 else ("Overvalued" if mos <= -0.10 else "Fairly valued")
     scls = "up" if mos >= 0.10 else ("down" if mos <= -0.10 else "muted")
@@ -716,8 +718,18 @@ def _valuation_summary(r):
     if v.get("mc_prob_undervalued") is not None:
         bits.append(f'MC P(undervalued) {v["mc_prob_undervalued"]*100:.0f}%')
     tail = f' <span class="muted" style="font-weight:400">· {" · ".join(bits)}</span>' if bits else ''
+    implied = ""
+    ig = v.get("implied_market_growth")
+    if ig is not None:
+        asm = v.get("assumptions") or {}
+        grew = asm.get("reported_growth")
+        src = (asm.get("growth_source") or "").split(",")[0]
+        vs = (f' <span class="muted">vs {grew*100:.0f}% reported {html.escape(src)}</span>'
+              if grew is not None and src and not src.startswith("default") else "")
+        implied = (f'<div class="det-row" title="Reverse DCF: the 10-year growth rate that '
+                   f'justifies today\'s price">Price assumes <b>{ig*100:.0f}%/yr</b> growth{vs}</div>')
     return (f'<div class="det-sec"><div class="det-h">Valuation</div>'
-            f'<div class="det-row"><b class="{scls}">{stance}</b>{tail}</div></div>')
+            f'<div class="det-row"><b class="{scls}">{stance}</b>{tail}</div>{implied}</div>')
 
 
 def _regime_summary(r):

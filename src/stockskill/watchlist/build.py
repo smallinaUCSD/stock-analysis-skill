@@ -156,21 +156,12 @@ def _attach_factors(rows, data) -> None:
         return
 
 
-def _attach_risk(rows, data, benches) -> None:
-    """Beta/alpha/Sharpe/drawdown vs SPY and QQQ on each row (pure math over the
-    cached price history). Beta shown on the board is the Welch estimate vs SPY,
-    falling back to the vendor's when there's no benchmark. Never raises."""
-    if not benches:
-        return
-    from ..performance.benchmarks import risk_vs_benchmarks
+def _attach_risk(rows, risk: dict) -> None:
+    """Hang beta/alpha/Sharpe/drawdown vs SPY and QQQ (``risk``: {ticker:
+    {benchmark: stats}}) on each row. Beta shown on the board is the Welch
+    estimate vs SPY, falling back to the vendor's when there's no benchmark."""
     for r in rows:
-        td = data.get(r.ticker)
-        if not td:
-            continue
-        try:
-            r.risk = risk_vs_benchmarks(td, benches)
-        except Exception:  # noqa: BLE001
-            continue
+        r.risk = risk.get(r.ticker) or {}
         spy = r.risk.get("SPY") or {}
         if spy.get("beta") is not None:
             r.beta = spy["beta"]
@@ -305,6 +296,17 @@ def build_watchlist_html(tickers_spec, *, period: str = "5y", workers: int = 5,
 
     data = fetch_all(tickers, period=period, workers=workers, cache_dir=cache_dir, ttl=ttl)
     cfg = SignalConfig.from_env()
+    # Benchmarks for beta/alpha: refreshed on a full live build, read from the
+    # cache otherwise (the fast and incremental builds stay offline). Each row's
+    # Welch beta vs SPY also sets its DCF discount rate.
+    from ..performance.benchmarks import load_benchmarks, risk_vs_benchmarks
+    benches = load_benchmarks(cache_dir, period, ttl, fetch=live and panels, have=data)
+    risk = {}
+    for t, td in data.items():
+        try:
+            risk[t] = risk_vs_benchmarks(td, benches) if benches else {}
+        except Exception:  # noqa: BLE001
+            risk[t] = {}
     # Build rows, yielding the CPU periodically on the served board: the first
     # (uncached) build runs the heavy per-ticker models, and on a small shared-CPU
     # host that must not monopolise the core or the health check times out and the
@@ -313,7 +315,8 @@ def build_watchlist_html(tickers_spec, *, period: str = "5y", workers: int = 5,
     for i, t in enumerate(tickers):
         if t not in data:
             continue
-        rows.append(build_row(data[t], cfg, tag_map.get(t)))
+        rows.append(build_row(data[t], cfg, tag_map.get(t),
+                              beta=(risk.get(t, {}).get("SPY") or {}).get("beta")))
         if served and i % 6 == 5:
             time.sleep(0.01)
     _attach_factors(rows, data)
@@ -330,11 +333,7 @@ def build_watchlist_html(tickers_spec, *, period: str = "5y", workers: int = 5,
         # Fast path: don't touch Yahoo; fall through to the cached panels below.
         sectors, markets, macro = [], [], {}
 
-    # Benchmarks for beta/alpha: refreshed with the panels on a full live build,
-    # read from the cache otherwise (the fast and incremental builds stay offline).
-    from ..performance.benchmarks import load_benchmarks
-    _attach_risk(rows, data, load_benchmarks(cache_dir, period, ttl,
-                                             fetch=live and panels, have=data))
+    _attach_risk(rows, risk)
 
     # Keep the last good panel data so a failed/rate-limited fetch doesn't blank
     # the Sector / Markets / Macro panels (in memory + on disk when cached).

@@ -48,13 +48,15 @@ def _reco_label(mean: float | None, key: str | None) -> str:
 
 def analyze_ticker(ticker: str, growth: float | None = None,
                    snapshot: FundamentalSnapshot | None = None,
-                   with_options: bool = True) -> dict:
+                   with_options: bool = True, beta: float | None = None) -> dict:
+    """``beta``: a price-measured beta (Welch vs the S&P 500) to discount with
+    instead of the vendor's; None uses the snapshot's."""
     snap = snapshot or fetch_snapshot(ticker)
     if growth is not None:
         growth_used, growth_source = growth, "user-specified"
     else:
         growth_used, growth_source = pick_growth(snap)
-    a = Assumptions(stage1_growth=growth_used)
+    a = Assumptions(stage1_growth=growth_used, beta_override=beta)
 
     base_out = value_snapshot(snap, a)
     rep = base_out.report
@@ -136,6 +138,9 @@ def analyze_ticker(ticker: str, growth: float | None = None,
         }
     valuation.update({
         "discount_rate": base_out.discount_rate,
+        "beta_used": base_out.beta_used,
+        "beta_source": ("Welch, 1y daily vs S&P 500" if beta is not None
+                        else ("vendor" if snap.beta is not None else "default")),
         "methods": [
             {"method": e.method, "fair_value": e.fair_value, "note": e.note}
             for e in rep.estimates
@@ -146,6 +151,9 @@ def analyze_ticker(ticker: str, growth: float | None = None,
             "stage1_years": a.stage1_years,
             "terminal_growth": a.terminal_growth,
             "growth_source": growth_source,
+            # the raw reported figure (stage1_growth may be clamped for the model)
+            "reported_growth": (snap.revenue_growth if snap.revenue_growth is not None
+                                else snap.earnings_growth),
         },
     })
 

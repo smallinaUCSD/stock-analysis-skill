@@ -371,8 +371,33 @@ def interpret_html() -> str:
              "QQQ and VOO overlap heavily (the same mega-caps top both), so owning both adds "
              "less diversification than two tickers suggests."))])
 
+    options = _section(
+        "options", "Options market and hedging", "What options say about the next move, and "
+        "sizing a hedge for your holdings.",
+        [("Expected move",
+          "<p>On a stock's full analysis page, <b>Options market</b> shows how big a move the "
+          "options market is pricing in by an upcoming expiry: the price of an at-the-money call "
+          "plus put (a straddle). If the market is right, about 58% of outcomes land inside that "
+          "range. <b>Implied volatility</b> is the same thing as a yearly rate; above the stock's "
+          "realized volatility means options expect more movement than it has lately shown, "
+          "which is typical before earnings.</p>"),
+         ("Hedging (Holdings page, local only)",
+          "<p>Your <b>portfolio beta</b> adds up each position's dollars times its beta, so a 3x "
+          "fund counts about three times over. <b>Moves like</b> turns that into dollars of the "
+          "index. The <b>hedge calculator</b> sizes a short index position, an inverse fund, or "
+          "index puts to offset part of it. Inverse funds reset daily, so their long-run return "
+          "drifts from their stated multiple; the table shows how much that drift was over the "
+          "past year.</p>"),
+         ("Two examples", _ex(
+             "Options price NVDA at <b>&plusmn;7%</b> over the next month, with implied "
+             "volatility 31% against 38% realized: the market expects a calmer month than the "
+             "past year.",
+             "A $100k portfolio with beta 1.7 moves like $170k of the S&amp;P 500. Offsetting half "
+             "means about $85k of SH (-1x), or about $28k of SPXU (-3x), which is cheaper up front "
+             "but drifts more the longer it's held."))])
+
     sections = [reading, factors, dcf, montecarlo, ptarget, kelly, momentum,
-                volume, regime, stops, voc, consensus, risk, compare]
+                volume, regime, stops, voc, consensus, risk, compare, options]
     toc = "".join(
         f'<a href="#{sid}">{label}</a>' for sid, label in
         [("reading", "The board"), ("factors", "Factors"), ("dcf", "DCF"),
@@ -380,7 +405,7 @@ def interpret_html() -> str:
          ("kelly", "Position sizing"), ("momentum", "Momentum"), ("volume", "Volume"),
          ("regime", "Regime"), ("stops", "Stop study"), ("voc", "Virtue of Complexity"),
          ("consensus", "Analyst consensus"), ("risk", "Beta and alpha"),
-         ("compare", "Compare")])
+         ("compare", "Compare"), ("options", "Options and hedging")])
     close = (f'<button class="page-x" onclick="return goBack(event)" title="Close" '
              f'aria-label="Close">{icon("x", 17)}</button>')
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">

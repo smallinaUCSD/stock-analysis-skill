@@ -8,7 +8,9 @@ inventing a number.
   Review 11:37-64): winsorize each daily stock return to the band between
   -2x and +4x the same day's market return, then fit a weighted regression
   whose weights halve every ~4 months (84 trading days). It forecasts future
-  beta better than plain OLS, Vasicek or vendor (Bloomberg/Yahoo) betas.
+  beta better than plain OLS, Vasicek or vendor (Bloomberg/Yahoo) betas. For
+  leveraged/inverse funds the band is re-centered on a first-pass beta (see
+  ``welch_beta``).
 * Alpha is Jensen's alpha from an OLS regression of daily excess returns on
   the benchmark's, annualized, with its t-statistic. Over a year alpha is
   usually statistically indistinguishable from zero, and the t-stat says so.
@@ -64,16 +66,24 @@ def _wls(y, x, w):
 def welch_beta(r, m, half_life: float = WELCH_HALF_LIFE) -> float | None:
     """Welch's slope-winsorized, age-decayed beta of returns ``r`` on market ``m``.
 
-    Each stock return is clipped to [min(-2m, 4m), max(-2m, 4m)] for that day,
-    then regressed on the market with weights decaying by half every
-    ``half_life`` days (the newest day weighs most)."""
+    Each stock return is clipped to the band (c - 3)m .. (c + 3)m for that day
+    (Welch: c = 1, i.e. -2m .. +4m), then regressed on the market with weights
+    decaying by half every ``half_life`` days (the newest day weighs most).
+
+    Welch's band assumes a beta roughly between -2 and 4. Leveraged and inverse
+    funds sit outside it (a -3x fund would be clipped to about -2), so when a
+    first-pass OLS beta is outside [-1, 3] the band is centered on it instead."""
     n = min(len(r), len(m))
     if n < 20:
         return None
     r, m = r[-n:], m[-n:]
+    first = _wls(r, m, [1.0] * n)
+    c = 1.0
+    if first and not (-1.0 <= first[1] <= 3.0):
+        c = first[1]
     y = []
     for ri, mi in zip(r, m):
-        lo, hi = min(-2.0 * mi, 4.0 * mi), max(-2.0 * mi, 4.0 * mi)
+        lo, hi = min((c - 3.0) * mi, (c + 3.0) * mi), max((c - 3.0) * mi, (c + 3.0) * mi)
         y.append(min(max(ri, lo), hi))
     k = math.log(2.0) / half_life
     w = [math.exp(-k * (n - 1 - i)) for i in range(n)]

@@ -109,7 +109,14 @@ def _valuation_box(r):
                 frow("Base", v["base"], "") + frow("Bull", v["bull"], "up") + '</table>')
     ig = v.get("implied_market_growth")
     if ig is not None:
-        rows += _r("Reverse-DCF implied growth", f"{ig*100:.0f}%/yr")
+        rep = (v.get("assumptions") or {}).get("reported_growth")
+        rep_txt = f' <span class="muted">(reported {rep*100:.0f}%)</span>' if rep is not None else ""
+        rows += _r("Growth the price assumes", f"{ig*100:.0f}%/yr for 10 yrs{rep_txt}")
+    if v.get("discount_rate") is not None:
+        b, src = v.get("beta_used"), v.get("beta_source") or ""
+        btxt = (f' <span class="muted">(beta {b:.2f}, {_html.escape(src.split(",")[0].lower())})</span>'
+                if b is not None else "")
+        rows += _r("Discount rate", f'{v["discount_rate"]*100:.1f}%{btxt}')
     reco = c.get("reco")
     if reco and reco != "n/a":
         tvp = c.get("target_vs_price")
@@ -292,6 +299,12 @@ def _risk_box(r):
     return _box("Risk vs the market", rows, read, "risk")
 
 
+# Filled in the browser from /api/options/<ticker> (Yahoo can be slow; the page
+# must not wait on it). Re-rendered after each auto-refresh swaps the sections.
+_OPTIONS_BOX = ('<div class="asec" data-opt="1"><div class="a-h">Options market</div>'
+                '<div class="opt-body muted">Loading option prices…</div></div>')
+
+
 _VOL_UP = {"accumulation", "bullish-divergence"}
 _VOL_DOWN = {"distribution", "bearish-divergence"}
 
@@ -335,6 +348,9 @@ def analysis_html(row, closes=None, refresh_seconds: int = 900) -> str:
         lbl = "Pre-market" if st.startswith("PRE") else "After hours"
         ext = f'<div class="a-ext">{lbl} ${row.ext_price:,.2f} {_pctpair(row.ext_change)}</div>'
 
+    rv = ((getattr(row, "risk", None) or {}).get("SPY") or {}).get("vol") or row.vol_annual
+    rvol = "null" if rv is None else f"{rv:.4f}"
+
     def group(title, note, *boxes):
         inner = "".join(b for b in boxes if b)
         if not inner:
@@ -347,7 +363,8 @@ def analysis_html(row, closes=None, refresh_seconds: int = 900) -> str:
     sections = (
         group("Valuation", "what the business is worth", _valuation_box(row), _mc_box(row))
         + group("Risk", "how it moves with the market", _risk_box(row))
-        + group("Trade plan", "entry, exits and size", _trade_box(row), _sizing_box(row))
+        + group("Trade plan", "entry, exits and size", _trade_box(row), _sizing_box(row),
+                _OPTIONS_BOX)
         + group("Trend and flow", "is the move backed?", _momentum_box(closes),
                 _volume_box(row), _regime_box(closes), _stops_box(closes))
         + group("Experimental", "", _voc_box(closes))
@@ -392,14 +409,15 @@ function refresh(){{ if(_busy) return; _busy=true;
     ['.asections','.a-price','.a-ext'].forEach(function(sel){{
       const n=d.querySelector(sel), o=document.querySelector(sel);
       if(n&&o){{ o.innerHTML=n.innerHTML; }} }});
+    if(window.optRender) optRender();
     const nb=d.querySelector('.a-head .badge'), ob=document.querySelector('.a-head .badge');
     if(nb&&ob){{ ob.className=nb.className; ob.textContent=nb.textContent; }}
   }}).catch(function(){{}}).finally(function(){{ _busy=false; }});
 }}
 if(REFRESH>0 && REFRESH<=3600000) setInterval(refresh, Math.max(60000,REFRESH));
 </script>
-<script>var TK="{tk}";
-""" + _PRICE_JS + """</script>
+<script>var TK="{tk}", RVOL={rvol};
+""" + _PRICE_JS + _OPT_JS + """</script>
 </body></html>"""
 
 
@@ -476,4 +494,29 @@ function apxRead(i){ var d=APX.d, ch=i>0?d.close[i]/d.close[i-1]-1:null;
   var t=null; window.addEventListener('resize',function(){ clearTimeout(t); t=setTimeout(apxDraw,150); });
   apxLoad();
 })();
+"""
+
+_OPT_JS = r"""
+var OPT=null;
+function optMoney(v){ return '$'+Number(v).toLocaleString(undefined,{maximumFractionDigits:v<100?2:0}); }
+function optDate(iso){ var p=iso.split('-'); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+p[1]-1]+' '+(+p[2]); }
+function optRender(){
+  var box=document.querySelector('[data-opt] .opt-body'); if(!box) return;
+  if(!OPT){ return; }
+  if(!OPT.available){ box.className='opt-body muted'; box.textContent='No option prices available for this ticker right now.'; return; }
+  var rows=OPT.moves.map(function(m){
+    return '<div class="a-row"><span>'+m.label+' <span class="muted">('+optDate(m.expiry)+')</span></span>'+
+      '<b>&plusmn;'+(m.move_pct*100).toFixed(1)+'% <span class="muted">('+optMoney(m.low)+' to '+optMoney(m.high)+')</span></b></div>'; }).join('');
+  var iv=OPT.moves.length?OPT.moves[Math.min(1,OPT.moves.length-1)].iv:null;
+  if(iv!=null){
+    var cmp=RVOL?(' <span class="muted">vs '+(RVOL*100).toFixed(0)+'% realized</span>'):'';
+    rows+='<div class="a-row"><span>Implied volatility</span><b>'+(iv*100).toFixed(0)+'% a year'+cmp+'</b></div>'; }
+  var read='What the options market is charging for a move either way: the price of an at-the-money call plus put. '+
+    'About 58% of outcomes land inside that range if the market is right. Implied volatility above realized means '+
+    'options are pricing in more movement than the stock has lately shown (often around earnings).'+
+    (OPT.stale?' Priced from last trades while the market is closed, so approximate.':'');
+  box.className='opt-body'; box.innerHTML=rows+'<div class="a-read">'+read+'</div>';
+}
+(function(){ fetch('/api/options/'+encodeURIComponent(TK)).then(function(r){return r.json();})
+  .then(function(d){ OPT=d; optRender(); }).catch(function(){ OPT={available:false}; optRender(); }); })();
 """

@@ -103,13 +103,14 @@ _ROW_CACHE: dict = {}
 _ROW_CACHE_MAX = 800
 
 
-def _snapshot_key(td: TickerData):
+def _snapshot_key(td: TickerData, beta: float | None = None):
     o = td.ohlcv or {}
     closes = o.get("close", [])
     dates = o.get("dates") or []
     last_date = dates[-1].isoformat() if dates else ""
     last_close = round(float(closes[-1]), 4) if closes else 0.0
-    return (td.ticker, len(closes), last_date, last_close)
+    return (td.ticker, len(closes), last_date, last_close,
+            None if beta is None else round(beta, 4))
 
 
 def _clone_row(row: TickerRow, section_tags: set | None) -> TickerRow:
@@ -129,11 +130,12 @@ def _clone_row(row: TickerRow, section_tags: set | None) -> TickerRow:
 
 
 def build_row(td: TickerData, cfg: SignalConfig | None = None,
-              section_tags: set | None = None) -> TickerRow:
-    key = _snapshot_key(td)
+              section_tags: set | None = None, beta: float | None = None) -> TickerRow:
+    """``beta``: the Welch beta vs SPY, used as the DCF's discount-rate beta."""
+    key = _snapshot_key(td, beta)
     hit = _ROW_CACHE.get(key)
     if hit is None:
-        hit = _compute_row(td, cfg, section_tags)
+        hit = _compute_row(td, cfg, section_tags, beta)
         if len(_ROW_CACHE) > _ROW_CACHE_MAX:      # bound memory; keys accrue daily
             _ROW_CACHE.clear()
         _ROW_CACHE[key] = hit
@@ -141,7 +143,7 @@ def build_row(td: TickerData, cfg: SignalConfig | None = None,
 
 
 def _compute_row(td: TickerData, cfg: SignalConfig | None = None,
-                 section_tags: set | None = None) -> TickerRow:
+                 section_tags: set | None = None, beta: float | None = None) -> TickerRow:
     cfg = cfg or SignalConfig()
     row = TickerRow(ticker=td.ticker, sections=set(section_tags or ()))
     if td.error:
@@ -237,7 +239,8 @@ def _compute_row(td: TickerData, cfg: SignalConfig | None = None,
         # Embed the analyzer valuation (reuses the fetched snapshot -- no network).
         try:
             from ..analyze import analyze_ticker
-            row.valuation = analyze_ticker(td.ticker, snapshot=snap, with_options=False)
+            row.valuation = analyze_ticker(td.ticker, snapshot=snap, with_options=False,
+                                           beta=beta)
         except Exception:
             row.valuation = {}
 

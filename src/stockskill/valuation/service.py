@@ -31,6 +31,9 @@ class Assumptions:
     risk_free: float = 0.043
     equity_premium: float = 0.05
     default_beta: float = 1.1              # used only if snapshot has no beta
+    # A beta measured from prices (Welch's estimator vs the S&P 500) replaces the
+    # vendor's 5y-monthly beta when given; None keeps the snapshot's.
+    beta_override: float | None = None
     min_discount_rate: float = 0.08        # floor: a low beta can't imply a sub-8% equity rate
     stage1_growth: float = 0.08            # base-case FCF growth (year 1 if fading)
     stage1_years: int = 10
@@ -64,6 +67,7 @@ class ValuationOutput:
     warnings: list[str] = field(default_factory=list)
     dcf_inputs: DCFInputs | None = None      # for sensitivity analysis in the CLI
     terminal_value_pct: float | None = None  # share of EV from the terminal value
+    beta_used: float | None = None
 
 
 def value_snapshot(snap: FundamentalSnapshot, a: Assumptions | None = None) -> ValuationOutput:
@@ -74,9 +78,12 @@ def value_snapshot(snap: FundamentalSnapshot, a: Assumptions | None = None) -> V
         warnings.append("no price in snapshot; margin of safety unavailable")
     report = ValuationReport(ticker=snap.ticker, price=snap.price or float("nan"))
 
-    beta = snap.beta if snap.beta is not None else a.default_beta
-    if snap.beta is None:
-        warnings.append(f"no beta in snapshot; used default {a.default_beta}")
+    if a.beta_override is not None:
+        beta = a.beta_override
+    else:
+        beta = snap.beta if snap.beta is not None else a.default_beta
+        if snap.beta is None:
+            warnings.append(f"no beta in snapshot; used default {a.default_beta}")
     capm = capm_cost_of_equity(a.risk_free, beta, a.equity_premium)
     discount_rate = max(capm, a.min_discount_rate)
     if capm < a.min_discount_rate:
@@ -169,4 +176,5 @@ def value_snapshot(snap: FundamentalSnapshot, a: Assumptions | None = None) -> V
         warnings=warnings,
         dcf_inputs=dcf_inputs_used,
         terminal_value_pct=terminal_pct,
+        beta_used=beta,
     )

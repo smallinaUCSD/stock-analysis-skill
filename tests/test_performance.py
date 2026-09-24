@@ -44,6 +44,13 @@ def test_welch_beta_clips_outlier_days_ols_does_not():
     assert abs(welch - 1.0) < 0.25
 
 
+def test_welch_beta_handles_leveraged_and_inverse_funds():
+    m = _market()
+    assert M.welch_beta([-3 * x for x in m], m) == pytest.approx(-3.0, abs=1e-9)
+    assert M.welch_beta([5 * x for x in m], m) == pytest.approx(5.0, abs=1e-9)
+    assert M.welch_beta([-1 * x for x in m], m) == pytest.approx(-1.0, abs=1e-9)
+
+
 def test_welch_beta_weights_recent_days_more():
     m = _market(400)
     r = [0.5 * x for x in m[:200]] + [2.0 * x for x in m[200:]]   # beta rose 0.5 -> 2
@@ -192,9 +199,23 @@ def test_board_rows_get_welch_beta_and_risk_block():
     dates = [date(2025, 1, 1) + timedelta(days=i) for i in range(301)]
     spy = SimpleNamespace(ticker="SPY", ohlcv={"dates": dates, "close": _prices(m)})
     stk = SimpleNamespace(ticker="XYZ", ohlcv={"dates": dates, "close": _prices([1.3 * x for x in m])})
+    from stockskill.performance.benchmarks import risk_vs_benchmarks
     row = SimpleNamespace(ticker="XYZ", beta=0.9, risk={})
-    _attach_risk([row], {"XYZ": stk}, {"SPY": spy})
+    _attach_risk([row], {"XYZ": risk_vs_benchmarks(stk, {"SPY": spy})})
     assert row.beta == pytest.approx(1.3, abs=1e-9)          # vendor beta replaced
     html = _risk_summary(row)
     assert "Risk vs the market" in html and "1.30" in html
     assert _risk_summary(SimpleNamespace(risk={})) == ""
+
+
+def test_dcf_discounts_with_the_measured_beta_when_given():
+    from stockskill.analyze import analyze_ticker
+    from stockskill.data.fundamentals import FundamentalSnapshot
+    snap = FundamentalSnapshot(ticker="XYZ", as_of="2026-09-23", price=100.0, shares=1e9,
+                               fcf=5e9, eps=5.0, beta=1.0, revenue_growth=0.08, name="XYZ")
+    vendor = analyze_ticker("XYZ", snapshot=snap, with_options=False)["valuation"]
+    welch = analyze_ticker("XYZ", snapshot=snap, with_options=False, beta=2.0)["valuation"]
+    assert vendor["beta_source"] == "vendor" and vendor["beta_used"] == 1.0
+    assert welch["beta_source"].startswith("Welch") and welch["beta_used"] == 2.0
+    assert welch["discount_rate"] == pytest.approx(0.043 + 2.0 * 0.05)
+    assert welch["base"] < vendor["base"]            # riskier -> higher rate -> lower value
