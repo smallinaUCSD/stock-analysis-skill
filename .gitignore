@@ -25,3 +25,4 @@ data/smart_tickers.csv
 
 # Local user-added tickers persisted to disk (see STOCKSKILL_ADDED_FILE)
 data/added.json
+data/cache/_sec/

@@ -34,6 +34,9 @@ class Assumptions:
     # A beta measured from prices (Welch's estimator vs the S&P 500) replaces the
     # vendor's 5y-monthly beta when given; None keeps the snapshot's.
     beta_override: float | None = None
+    # Banks/insurers: operating cash flow is lending and deposit flows, not
+    # business cash, so a cash-flow DCF is meaningless; value on peer multiples.
+    skip_dcf: bool = False
     min_discount_rate: float = 0.08        # floor: a low beta can't imply a sub-8% equity rate
     stage1_growth: float = 0.08            # base-case FCF growth (year 1 if fading)
     stage1_years: int = 10
@@ -104,7 +107,9 @@ def value_snapshot(snap: FundamentalSnapshot, a: Assumptions | None = None) -> V
     elif snap.eps and snap.shares and snap.eps > 0:
         flow0, flow_label = snap.eps * snap.shares, "DCF (earnings)"
 
-    if flow0 and snap.shares:
+    if a.skip_dcf:
+        warnings.append("DCF skipped: financial company (cash flows are lending flows)")
+    elif flow0 and snap.shares:
         dcf_inp = DCFInputs(
             fcf0=flow0,
             shares=snap.shares,
@@ -133,6 +138,7 @@ def value_snapshot(snap: FundamentalSnapshot, a: Assumptions | None = None) -> V
             warnings.append(f"DCF skipped: {e}")
     else:
         warnings.append("DCF skipped: no positive FCF or EPS")
+
 
     # --- Relative multiples (needs peer multiples + matching metrics) ---
     if snap.shares and any([a.peer_pe, a.peer_ev_ebitda, a.peer_ps]):

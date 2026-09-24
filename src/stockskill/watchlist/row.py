@@ -130,12 +130,21 @@ def _clone_row(row: TickerRow, section_tags: set | None) -> TickerRow:
 
 
 def build_row(td: TickerData, cfg: SignalConfig | None = None,
-              section_tags: set | None = None, beta: float | None = None) -> TickerRow:
-    """``beta``: the Welch beta vs SPY, used as the DCF's discount-rate beta."""
+              section_tags: set | None = None, beta: float | None = None,
+              sec: dict | None = None, peers: dict | None = None) -> TickerRow:
+    """``beta``: the Welch beta vs SPY, used as the DCF's discount-rate beta.
+    ``sec`` / ``peers``: SEC filing history and industry peer context for the
+    valuation (see analyze.analyze_ticker)."""
+    sec_key = ((sec or {}).get("years") or [{}])[-1].get("filed") if sec else None
+    peer_key = (tuple(round(v, 3) if isinstance(v, float) else v
+                      for v in (peers.get("pe"), peers.get("ev_ebitda"), peers.get("ps"), peers.get("beta")))
+                if peers else None)
     key = _snapshot_key(td, beta)
+    if sec_key or peer_key:
+        key = key + (sec_key, peer_key)
     hit = _ROW_CACHE.get(key)
     if hit is None:
-        hit = _compute_row(td, cfg, section_tags, beta)
+        hit = _compute_row(td, cfg, section_tags, beta, sec, peers)
         if len(_ROW_CACHE) > _ROW_CACHE_MAX:      # bound memory; keys accrue daily
             _ROW_CACHE.clear()
         _ROW_CACHE[key] = hit
@@ -143,7 +152,8 @@ def build_row(td: TickerData, cfg: SignalConfig | None = None,
 
 
 def _compute_row(td: TickerData, cfg: SignalConfig | None = None,
-                 section_tags: set | None = None, beta: float | None = None) -> TickerRow:
+                 section_tags: set | None = None, beta: float | None = None,
+                 sec: dict | None = None, peers: dict | None = None) -> TickerRow:
     cfg = cfg or SignalConfig()
     row = TickerRow(ticker=td.ticker, sections=set(section_tags or ()))
     if td.error:
@@ -240,7 +250,7 @@ def _compute_row(td: TickerData, cfg: SignalConfig | None = None,
         try:
             from ..analyze import analyze_ticker
             row.valuation = analyze_ticker(td.ticker, snapshot=snap, with_options=False,
-                                           beta=beta)
+                                           beta=beta, sec_history=sec, peers=peers)
         except Exception:
             row.valuation = {}
 

@@ -333,6 +333,7 @@ a.macro-ev:hover{color:var(--link)}
 .det-row{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:1px 0}
 .det-row b{text-align:right;font-weight:500}
 .det-line{font-size:13px;line-height:1.5;padding:1px 0}
+.warn{color:var(--warn,#c98a2b)}
 .det-line b{font-weight:500}
 .det-note{font-size:13px;color:var(--muted);margin-top:4px;line-height:1.45}
 .ts-sub{font-size:13px;color:var(--muted);margin-bottom:4px}
@@ -721,31 +722,41 @@ def _kv(label, value, cls="", title=""):
 
 
 def _valuation_summary(r):
-    """Valuation for the modal: verdict, base fair value, Monte Carlo chance it's
-    undervalued, and the reverse DCF (growth the price assumes vs reported)."""
+    """Valuation for the modal. When the price needs far more growth than the
+    company has reported, say "priced on future growth" instead of a precise
+    overvalued verdict; gaps are shown as a share of the price."""
     payload = r.valuation or {}
     v = payload.get("valuation") if "valuation" in payload else payload
     v = v or {}
     if not v.get("reliable"):
         return ""                      # ETFs / no cash flows: the full analysis explains why
-    mos = v.get("margin_of_safety") or 0.0
-    stance = "Undervalued" if mos >= 0.10 else ("Overvalued" if mos <= -0.10 else "Fairly valued")
-    scls = "up" if mos >= 0.10 else ("down" if mos <= -0.10 else "")
-    rows = [_kv("Verdict", stance, scls)]
+    asm = v.get("assumptions") or {}
+    grew = asm.get("reported_growth")
+    ig = v.get("implied_market_growth")
+    gap = v.get("gap_vs_price")
+    rows = []
+    if v.get("priced_on_growth"):
+        rows.append(_kv("Verdict", "Priced on future growth", "warn",
+                        title="The price needs far more growth than the company has reported; "
+                              "today's cash flows can't explain it"))
+    else:
+        mos = v.get("margin_of_safety") or 0.0
+        stance = "Undervalued" if mos >= 0.10 else ("Overvalued" if mos <= -0.10 else "Fairly valued")
+        rows.append(_kv("Verdict", stance, "up" if mos >= 0.10 else ("down" if mos <= -0.10 else "")))
     if v.get("base"):
-        rows.append(_kv("Fair value (base)", f'${v["base"]:,.0f}'))
-    if v.get("mc_prob_undervalued") is not None:
+        tail = (f' <span class="muted" style="font-weight:400">({gap*100:+.0f}% vs price)</span>'
+                if gap is not None else "")
+        rows.append(_kv("Cash-flow value", f'${v["base"]:,.0f}{tail}'))
+    if ig is not None:
+        rows.append(_kv("Price needs", f"{ig*100:.0f}%/yr growth",
+                        title="Reverse DCF: the 10-year growth rate that justifies today's price"))
+    if grew is not None:
+        src = (asm.get("growth_source") or "").lower()
+        span = "3 yrs" if "3-yr" in src else "latest"
+        rows.append(_kv(f"Revenue grew ({span})", f"{grew*100:.0f}%/yr"))
+    if v.get("mc_prob_undervalued") is not None and not v.get("priced_on_growth"):
         rows.append(_kv("Chance undervalued", f'{v["mc_prob_undervalued"]*100:.0f}%',
                         title="Monte Carlo DCF: share of simulated fair values above today's price"))
-    ig = v.get("implied_market_growth")
-    if ig is not None:
-        rows.append(_kv("Price assumes", f"{ig*100:.0f}%/yr growth",
-                        title="Reverse DCF: the 10-year growth rate that justifies today's price"))
-        asm = v.get("assumptions") or {}
-        grew = asm.get("reported_growth")
-        src = (asm.get("growth_source") or "").split(",")[0].replace(" growth", "")
-        if grew is not None and src and not src.startswith("default"):
-            rows.append(_kv("Reported growth", f"{grew*100:.0f}% {html.escape(src)}"))
     return f'<div class="det-sec"><div class="det-h">Valuation</div>{"".join(rows)}</div>'
 
 

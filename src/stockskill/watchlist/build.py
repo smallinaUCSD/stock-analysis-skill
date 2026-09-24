@@ -156,6 +156,42 @@ def _attach_factors(rows, data) -> None:
         return
 
 
+def _sec_and_peers(data: dict, risk: dict, cache_dir, fetch: bool):
+    """SEC filing histories (fetched on a full live build, cache-only otherwise)
+    and industry peer context per ticker. Never raises into the build."""
+    from ..data import sec as SEC
+    from ..leverage import registry
+    from ..valuation.peers import peer_context
+    secs: dict = {}
+    if SEC.has_sec() or cache_dir:
+        for t in data:
+            if registry.get(t) is not None:
+                continue
+            try:
+                h = SEC.annual_history(t, cache_dir, offline=not (fetch and SEC.has_sec()))
+            except Exception:  # noqa: BLE001
+                h = None
+            if not (h and h.get("years")):
+                try:   # foreign filers / new registrants: multi-year growth from Yahoo
+                    h = SEC.yahoo_revenue_history(t, cache_dir, offline=not fetch)
+                except Exception:  # noqa: BLE001
+                    h = None
+            if h and h.get("years"):
+                secs[t] = h
+    sics = {t: h.get("sic") for t, h in secs.items() if h.get("sic")}
+    snaps = {t: data[t].snapshot for t in sics if data.get(t) and data[t].snapshot}
+    betas = {t: (risk.get(t, {}).get("SPY") or {}).get("beta") for t in sics}
+    peers = {}
+    for t in sics:
+        try:
+            ctx = peer_context(t, sics, snaps, betas)
+        except Exception:  # noqa: BLE001
+            ctx = None
+        if ctx:
+            peers[t] = ctx
+    return secs, peers
+
+
 def _attach_risk(rows, risk: dict) -> None:
     """Hang beta/alpha/Sharpe/drawdown vs SPY and QQQ (``risk``: {ticker:
     {benchmark: stats}}) on each row. Beta shown on the board is the Welch
@@ -311,12 +347,14 @@ def build_watchlist_html(tickers_spec, *, period: str = "5y", workers: int = 5,
     # (uncached) build runs the heavy per-ticker models, and on a small shared-CPU
     # host that must not monopolise the core or the health check times out and the
     # worker is killed. Cached rebuilds are cheap, so the sleeps are negligible.
+    secs, peer_ctx = _sec_and_peers(data, risk, cache_dir, fetch=live and panels)
     rows = []
     for i, t in enumerate(tickers):
         if t not in data:
             continue
         rows.append(build_row(data[t], cfg, tag_map.get(t),
-                              beta=(risk.get(t, {}).get("SPY") or {}).get("beta")))
+                              beta=(risk.get(t, {}).get("SPY") or {}).get("beta"),
+                              sec=secs.get(t), peers=peer_ctx.get(t)))
         if served and i % 6 == 5:
             time.sleep(0.01)
     _attach_factors(rows, data)

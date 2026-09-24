@@ -34,5 +34,6 @@ def _no_network_board_builds(monkeypatch):
 def _no_api_keys(monkeypatch):
     """Tests never call the paid/keyed providers, even when run from a shell with
     the .env loaded; a test that needs a key sets a fake one itself."""
-    for k in ("FMP_API_KEY", "FINNHUB_API_KEY", "UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"):
+    for k in ("FMP_API_KEY", "FINNHUB_API_KEY", "UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN",
+              "SEC_USER_AGENT"):
         monkeypatch.delenv(k, raising=False)

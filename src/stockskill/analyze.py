@@ -48,15 +48,54 @@ def _reco_label(mean: float | None, key: str | None) -> str:
 
 def analyze_ticker(ticker: str, growth: float | None = None,
                    snapshot: FundamentalSnapshot | None = None,
-                   with_options: bool = True, beta: float | None = None) -> dict:
+                   with_options: bool = True, beta: float | None = None,
+                   sec_history: dict | None = None, peers: dict | None = None) -> dict:
     """``beta``: a price-measured beta (Welch vs the S&P 500) to discount with
-    instead of the vendor's; None uses the snapshot's."""
+    instead of the vendor's; None uses the snapshot's.
+
+    ``sec_history`` (data.sec.annual_history): when given, the DCF starts from
+    the 3-year average of operating cash flow - capex - stock pay and grows it
+    at the 3-year revenue CAGR from the 10-Ks, instead of one trailing year.
+    ``peers`` (valuation.peers.peer_context): adds peer multiples as a second
+    method and discounts with the relevered industry beta."""
+    import dataclasses
     snap = snapshot or fetch_snapshot(ticker)
+    reported_growth = snap.revenue_growth if snap.revenue_growth is not None else snap.earnings_growth
     if growth is not None:
         growth_used, growth_source = growth, "user-specified"
     else:
         growth_used, growth_source = pick_growth(snap)
-    a = Assumptions(stage1_growth=growth_used, beta_override=beta)
+    inputs: dict = {"cash_flow_basis": "trailing free cash flow (one year)"}
+    snap_v = snap
+    if sec_history and sec_history.get("years"):
+        from .valuation.normalize import normalized_cash_flow, revenue_cagr
+        ys = sec_history["years"]
+        norm = normalized_cash_flow(ys, 3)
+        if norm:
+            snap_v = dataclasses.replace(snap, fcf=norm["value"])
+            inputs.update({
+                "cash_flow": norm["value"], "cash_flow_years": norm["years"],
+                "cash_flow_basis": ("3-yr avg of operating cash flow - capex"
+                                    + (" - stock pay" if norm["sbc_included"] else "")
+                                    + " (SEC 10-K)")})
+        cg = revenue_cagr(ys, 3)
+        if cg is not None:
+            reported_growth = cg
+            if growth is None:
+                growth_used = max(0.03, min(0.30, cg))
+                src = "Yahoo annual reports" if sec_history.get("source") == "yahoo" else "SEC"
+                growth_source = f"3-yr revenue growth ({src})" + (
+                    ", clamped to 30%" if cg > 0.30 else (", floored at 3%" if cg < 0.03 else ""))
+        inputs["sic"] = sec_history.get("sic_desc")
+    beta_source = "welch" if beta is not None else None
+    if peers and peers.get("beta") is not None:
+        beta, beta_source = peers["beta"], "industry"
+    sic = str((sec_history or {}).get("sic") or "")
+    financial = len(sic) >= 2 and 60 <= int(sic[:2]) <= 67
+    a = Assumptions(stage1_growth=growth_used, beta_override=beta, skip_dcf=financial,
+                    peer_pe=(peers or {}).get("pe"), peer_ev_ebitda=(peers or {}).get("ev_ebitda"),
+                    peer_ps=(peers or {}).get("ps"))
+    snap_orig, snap = snap, snap_v
 
     base_out = value_snapshot(snap, a)
     rep = base_out.report
@@ -64,6 +103,7 @@ def analyze_ticker(ticker: str, growth: float | None = None,
     scen = three_scenarios(snap, a)
     fv = scen.fair_values()
 
+    snap = snap_orig
     price = snap.price
     target = snap.target_mean
     div_yield = (snap.dividend_annual / price) if (snap.dividend_annual and price) else None
@@ -139,8 +179,20 @@ def analyze_ticker(ticker: str, growth: float | None = None,
     valuation.update({
         "discount_rate": base_out.discount_rate,
         "beta_used": base_out.beta_used,
-        "beta_source": ("Welch, 1y daily vs S&P 500" if beta is not None
-                        else ("vendor" if snap.beta is not None else "default")),
+        "beta_source": ({"industry": f"industry, {len((peers or {}).get('peers') or []) + 1} peers",
+                         "welch": "Welch, 1y daily vs S&P 500"}.get(beta_source)
+                        or ("vendor" if snap.beta is not None else "default")),
+        "inputs": inputs,
+        # the DCF's starting point, so the "what would you have to believe"
+        # calculator can re-run it with other growth / discount assumptions
+        "dcf_base": ({"cash_flow": base_out.dcf_inputs.fcf0, "shares": base_out.dcf_inputs.shares,
+                      "net_debt": base_out.dcf_inputs.net_debt,
+                      "terminal_growth": base_out.dcf_inputs.terminal_growth,
+                      "years": base_out.dcf_inputs.stage1_years}
+                     if base_out.dcf_inputs is not None else None),
+        "peers": ({"group": peers.get("group"), "names": (peers.get("peers") or [])[:8],
+                   "pe": peers.get("pe"), "ev_ebitda": peers.get("ev_ebitda"), "ps": peers.get("ps")}
+                  if peers else None),
         "methods": [
             {"method": e.method, "fair_value": e.fair_value, "note": e.note}
             for e in rep.estimates
@@ -152,10 +204,23 @@ def analyze_ticker(ticker: str, growth: float | None = None,
             "terminal_growth": a.terminal_growth,
             "growth_source": growth_source,
             # the raw reported figure (stage1_growth may be clamped for the model)
-            "reported_growth": (snap.revenue_growth if snap.revenue_growth is not None
-                                else snap.earnings_growth),
+            "reported_growth": reported_growth,
         },
     })
+
+    # How far the estimate sits from the price, as a share of the PRICE (a
+    # fair value 84% below a $377 price reads "-84%", not "-527%" of value).
+    ig = base_out.implied_market_growth
+    valuation["gap_vs_price"] = (base_fv / price - 1.0) if (reliable and base_fv and price) else None
+    # When the price needs growth far beyond anything reported, a precise
+    # "overvalued" verdict misleads: the market is paying for businesses that
+    # don't show up in today's cash flows. Say that instead.
+    priced_on_growth = bool(
+        reliable and ig is not None and (valuation.get("margin_of_safety") or 0) <= -0.10
+        and ig >= max(0.25, (reported_growth or 0.0) + 0.15))
+    valuation["priced_on_growth"] = priced_on_growth
+    if priced_on_growth:
+        valuation["signal"] = "priced on future growth"
 
     # Monte Carlo DCF: a fair-value distribution + P(undervalued) at today's price.
     # Modest path count keeps the per-card cost low on the board build.

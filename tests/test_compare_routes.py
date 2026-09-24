@@ -155,3 +155,22 @@ def test_pairs_signals_and_options_routes(tmp_path, monkeypatch):
 
     cmp = c.get("/api/compare?t=AAA,BBB&period=1y").get_json()
     assert cmp["pair"]["a"] == "AAA" and len(cmp["pair"]["z"]) == len(cmp["pair"]["dates"])
+
+
+def test_dcf_calculator_route(tmp_path, monkeypatch):
+    import stockskill.watchlist.pipeline as pipe
+    import stockskill.data.sec as SEC
+    from stockskill.server import create_app
+    td = _td("XYZ", 1.0)
+    td.snapshot.shares, td.snapshot.price, td.snapshot.net_debt = 1e9, td.ohlcv["close"][-1], 0.0
+    years = [{"end": f"{y}-12-31", "filed": f"{y+1}-02-01", "revenue": 100.0 * 1.1 ** i,
+              "ocf": 20e9, "capex": 5e9, "sbc": 1e9, "sic": None} for i, y in enumerate(range(2021, 2025))]
+    monkeypatch.setattr(pipe, "fetch_one", lambda t, **k: td if t == "XYZ" else TickerData(t, {"close": []}, None))
+    monkeypatch.setattr(SEC, "annual_history", lambda t, *a, **k: {"years": years, "sic": None})
+    monkeypatch.setenv("STOCKSKILL_CACHE_DIR", str(tmp_path))
+    c = create_app(tickers_path=str(tmp_path / "t.csv"), public=True).test_client()
+    lo = c.get("/api/dcf/XYZ?g=0.02&r=0.10").get_json()
+    hi = c.get("/api/dcf/XYZ?g=0.20&r=0.10").get_json()
+    assert lo["fair_value"] < hi["fair_value"]                  # more growth, more value
+    assert hi["gap"] == pytest.approx(hi["fair_value"] / hi["price"] - 1)
+    assert c.get("/api/dcf/XYZ?g=5&r=0.1").status_code == 400

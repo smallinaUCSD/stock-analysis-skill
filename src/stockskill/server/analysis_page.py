@@ -60,6 +60,13 @@ body{font-size:14px}
 .a-foot{color:var(--on-band-soft);background:var(--band);font-size:13px;text-align:center;
   margin:24px 0 4px;padding:22px 16px;border-radius:var(--r-lg)}
 .up{color:var(--up)}.down{color:var(--down)}.muted{color:var(--muted)}
+.calc{margin-top:12px;padding-top:10px;border-top:1px solid var(--border)}
+.calc-h{font-size:14px;font-weight:500;margin-bottom:6px}
+.calc label{display:grid;grid-template-columns:1fr auto;gap:2px 10px;font-size:13px;color:var(--ink-2);margin:6px 0}
+.calc label input{grid-column:1/-1;width:100%;accent-color:var(--accent)}
+.calc label b{font-weight:500;color:var(--ink)}
+.calc-out{font-size:14px;margin-top:6px}
+.calc-out b{font-weight:500;color:var(--ink)}
 .apx-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
 .apx-bar .seg{display:inline-flex;border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
 .apx-bar .seg button{font:500 13px var(--font);padding:0 12px;height:34px;border:none;background:var(--surface);
@@ -91,6 +98,16 @@ def _pctpair(x):
 
 
 # --- per-model sections -------------------------------------------------------
+def _big(x):
+    if x is None:
+        return "n/a"
+    a = abs(x)
+    for unit, div in (("T", 1e12), ("B", 1e9), ("M", 1e6)):
+        if a >= div:
+            return f"${x/div:,.1f}{unit}"
+    return f"${x:,.0f}"
+
+
 def _valuation_box(r):
     d = r.valuation or {}
     v = d.get("valuation") or {}
@@ -98,9 +115,14 @@ def _valuation_box(r):
     if not v.get("reliable"):
         return _box("Valuation", f'<div class="muted">{_html.escape(v.get("signal") or "no reliable basis (ETF or no fundamentals)")}</div>',
                     help_id="dcf")
-    mos = v.get("margin_of_safety") or 0.0
-    stance = ("pos", "Undervalued") if mos >= 0.10 else (("neg", "Overvalued") if mos <= -0.10 else ("midtone", "Fairly valued"))
-    title = f'Valuation <span class="stance {stance[0]}">{stance[1]}{f" {mos*100:+.0f}%" if mos else ""}</span>'
+    gap = v.get("gap_vs_price")
+    gtxt = f" {gap*100:+.0f}% vs price" if gap is not None else ""
+    if v.get("priced_on_growth"):
+        title = f'Valuation <span class="stance midtone">Priced on future growth</span>'
+    else:
+        mos = v.get("margin_of_safety") or 0.0
+        stance = ("pos", "Undervalued") if mos >= 0.10 else (("neg", "Overvalued") if mos <= -0.10 else ("midtone", "Fairly valued"))
+        title = f'Valuation <span class="stance {stance[0]}">{stance[1]}{gtxt}</span>'
     price = v.get("price") or r.price
     rows = ""
     if v.get("bear") and v.get("base") and v.get("bull"):
@@ -109,25 +131,47 @@ def _valuation_box(r):
             return f'<tr><td class="{c}">{lbl}</td><td style="text-align:right"><b>${val:,.0f}</b>{dv}</td></tr>'
         rows = ('<table class="fvtab">' + frow("Bear", v["bear"], "down") +
                 frow("Base", v["base"], "") + frow("Bull", v["bull"], "up") + '</table>')
+    asm = v.get("assumptions") or {}
     ig = v.get("implied_market_growth")
     if ig is not None:
-        rep = (v.get("assumptions") or {}).get("reported_growth")
-        rep_txt = f' <span class="muted">(reported {rep*100:.0f}%)</span>' if rep is not None else ""
-        rows += _r("Growth the price assumes", f"{ig*100:.0f}%/yr for 10 yrs{rep_txt}")
+        rows += _r("Price needs", f"{ig*100:.0f}%/yr growth for 10 yrs")
+    if asm.get("reported_growth") is not None:
+        rows += _r("Revenue grew", f'{asm["reported_growth"]*100:.0f}%/yr '
+                   f'<span class="muted">({_html.escape(asm.get("growth_source") or "")})</span>')
+    inp = v.get("inputs") or {}
+    if inp.get("cash_flow") is not None:
+        rows += _r("Cash flow used", f'{_big(inp["cash_flow"])}/yr '
+                   f'<span class="muted">({_html.escape(inp.get("cash_flow_basis") or "")})</span>')
     if v.get("discount_rate") is not None:
         b, src = v.get("beta_used"), v.get("beta_source") or ""
-        btxt = (f' <span class="muted">(beta {b:.2f}, {_html.escape(src.split(",")[0].lower())})</span>'
-                if b is not None else "")
+        btxt = (f' <span class="muted">(beta {b:.2f}, {_html.escape(src)})</span>' if b is not None else "")
         rows += _r("Discount rate", f'{v["discount_rate"]*100:.1f}%{btxt}')
+    pe = v.get("peers")
+    if pe and pe.get("names"):
+        mult = " · ".join(f"{lbl} {pe[k]:.1f}" for k, lbl in (("pe", "P/E"), ("ev_ebitda", "EV/EBITDA"),
+                                                                ("ps", "P/S")) if pe.get(k))
+        rows += _r("Industry peers", f'{_html.escape(", ".join(pe["names"][:5]))}'
+                   + (f' <span class="muted">({mult})</span>' if mult else ""))
     reco = c.get("reco")
     if reco and reco != "n/a":
         tvp = c.get("target_vs_price")
         tv = f', target {_pctpair(tvp)}' if tvp is not None else ""
         rows += _r("Analyst consensus", f"{_html.escape(reco)}{tv}")
-    read = ("Fair value from a two-stage discounted cash flow, shown as a bear / base / "
-            "bull range. Above the price is cheap, below is expensive; the reverse-DCF "
-            "growth is what the price already assumes.")
-    return _box(title, rows, read, "dcf")
+    if v.get("dcf_base"):
+        g0 = round((asm.get("stage1_growth") or 0.08) * 100)
+        r0 = round((v.get("discount_rate") or 0.09) * 200) / 2
+        rows += (f'<div class="calc" data-calc="{_html.escape(r.ticker)}"><div class="calc-h">What you\'d have to believe</div>'
+                 f'<label>Growth for 10 years <b class="calc-g">{g0}%</b>'
+                 f'<input type="range" class="calc-gs" min="0" max="60" step="1" value="{g0}"></label>'
+                 f'<label>Discount rate <b class="calc-r">{r0:g}%</b>'
+                 f'<input type="range" class="calc-rs" min="6" max="16" step="0.5" value="{r0}"></label>'
+                 f'<div class="calc-out muted">Move the sliders to re-run the DCF.</div></div>')
+    read = ("A two-stage discounted cash flow shown as a bear / base / bull range. It starts "
+            "from the average cash flow of the last three annual reports (after capital spending "
+            "and stock pay) and grows it at the company's 3-year revenue growth; banks and insurers "
+            "are valued on peers instead. \"Priced on future growth\" means today's cash flows "
+            "can't explain the price: the market is paying for growth the company hasn't shown yet.")
+    return _box(title, rows + '<div class="a-read vbt" data-vbt="1"></div>', read, "dcf")
 
 
 def _mc_box(r):
@@ -422,6 +466,7 @@ function refresh(){{ if(_busy) return; _busy=true;
       if(n&&o){{ o.innerHTML=n.innerHTML; }} }});
     if(window.optRender) optRender();
     if(window.sigRender) sigRender();
+    if(window.calcInit) calcInit();
     const nb=d.querySelector('.a-head .badge'), ob=document.querySelector('.a-head .badge');
     if(nb&&ob){{ ob.className=nb.className; ob.textContent=nb.textContent; }}
   }}).catch(function(){{}}).finally(function(){{ _busy=false; }});
@@ -429,7 +474,7 @@ function refresh(){{ if(_busy) return; _busy=true;
 if(REFRESH>0 && REFRESH<=3600000) setInterval(refresh, Math.max(60000,REFRESH));
 </script>
 <script>var TK="{tk}", RVOL={rvol};
-""" + _PRICE_JS + _OPT_JS + _SIG_JS + """</script>
+""" + _PRICE_JS + _OPT_JS + _SIG_JS + _CALC_JS + """</script>
 </body></html>"""
 
 
@@ -586,4 +631,39 @@ function sigRender(){
 }
 (function(){ fetch('/api/signals/'+encodeURIComponent(TK)).then(function(r){return r.json();})
   .then(function(d){ SIG=d; sigRender(); }).catch(function(){ SIG={}; sigRender(); }); })();
+"""
+
+_CALC_JS = r"""
+var VBT=null, _ct=null;
+function calcRun(box){
+  var g=+box.querySelector('.calc-gs').value, r=+box.querySelector('.calc-rs').value;
+  box.querySelector('.calc-g').textContent=g+'%'; box.querySelector('.calc-r').textContent=r+'%';
+  clearTimeout(_ct); _ct=setTimeout(function(){
+    fetch('/api/dcf/'+encodeURIComponent(box.dataset.calc)+'?g='+(g/100)+'&r='+(r/100)).then(function(x){return x.json();})
+      .then(function(d){ var out=box.querySelector('.calc-out');
+        if(d.error){ out.textContent=d.error; return; }
+        var cls=d.gap>=0?'up':'down';
+        out.className='calc-out';
+        out.innerHTML='Worth <b>$'+Math.round(d.fair_value).toLocaleString()+'</b> a share <span class="'+cls+'">('+
+          (d.gap>=0?'+':'')+Math.round(d.gap*100)+'% vs price)</span>'+
+          (d.implied_growth!=null?'. At '+r+'%, the price needs <b>'+Math.round(d.implied_growth*100)+'%/yr</b> growth.':'.');
+      }).catch(function(){}); }, 200);
+}
+function calcInit(){
+  document.querySelectorAll('[data-calc]').forEach(function(box){
+    box.querySelectorAll('input').forEach(function(i){ i.addEventListener('input', function(){ calcRun(box); }); });
+  });
+  vbtRender();
+}
+function vbtRender(){ var el=document.querySelector('[data-vbt]'); if(!el||!VBT) return;
+  var n=VBT.normalized; if(!n){ el.style.display='none'; return; }
+  var worked=n.spread>0 && n.ic>0.05;
+  el.innerHTML='<b>Track record on this watchlist:</b> rebuilding this DCF from the filings public at the time ('+
+    n.years.map(function(y){return y.year;}).join(', ')+', '+n.n_obs+' stock-years), the stocks it called cheapest returned '+
+    (n.spread>=0?'<span class="up">':'<span class="down">')+(n.spread>=0?'+':'')+Math.round(n.spread*100)+
+    ' pts a year</span> vs the priciest third (rank correlation '+n.ic.toFixed(2)+'). '+
+    (worked?'A modest edge, not a timing tool.':'So far it has not predicted next-year returns here: read it as what today\'s cash flows support, not as a timing signal.');
+}
+(function(){ calcInit();
+  fetch('/api/valuation/backtest').then(function(x){return x.json();}).then(function(d){ if(d.ok){ VBT=d; vbtRender(); } }).catch(function(){}); })();
 """

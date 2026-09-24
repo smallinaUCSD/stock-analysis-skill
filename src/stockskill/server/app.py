@@ -79,6 +79,36 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
         from .interpret_page import interpret_html
         return interpret_html()
 
+    def _peers_for(tk: str, hist: dict | None):
+        """Industry peer context for one ticker from the board's cached data."""
+        if not hist or not hist.get("sic"):
+            return None
+        try:
+            from ..data import sec as SEC
+            from ..performance.benchmarks import load_benchmarks, risk_vs_benchmarks
+            from ..valuation.peers import group_of, peer_context
+            from ..watchlist.pipeline import _load_cached
+            from ..watchlist.tickers import parse_tickers
+            sics = {tk: hist["sic"]}
+            for t in parse_tickers(tickers_path)["all"]:
+                h = SEC.annual_history(t, cache_dir, offline=True) if t != tk else None
+                if h and h.get("sic"):
+                    sics[t] = h["sic"]
+            members, _ = group_of(tk, sics)
+            if not members:
+                return None
+            spy = load_benchmarks(cache_dir, period, cache_ttl, fetch=False).get("SPY")
+            snaps, betas = {}, {}
+            for t in members:
+                td_ = _load_cached(cache_dir, t) if cache_dir else None
+                if td_ and td_.snapshot:
+                    snaps[t] = td_.snapshot
+                    if spy:
+                        betas[t] = (risk_vs_benchmarks(td_, {"SPY": spy}).get("SPY") or {}).get("beta")
+            return peer_context(tk, sics, snaps, betas)
+        except Exception:  # noqa: BLE001
+            return None
+
     @app.get("/analysis/<ticker>")
     def analysis_page(ticker: str):
         from .analysis_page import analysis_html
@@ -96,8 +126,16 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
             risk = risk_vs_benchmarks(td, load_benchmarks(cache_dir, period, cache_ttl, fetch=True))
         except Exception:  # noqa: BLE001
             risk = {}
+        from ..data import sec as SEC
+        try:
+            hist = SEC.annual_history(ticker.upper(), cache_dir)
+            if not (hist and hist.get("years")):
+                hist = SEC.yahoo_revenue_history(ticker.upper(), cache_dir)
+        except Exception:  # noqa: BLE001
+            hist = None
         row = build_row(td, SignalConfig.from_env(),
-                        beta=(risk.get("SPY") or {}).get("beta"))
+                        beta=(risk.get("SPY") or {}).get("beta"), sec=hist,
+                        peers=_peers_for(ticker.upper(), hist))
         row.risk = risk
         if (risk.get("SPY") or {}).get("beta") is not None:
             row.beta = risk["SPY"]["beta"]
@@ -370,6 +408,102 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
             "gain_threshold": r.gain_threshold, "loss_threshold": r.loss_threshold,
             "var_95": r.var_95, "pctiles": r.pctiles,
         })
+
+    _VAL_CACHE: dict = {}
+
+    def _valuation_for(tk: str):
+        """(price, valuation dict) built exactly as the board and analysis page
+        build it (SEC history, peers, Welch beta). Cached 10 minutes."""
+        import time as _t
+        hit = _VAL_CACHE.get(tk)
+        if hit and _t.time() - hit[0] < 600:
+            return hit[1]
+        from ..analyze import analyze_ticker
+        from ..data import sec as SEC
+        from ..performance.benchmarks import load_benchmarks, risk_vs_benchmarks
+        from ..watchlist.pipeline import fetch_one
+        td = fetch_one(tk, period=period, cache_dir=cache_dir, ttl=cache_ttl)
+        if not td or not td.snapshot or not (td.ohlcv or {}).get("close"):
+            return None
+        hist = SEC.annual_history(tk, cache_dir) or SEC.yahoo_revenue_history(tk, cache_dir)
+        risk = risk_vs_benchmarks(td, load_benchmarks(cache_dir, period, cache_ttl, fetch=False))
+        v = analyze_ticker(tk, snapshot=td.snapshot, with_options=False,
+                           beta=(risk.get("SPY") or {}).get("beta"), sec_history=hist,
+                           peers=_peers_for(tk, hist))["valuation"]
+        out = (td.ohlcv["close"][-1], v)
+        _VAL_CACHE[tk] = (_t.time(), out)
+        return out
+
+    @app.get("/api/dcf/<ticker>")
+    def dcf_calc(ticker: str):
+        """Re-run the DCF with the user's growth (g) and discount rate (r)."""
+        if not _TICKER_RE.match(ticker):
+            return jsonify({"error": "invalid ticker"}), 400
+        from ..valuation.dcf import DCFInputs, two_stage_dcf
+        from ..valuation.reverse_dcf import implied_stage1_growth
+        g = request.args.get("g", type=float)
+        r = request.args.get("r", type=float)
+        if g is None or r is None or not (-0.2 <= g <= 1.0) or not (0.03 <= r <= 0.30):
+            return jsonify({"error": "g must be -0.2..1.0 and r 0.03..0.30"}), 400
+        got = _valuation_for(ticker.upper())
+        base = (got[1].get("dcf_base") if got else None)
+        if not base:
+            return jsonify({"error": "no cash-flow basis for this ticker"}), 404
+        price = got[0]
+        inp = DCFInputs(fcf0=base["cash_flow"], shares=base["shares"], net_debt=base["net_debt"],
+                        discount_rate=r, stage1_growth=g, stage1_years=base["years"],
+                        terminal_growth=min(base["terminal_growth"], r - 0.01))
+        try:
+            fv = two_stage_dcf(inp).fair_value_per_share
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 422
+        try:
+            ig = implied_stage1_growth(price, inp)
+        except Exception:  # noqa: BLE001
+            ig = None
+        return jsonify({"ticker": ticker.upper(), "g": g, "r": r, "price": price,
+                        "fair_value": fv, "gap": fv / price - 1.0 if price else None,
+                        "implied_growth": ig})
+
+    _VBT_CACHE: dict = {}
+
+    @app.get("/api/valuation/backtest")
+    def valuation_backtest():
+        """Point-in-time track record of the DCF on the watchlist (cache-only)."""
+        import time as _t
+        hit = _VBT_CACHE.get("v")
+        if hit and _t.time() - hit[0] < 12 * 3600:
+            return jsonify(hit[1])
+        from ..data import sec as SEC
+        from ..leverage import registry
+        from ..valuation.backtest import evaluate, observations
+        from ..watchlist.pipeline import _load_cached
+        from ..watchlist.tickers import parse_tickers
+        try:
+            tks = [t for t in parse_tickers(tickers_path)["all"] if registry.get(t) is None]
+        except Exception:  # noqa: BLE001
+            tks = []
+        spy = _load_cached(cache_dir, "SPY") if cache_dir else None
+        if not spy:
+            return jsonify({"ok": False, "error": "no benchmark history cached"}), 503
+        uni = {}
+        for t in tks:
+            td = _load_cached(cache_dir, t)
+            h = SEC.annual_history(t, cache_dir, offline=True)
+            if not td or not h or len(h.get("years") or []) < 3 or not (td.ohlcv or {}).get("close"):
+                continue
+            last_sh = next((y["shares"] for y in reversed(h["years"]) if y.get("shares")), None)
+            sf, snap_sh = 1.0, (td.snapshot.shares if td.snapshot else None)
+            if snap_sh and last_sh and snap_sh / last_sh >= 1.8 and abs(snap_sh / last_sh - round(snap_sh / last_sh)) < 0.15:
+                sf = float(round(snap_sh / last_sh))       # a split since the last filing
+            uni[t] = {"years": h["years"], "dates": td.ohlcv["dates"], "closes": td.ohlcv["close"],
+                      "split_factor": sf}
+        bench = {"dates": spy.ohlcv["dates"], "closes": spy.ohlcv["close"]}
+        out = {"ok": True, "stocks": len(uni),
+               "normalized": evaluate(observations(uni, bench, "normalized")),
+               "one_year": evaluate(observations(uni, bench, "one_year"))}
+        _VBT_CACHE["v"] = (_t.time(), out)
+        return jsonify(out)
 
     _SIG_CACHE: dict = {}
 

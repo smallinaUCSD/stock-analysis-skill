@@ -32,4 +32,14 @@ data=fetch_all(tk, period=os.environ['STK_PERIOD'], workers=6,
 ok=[t for t in tk if t in data and (data[t].ohlcv or {}).get('close')]
 newest=max((str((data[t].ohlcv.get('dates') or [''])[-1]) for t in ok), default='?')
 print(f'>> {len(ok)}/{len(tk)} tickers current; newest date = {newest}')
+# annual reports from SEC EDGAR (needs SEC_USER_AGENT in .env; cached a day)
+from stockskill.data import sec
+from stockskill.leverage import registry
+if sec.has_sec():
+    n = 0
+    for t in tk:
+        if registry.get(t) is None and (sec.annual_history(t, os.environ['STK_CACHE'])
+                                        or sec.yahoo_revenue_history(t, os.environ['STK_CACHE'])):
+            n += 1
+    print(f'>> annual reports cached for {n} companies (SEC EDGAR, Yahoo fallback)')
 "
