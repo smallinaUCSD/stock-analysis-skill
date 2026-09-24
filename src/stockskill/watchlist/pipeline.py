@@ -55,6 +55,16 @@ def _load_cached(cache_dir: str, ticker: str) -> "TickerData | None":
     return None
 
 
+# Tickers whose last network fetch came back EMPTY (a provider rate limit or
+# outage) -> earliest time to try again. Background rebuilds run every 15-60 min;
+# without this, each one re-hammers the providers for every name it can't fetch,
+# which burns the daily quota and prolongs an IP throttle. Explicit refreshes and
+# add-verification (ttl=0) always try.
+_FAIL_UNTIL: dict[str, float] = {}
+FAIL_BACKOFF = 1800.0
+_EMPTY = ("dates", "open", "high", "low", "close", "volume")
+
+
 def fetch_one(ticker: str, period: str = "1y",
               cache_dir: str | None = None, ttl: float = 1800.0) -> TickerData:
     # Serve a FRESH good cache hit without touching the network.
@@ -62,6 +72,12 @@ def fetch_one(ticker: str, period: str = "1y",
     if cached is not None and _is_good(cached) \
             and (time.time() - cached.fetched_at) < ttl:
         return cached
+    if ttl > 0 and time.time() < _FAIL_UNTIL.get(ticker, 0.0):
+        if cached is not None:
+            return cached
+        return TickerData(ticker, {k: [] for k in _EMPTY}, None,
+                          error="data temporarily unavailable (retrying shortly)",
+                          fetched_at=time.time())
 
     try:
         td = TickerData(ticker, ohlcv(ticker, period), fetch_snapshot(ticker),
@@ -70,6 +86,11 @@ def fetch_one(ticker: str, period: str = "1y",
         td = TickerData(ticker, {k: [] for k in
                                  ("dates", "open", "high", "low", "close", "volume")},
                         None, error=str(e), fetched_at=time.time())
+
+    if (td.ohlcv or {}).get("close"):
+        _FAIL_UNTIL.pop(ticker, None)
+    else:
+        _FAIL_UNTIL[ticker] = time.time() + FAIL_BACKOFF
 
     # Stale-while-error: if the fresh fetch is bad (network error or an empty
     # series from a rate limit), keep showing the last good value instead of

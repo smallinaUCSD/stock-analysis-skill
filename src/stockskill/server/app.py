@@ -109,6 +109,22 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
         res = board.add(request.args.get("ticker", ""))
         return jsonify(res), (200 if res.get("ok") else 400)
 
+    @app.post("/api/watchlist/add_bulk")
+    def watchlist_add_bulk():
+        # One or many tickers ("NET, OKTA CHKP" or a JSON list). Returns at once
+        # with a job id; verification + the board update run in the background.
+        body = request.get_json(silent=True) or {}
+        tickers = body.get("tickers") or request.args.get("tickers") or request.form.get("tickers") or ""
+        res = board.add_bulk(tickers)
+        return jsonify(res), (200 if res.get("ok") else 400)
+
+    @app.get("/api/watchlist/add_status/<job_id>")
+    def watchlist_add_status(job_id: str):
+        st = board.job_status(job_id)
+        if st is None:
+            return jsonify({"ok": False, "error": "unknown or expired job"}), 404
+        return jsonify({"ok": True, **st})
+
     @app.post("/api/watchlist/remove")
     def watchlist_remove():
         res = board.remove(request.args.get("ticker", ""))

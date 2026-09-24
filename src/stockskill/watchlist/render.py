@@ -175,6 +175,8 @@ table.wl th:nth-child(15),table.wl td:nth-child(15){text-align:left}
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tbtn.add{background:var(--accent);color:#fff;border-color:transparent;font-weight:650}
 #addmsg.ok{color:var(--up)} #addmsg.bad{color:var(--down)}
+#addmsg .ok{color:var(--up)} #addmsg .bad{color:var(--down)}
+.addsg{color:var(--accent);text-decoration:underline;cursor:pointer}
 /* tools bar + tool modal */
 .toolsbar{display:flex;flex-wrap:wrap;gap:6px;margin-left:6px}
 .tool-b{font-family:inherit;font-size:12px;font-weight:600;line-height:1;box-sizing:border-box;
@@ -940,11 +942,14 @@ def _macro_html(macro):
 
 
 _SERVED_JS = r"""
-let _addResults=[], _addTimer=null;
+let _addResults=[], _addTimer=null, _addPoll=null;
 function addMsg(t,cls){ const m=document.getElementById('addmsg'); if(m){ m.textContent=t||''; m.className=(cls||'muted'); } }
+// The add box takes one ticker or a list: "NET, OKTA CHKP" (commas/spaces/newlines).
+function _addTokens(s){ return (s||'').toUpperCase().split(/[\s,;]+/).filter(Boolean); }
+function _lastTok(s){ const p=(s||'').split(/[\s,;]+/); return (p[p.length-1]||'').trim(); }
 function addSearch(){
   clearTimeout(_addTimer);
-  const q=document.getElementById('addq').value.trim();
+  const q=_lastTok(document.getElementById('addq').value);   // autocomplete the one being typed
   const sug=document.getElementById('addsug');
   if(q.length<1){ sug.innerHTML=''; sug.style.display='none'; return; }
   _addTimer=setTimeout(()=>{
@@ -958,17 +963,67 @@ function addSearch(){
     }).catch(()=>{ sug.style.display='none'; });
   },180);
 }
-function pickAdd(i){ const x=_addResults[i]; if(x){ document.getElementById('addq').value=x.symbol; doAdd(x.symbol); } }
-function addTicker(){ const q=document.getElementById('addq').value.trim().toUpperCase(); if(q) doAdd(q); }
+function pickAdd(i){
+  const x=_addResults[i]; if(!x) return;
+  const inp=document.getElementById('addq'), toks=_addTokens(inp.value);
+  if(toks.length<=1){ inp.value=x.symbol; doAdd(x.symbol); return; }   // single: add right away
+  toks[toks.length-1]=x.symbol;                                          // list: complete the last one
+  inp.value=toks.join(', ')+', ';
+  document.getElementById('addsug').style.display='none'; inp.focus();
+}
+function addTicker(){ const t=_addTokens(document.getElementById('addq').value); if(t.length) doAddMany(t); }
 function addKey(e){ if(e.key==='Enter'){ e.preventDefault(); addTicker(); } if(e.key==='Escape'){ document.getElementById('addsug').style.display='none'; } }
-function doAdd(sym){
+function doAdd(sym){ doAddMany([sym]); }
+// Adding runs as a background job on the server: this returns at once and polls
+// for progress, so the board, cards and analysis pages stay usable meanwhile.
+function doAddMany(list){
   document.getElementById('addsug').style.display='none';
-  addMsg('adding '+sym+'…','muted');
-  fetch('/api/watchlist/add?ticker='+encodeURIComponent(sym),{method:'POST'})
+  clearTimeout(_addPoll);
+  addMsg('adding '+(list.length===1?list[0]:list.length+' tickers')+'…','muted');
+  fetch('/api/watchlist/add_bulk',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({tickers:list})})
     .then(r=>r.json()).then(d=>{
-      if(d.ok){ addMsg(sym+' added','ok'); location.reload(); }
-      else{ addMsg(d.error||('could not add '+sym),'bad'); }
+      if(!d.ok){ addMsg(d.error||'could not add','bad'); return; }
+      document.getElementById('addq').value='';
+      if(!(d.queued||[]).length){ _addResult({added:[],failed:[],skipped:d.skipped||[]}); return; }
+      _pollAdd(d.job);
     }).catch(()=>addMsg('network error','bad'));
+}
+function _pollAdd(id){
+  fetch('/api/watchlist/add_status/'+encodeURIComponent(id),{cache:'no-store'}).then(r=>r.json()).then(j=>{
+    if(!j.ok){ addMsg(j.error||'add status unavailable','bad'); return; }
+    if(j.state!=='done'){
+      addMsg(j.state==='building' ? 'updating the board…' : 'adding '+j.done+'/'+j.total+'…','muted');
+      _addPoll=setTimeout(()=>_pollAdd(id),900); return;
+    }
+    _addResult(j);
+    if((j.added||[]).length) refreshWhenFree();
+  }).catch(()=>{ _addPoll=setTimeout(()=>_pollAdd(id),2000); });
+}
+function _addResult(j){
+  const m=document.getElementById('addmsg'); if(!m) return;
+  const e=_esc, parts=[];
+  if((j.added||[]).length) parts.push('<span class="ok">added '+e(j.added.join(', '))+'</span>');
+  (j.failed||[]).filter(f=>!f.retry).forEach(f=>{
+    let s='<span class="bad">'+e(f.ticker)+': not found</span>';
+    if(f.suggest&&f.suggest.symbol) s+=' <a href="#" class="addsg" onclick="doAdd(\''+e(f.suggest.symbol)+
+      '\');return false;">did you mean '+e(f.suggest.symbol)+(f.suggest.name?' ('+e(f.suggest.name)+')':'')+'?</a>';
+    parts.push(s);
+  });
+  // Real tickers that couldn't be checked because the data providers are
+  // rate-limited: say so (not "not found") and offer a one-click retry.
+  const retry=(j.failed||[]).filter(f=>f.retry).map(f=>f.ticker);
+  if(retry.length) parts.push('<span class="bad">couldn&#39;t verify '+e(retry.join(', '))+
+    ' right now (data providers rate-limited)</span> <a href="#" class="addsg" onclick="doAddMany([\''+
+    retry.join('\',\'')+'\']);return false;">retry</a>');
+  const sk=j.skipped||[];
+  if(sk.length) parts.push('<span class="muted">skipped '+e(sk.map(x=>x.ticker+' ('+x.reason+')').join(', '))+'</span>');
+  m.className=''; m.innerHTML=parts.join(' · ')||'<span class="muted">nothing to add</span>';
+}
+// Swap the new board in once the user isn't mid-interaction (card modal open).
+function refreshWhenFree(){
+  if(_refreshing || document.getElementById('modal').classList.contains('show')){ setTimeout(refreshWhenFree,1500); return; }
+  refreshData();
 }
 document.addEventListener('click', e=>{
   if(!e.target.closest('.addwrap')){ const s=document.getElementById('addsug'); if(s) s.style.display='none'; }
@@ -997,6 +1052,10 @@ function refreshData(){
       if(n&&o && o.innerHTML!==n.innerHTML) o.innerHTML=n.innerHTML; };
     swap('#wl tbody'); swap('#view-card .cards'); swap('#view-heatmap');
     swap('.panels'); swap('.banner-vp');
+    const nc=doc.querySelector('.chips'), oc=document.querySelector('.chips');
+    if(nc&&oc&&oc.innerHTML!==nc.innerHTML){ oc.innerHTML=nc.innerHTML;   // new sections -> new chips
+      if(typeof active!=='undefined') oc.querySelectorAll('.chip-f[data-group]').forEach(b=>{
+        const set=active[b.dataset.group]; if(set&&set.has(b.dataset.match)) b.classList.add('on'); }); }
     const nb=doc.querySelector('.status'), ob=document.querySelector('.status');
     if(nb&&ob) ob.className=nb.className, ob.textContent=nb.textContent;
     const nu=doc.getElementById('updated'), ou=document.getElementById('updated');
@@ -1123,7 +1182,7 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
     # the read-only tools stay.
     _add_box = (
         '<div class="addwrap">'
-        '<input id="addq" placeholder="Add ticker (e.g. NVDA or &quot;oracle&quot;)…" '
+        '<input id="addq" placeholder="Add tickers (e.g. NVDA, NET OKTA or &quot;oracle&quot;)…" '
         'autocomplete="off" oninput="addSearch()" onkeydown="addKey(event)">'
         '<div id="addsug" class="addsug"></div></div>'
         '<button class="tbtn add" onclick="addTicker()">+ Add</button>')

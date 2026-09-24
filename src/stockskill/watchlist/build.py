@@ -156,7 +156,15 @@ def _attach_factors(rows, data) -> None:
         return
 
 
-def _overlay_live_prices(rows, status) -> None:
+# Last live quote per ticker: {TICKER: (fetched_at, quote)}. Lets a rebuild that
+# was triggered by ADDING tickers fetch only the new names instead of re-pulling
+# the whole board through the rate-limited quote API (which took minutes and
+# starved every other request of quota). Also a stale-while-error fallback: a
+# ticker whose quote fails keeps its last live price rather than the snapshot's.
+_QUOTES: dict[str, tuple[float, dict]] = {}
+
+
+def _overlay_live_prices(rows, status, max_age: float = 0.0) -> None:
     """Patch rows' price + 1d change from a live quote source in EVERY session.
 
     Finnhub returns the live price while the market is open and the *last regular
@@ -164,21 +172,34 @@ def _overlay_live_prices(rows, status) -> None:
     current (today's or yesterday's close) instead of falling back to the
     days-old committed snapshot overnight/on weekends. Prefers Finnhub (free
     real-time US quotes, whole board); falls back to FMP's multi-symbol batch
-    (paid FMP plan)."""
+    (paid FMP plan).
+
+    ``max_age`` (seconds): reuse a cached quote younger than this and fetch only
+    the rest. 0 (the scheduled refresh) re-fetches every ticker."""
+    import time
     from ..data import finnhub, fmp
 
-    tickers = [r.ticker for r in rows]
-    try:
-        if finnhub.has_finnhub():
-            quotes = finnhub.batch_quotes(tickers)
-        elif fmp.has_fmp():
-            quotes = fmp.batch_quotes(tickers)
-        else:
-            quotes = {}
-    except Exception:  # noqa: BLE001
-        quotes = {}
+    now = time.time()
+    need = []
     for r in rows:
-        q = quotes.get(r.ticker.upper())
+        hit = _QUOTES.get(r.ticker.upper())
+        if hit is None or now - hit[0] >= max_age:
+            need.append(r.ticker.upper())
+    fetched: dict = {}
+    if need:
+        try:
+            if finnhub.has_finnhub():
+                fetched = finnhub.batch_quotes(need)
+            elif fmp.has_fmp():
+                fetched = fmp.batch_quotes(need)
+        except Exception:  # noqa: BLE001
+            fetched = {}
+    for t, q in (fetched or {}).items():
+        if q and q.get("price"):
+            _QUOTES[t.upper()] = (now, q)
+    for r in rows:
+        hit = _QUOTES.get(r.ticker.upper())
+        q = hit[1] if hit else None
         if q and q.get("price"):
             r.price = q["price"]
             if q.get("change_pct") is not None:
@@ -224,7 +245,8 @@ def build_watchlist_html(tickers_spec, *, period: str = "5y", workers: int = 5,
                          interval: float | None = None, served: bool = False,
                          title: str = "Watchlist", public: bool = False,
                          bmc_url: str | None = None, ttl: float = 1800.0,
-                         live: bool = True) -> tuple[str, dict]:
+                         live: bool = True, quote_max_age: float = 0.0,
+                         panels: bool = True) -> tuple[str, dict]:
     """Return ``(html, meta)`` for the watchlist board.
 
     ``tickers_spec`` is anything :func:`parse_tickers` accepts (a path or a
@@ -235,6 +257,10 @@ def build_watchlist_html(tickers_spec, *, period: str = "5y", workers: int = 5,
     snapshot: it skips the Yahoo panel fetches and the Finnhub price overlay, so
     a waking host can paint the board instantly and refresh live in the
     background (avoids the cold-start warming spinner).
+
+    ``quote_max_age`` / ``panels=False`` make a cheap *incremental* live build
+    (used after adding tickers): reuse live quotes younger than ``quote_max_age``
+    and the last Sector/Markets/Macro panels, fetching only what's new.
     """
     import os
     import time
@@ -274,7 +300,7 @@ def build_watchlist_html(tickers_spec, *, period: str = "5y", workers: int = 5,
     custom = load_custom_alerts(alerts_path) if alerts_path else []
     alerts = all_alerts(rows, custom)
 
-    if live:
+    if live and panels:
         sec_pm = price_map(list(SECTOR_ETFS), period="3mo")
         sectors = [(r.name, r.ticker, r.returns.get("1m")) for r in sector_table(sec_pm, "1m")]
         mkt_pm = price_map(all_market_tickers(), period="5d")
@@ -300,7 +326,7 @@ def build_watchlist_html(tickers_spec, *, period: str = "5y", workers: int = 5,
     # without a full per-ticker refetch. The heavy data (valuation, history,
     # signals) stays from the snapshot; only price and 1d change go live.
     if served and live:
-        _overlay_live_prices(rows, status)
+        _overlay_live_prices(rows, status, max_age=quote_max_age)
     if served:
         _apply_ext_prices(rows, status, live=live)   # Yahoo ext during extended sessions
 
