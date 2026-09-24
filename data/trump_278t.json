@@ -1,0 +1,13 @@
+{
+  "_note": "President Trump's OGE Form 278-T periodic transaction reports (public, extapps2.oge.gov). OGE's index doesn't list presidential filings, so add new report URLs here as they're posted. 'filed' is the report date in the file name.",
+  "filings": [
+    {"filed": "2025-08-12", "url": "https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/5315A095A2EE1B9185258CEB006E7E36/$FILE/Donald-J-Trump-08.12.2025-278T(3).pdf"},
+    {"filed": "2025-10-17", "url": "https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/AA799A2729B4D1BE85258D430031A320/$FILE/Donald%20J.%20Trump%2010.17.2025%20278-T.pdf"},
+    {"filed": "2025-10-20", "url": "https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/18353894FE440B3685258D430031A337/$FILE/Donald%20J.%20Trump%2010.20.2025%20278-T%20%282%29.pdf"},
+    {"filed": "2025-11-14", "url": "https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/903A217DC18563EC85258D4A0031B044/$FILE/Donald%20J.%20Trump%2011.14.2025%20278-T.pdf"},
+    {"filed": "2026-04-20", "url": "https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/CD75555856A7D2E485258DE4002DD4A0/$FILE/Donald-J-Trump-4.20.2026-278T.pdf"},
+    {"filed": "2026-05-08", "url": "https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/5326D3AF5BE7C25385258DF7002DD1B7/%24FILE/Trump%2C%20Donald%20J.-05.08.2026-278T.pdf"},
+    {"filed": "2026-05-08", "url": "https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/405E4EC4E27BE8D185258DF7002DD1C0/$FILE/Trump,%20Donald%20J.-05.08.2026-278T(2).pdf"},
+    {"filed": "2026-09-08", "url": "https://extapps2.oge.gov/201/Presiden.nsf/PAS+Index/E590116FC9631E9885258E7A002DE209/$FILE/Donald-J-Trump-09.8.2026-278T.pdf"}
+  ]
+}

@@ -264,6 +264,7 @@ table.wl th:nth-child(15),table.wl td:nth-child(15){text-align:left}
 .mx-sum .fchip{min-height:0;margin:0 0 8px}
 .mx-sum .links{margin-top:10px!important}
 .mx-news{margin-top:22px;padding-top:16px;border-top:1px solid var(--border)}
+.mx-kg{margin-top:22px;padding-top:16px;border-top:1px solid var(--border)}
 .mx .analysis-btn{margin:22px 0 2px}
 @media (max-width:900px){.mx-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:620px){.mx-grid{grid-template-columns:1fr}}
@@ -1414,6 +1415,7 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
         '</div></div>'
     ) if served else ""
     js_served = _SERVED_JS if served else ""
+    from ..server.graph_js import GRAPH_CSS as graph_css, GRAPH_JS as graph_js
     table = "".join(_row_html(r) for r in rows)
     cards = "".join(_card_html(r) for r in rows)
     tiles = _heatmap_html(rows)
@@ -1427,7 +1429,7 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 {meta_refresh}
-<title>{html.escape(title)}</title>{_THEME_BOOT}<style>{_CSS}{_CSS_EXTRA}</style></head>
+<title>{html.escape(title)}</title>{_THEME_BOOT}<style>{_CSS}{_CSS_EXTRA}{graph_css}</style></head>
 <body><div class="wrap">
 <header class="top">
   <div class="top-l"><h1>{html.escape(title)}</h1>{badge}
@@ -1554,6 +1556,12 @@ function openCard(card){{
   if(chart) top.appendChild(chart);
   const wrap=document.createElement('div'); wrap.className='card-item mx';
   wrap.append(head, top, grid);
+  const tkr=(card.dataset.ticker||'').toUpperCase();
+  const kg=document.createElement('div'); kg.className='mx-kg';
+  kg.innerHTML='<div class="det-h">Supply chain and connections <a class="site-help" style="font-weight:400;margin-left:8px" '+
+    'href="/graph?t='+encodeURIComponent(tkr)+'" onclick="openTab(this.href);return false">Open the full map</a></div>'+
+    '<div class="kg-mini muted" style="font-size:13px">Loading connections…</div>';
+  wrap.appendChild(kg);
   if(news){{ news.classList.add('mx-news'); wrap.appendChild(news); }}
   if(cta) wrap.appendChild(cta);
   body.innerHTML=''; body.appendChild(wrap);
@@ -1561,6 +1569,16 @@ function openCard(card){{
   fitChart(body);
   drawCharts(body);
   if(typeof loadNews==='function') loadNews(body);
+  loadMiniGraph(body, tkr);
+}}
+function loadMiniGraph(body, tkr){{
+  const el=body.querySelector('.kg-mini'); if(!el||!tkr||typeof drawGraph!=='function') return;
+  fetch('/api/graph/'+encodeURIComponent(tkr)).then(r=>r.json()).then(d=>{{
+    const n=['suppliers','customers','investments','competitors'].reduce((a,g)=>a+(d[g]||[]).length,0);
+    if(!d.ok||!n){{ el.textContent='No documented supplier, customer or investment links for '+tkr+' yet.'; return; }}
+    el.classList.remove('muted');
+    drawGraph(el, d, {{small:true, width:900, height:330, max:6, onNode:t=>openTab('/graph?t='+encodeURIComponent(t))}});
+  }}).catch(()=>{{ el.textContent='Connections unavailable right now.'; }});
 }}
 function fitChart(body){{
   // A taller chart now that it spans the whole quick-look (phones keep the default).
@@ -1726,5 +1744,6 @@ function _schedulePoll(){{
   _schedulePoll();
 }})();
 {js_served}
+{graph_js}
 </script>
 </body></html>"""

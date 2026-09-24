@@ -448,7 +448,8 @@ def analysis_html(row, closes=None, refresh_seconds: int = 900) -> str:
   <div class="a-id"><div class="a-id-top"><span class="a-tk">{tk}</span>
     <span class="badge {sig_cls}">{_html.escape(row.signal)}</span></div>
     <h1>{name}</h1></div>
-  <div class="a-pricebox"><div class="a-price">{price}<span class="chg {dcls}">{dtxt}</span></div>{ext}</div>
+  <div class="a-pricebox"><div class="a-price">{price}<span class="chg {dcls}">{dtxt}</span></div>{ext}
+    <a class="a-help" style="font-size:14px" href="/graph?t={tk}" target="_blank" rel="noopener">Connections</a></div>
   <button class="page-x" onclick="return goBack(event)" title="Close" aria-label="Close">{icon("x", 17)}</button>
 </header>
 <section class="agroup"><h2>Price<small>candles and volume</small></h2>

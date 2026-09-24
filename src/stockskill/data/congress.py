@@ -250,6 +250,11 @@ def _refresh(days: int, cache_dir) -> None:
                 trades += fn(days, cache_dir, s)
             except Exception as e:  # noqa: BLE001 - one chamber failing keeps the other
                 _STATE["error"] = f"{fn.__name__.strip('_')}: {e}"
+        try:                                     # the President's OGE 278-T reports
+            from .politicians import trump_trades
+            trades += trump_trades(cache_dir)
+        except Exception as e:  # noqa: BLE001
+            _STATE["error"] = f"president: {e}"
         trades.sort(key=lambda t: (t.get("filed") or "", t.get("traded") or ""), reverse=True)
         with open(os.path.join(_dir(cache_dir), "trades.json"), "w") as f:
             json.dump({"as_of": datetime.now().isoformat(timespec="minutes"), "days": days,
@@ -258,7 +263,7 @@ def _refresh(days: int, cache_dir) -> None:
         _STATE["loading"] = False
 
 
-def recent_trades(cache_dir=None, days: int = 90, max_age: float = 6 * 3600) -> dict:
+def recent_trades(cache_dir=None, days: int = 730, max_age: float = 6 * 3600) -> dict:
     """{"trades": [...], "as_of", "loading"}: the cached set, refreshed in the
     background when older than ``max_age`` (the first build takes a minute)."""
     path = os.path.join(_dir(cache_dir), "trades.json")
@@ -267,7 +272,8 @@ def recent_trades(cache_dir=None, days: int = 90, max_age: float = 6 * 3600) -> 
         data = json.load(open(path))
     except Exception:  # noqa: BLE001
         data = None
-    stale = data is None or time.time() - os.path.getmtime(path) > max_age
+    stale = (data is None or time.time() - os.path.getmtime(path) > max_age
+             or (data.get("days") or 0) < days)          # the window was widened
     with _LOCK:
         if stale and not _STATE["loading"]:
             _STATE["loading"] = True

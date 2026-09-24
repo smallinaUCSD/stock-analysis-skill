@@ -30,8 +30,10 @@ def trades_html(q: str = "") -> str:
             "value=\"" + html.escape(q) + "\"><button class=\"tr-go\" onclick=\"search()\">Search</button></div>"
             "<div id=\"tk-view\"></div>"
             "<div id=\"pol\">"
-            "<div class=\"tr-filters\"><span class=\"seg\" id=\"chamber\"><button data-c=\"\" class=\"on\">Both</button>"
-            "<button data-c=\"House\">House</button><button data-c=\"Senate\">Senate</button></span>"
+            "<div id=\"people\" class=\"people\"></div>"
+            "<div class=\"tr-filters\"><span class=\"seg\" id=\"chamber\"><button data-c=\"\" class=\"on\">All</button>"
+            "<button data-c=\"House\">House</button><button data-c=\"Senate\">Senate</button>"
+            "<button data-c=\"President\">President</button></span>"
             "<span class=\"seg\" id=\"kind\"><button data-k=\"\" class=\"on\">All</button><button data-k=\"buy\">Buys</button>"
             "<button data-k=\"sell\">Sells</button></span><span id=\"pol-meta\" class=\"muted tr-meta\"></span></div>"
             "<div id=\"pol-top\"></div><div id=\"pol-t\" class=\"tr-tw muted\">Loading…</div>"
@@ -76,6 +78,23 @@ _EXTRA_CSS = """
 .tr-more{margin:10px 0;height:36px;padding:0 14px;border:1px solid var(--border);border-radius:var(--r);
   background:var(--surface);font:500 13px var(--font);color:var(--ink);cursor:pointer}
 .tr-note{font-size:13px;color:var(--muted);line-height:1.55;margin:10px 0 0}
+.people{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:0 0 14px}
+.person{display:flex;flex-direction:column;align-items:center;text-align:center;gap:4px;padding:12px 8px;
+  border:1px solid var(--border);border-radius:12px;background:var(--surface);color:var(--ink);text-decoration:none;
+  transition:background-color .15s ease,border-color .15s ease}
+.person:hover{background:var(--surface-2);border-color:var(--ink-2)}
+.person img,.person .mono{width:72px;height:88px;border-radius:10px;object-fit:cover;background:var(--surface-2)}
+.person .mono{display:flex;align-items:center;justify-content:center;font:500 24px var(--font-display);color:var(--ink-2)}
+.person b{font-size:14px;font-weight:500;line-height:1.25}
+.person small{font-size:12px;color:var(--muted);line-height:1.35}
+.pty{display:inline-block;border-radius:5px;padding:0 5px;font-size:11px;font-weight:500}
+.pty.R{background:color-mix(in srgb,#c0392b 16%,transparent);color:#b03a2e}
+.pty.D{background:color-mix(in srgb,#2e6db4 16%,transparent);color:#2e6db4}
+.pty.I{background:var(--surface-3);color:var(--ink-2)}
+.people-h{display:flex;justify-content:space-between;align-items:baseline;margin:0 0 8px}
+.people-h h2{font-family:var(--font-display);font-weight:500;font-size:28px;margin:0}
+.people-more{height:32px;padding:0 12px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);
+  font:500 13px var(--font);color:var(--ink);cursor:pointer}
 .fund-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;margin-bottom:14px}
 .fund-card{border:1px solid var(--border);border-radius:10px;background:var(--surface);padding:12px 14px;cursor:pointer;text-align:left;
   font:14px var(--font);color:var(--ink)}
@@ -109,7 +128,7 @@ function setTab(t){ TAB=t; document.getElementById('pol').style.display=t==='pol
 document.getElementById('tabs').addEventListener('click',function(e){ var b=e.target.closest('button'); if(b) setTab(b.dataset.t); });
 function seg(id,key,cb){ document.getElementById(id).addEventListener('click',function(e){ var b=e.target.closest('button'); if(!b) return;
   [].forEach.call(this.querySelectorAll('button'),function(x){x.classList.toggle('on',x===b);}); cb(b.dataset[key]); }); }
-seg('chamber','c',function(v){ CH=v; loadPol(); }); seg('kind','k',function(v){ KIND=v; loadPol(); });
+seg('chamber','c',function(v){ CH=v; loadPol(); renderPeople(); }); seg('kind','k',function(v){ KIND=v; loadPol(); });
 document.getElementById('q').addEventListener('keydown',function(e){ if(e.key==='Enter') search(); });
 function search(){ var q=(document.getElementById('q').value||'').trim();
   try{ history.replaceState(null,'','/trades'+(q?'?q='+encodeURIComponent(q):'')); }catch(_){}
@@ -117,7 +136,7 @@ function search(){ var q=(document.getElementById('q').value||'').trim();
   if(!q){ loadPol(); return; }
   if(/^[A-Za-z.\-]{1,6}$/.test(q) && q===q.toUpperCase()){ FILTER.ticker=q; tickerView(q); loadPol(); return; }
   if(/^[A-Za-z.\-]{1,5}$/.test(q)){ FILTER.ticker=q.toUpperCase(); tickerView(q.toUpperCase()); loadPol(); return; }
-  FILTER.member=q; loadPol(); fundSearch(q); }
+  FILTER.member=q; loadPol(); renderPeople(); fundSearch(q); }
 
 // ---- ticker view: funds holding it + politicians trading it ---------------------
 function tickerView(t){ var box=document.getElementById('tk-view');
@@ -129,6 +148,25 @@ function tickerView(t){ var box=document.getElementById('tk-view');
       '</tbody></table></div>':'<p class="muted" style="font-size:14px;margin:0">None of the tracked funds report it (or their filings are still loading).</p>')+
       '<h3>Congress trades in it (last 90 days)</h3>'+(c.length?c.length+' trades listed below.':'<span class="muted" style="font-size:14px">None reported.</span>')+'</div>';
     box.innerHTML=h; }).catch(function(){ box.innerHTML=''; }); }
+
+// ---- people -------------------------------------------------------------------
+var PEOPLE=null, PSHOW=17;
+function initials(n){ return (n||'?').split(' ').filter(Boolean).map(function(w){return w[0];}).slice(0,2).join(''); }
+function yrs(iso){ if(!iso) return ''; var y=Math.floor((new Date()-new Date(iso))/3.15576e10); return y<1?'under a year':y+' yr'+(y===1?'':'s'); }
+function loadPeople(){ fetch('/api/politicians').then(function(r){return r.json();}).then(function(d){ PEOPLE=d; renderPeople();
+  if(d.loading && !(d.people||[]).length) setTimeout(loadPeople,8000); }); }
+function renderPeople(){ var box=document.getElementById('people'); if(!PEOPLE) return;
+  var ppl=(PEOPLE.people||[]).filter(function(p){ return !FILTER.member || (p.name||'').toLowerCase().indexOf(FILTER.member.toLowerCase())>=0; });
+  if(CH) ppl=ppl.filter(function(p){ return p.chamber===CH; });
+  if(!ppl.length){ box.innerHTML=''; return; }
+  var cards=ppl.slice(0,PSHOW).map(function(p){ var party=(p.party||'I')[0];
+    var where=p.chamber==='President'?'President':((p.chamber==='Senate'?'Senate':'House')+' · '+esc(p.state||''));
+    return '<a class="person" href="/politician/'+encodeURIComponent(p.id)+'" target="_blank" rel="noopener">'+
+      '<img src="'+esc(p.photo)+'" alt="" loading="lazy" onerror="this.outerHTML=\'<div class=&quot;mono&quot;>'+esc(initials(p.name))+'</div>\'">'+
+      '<b>'+esc(p.name)+'</b><small><span class="pty '+party+'">'+esc(p.party||'')+'</span> '+where+'</small>'+
+      '<small>In office '+yrs(p.since)+' · '+p.trades+' trade'+(p.trades===1?'':'s')+'</small></a>'; }).join('');
+  box.innerHTML='<div class="people-h" style="grid-column:1/-1"><h2>Who is trading</h2><span class="muted" style="font-size:13px">Past year · click for their profile</span></div>'+cards+
+    (ppl.length>PSHOW?'<div style="grid-column:1/-1"><button class="people-more" onclick="PSHOW+=24;renderPeople()">Show more ('+(ppl.length-PSHOW)+')</button></div>':''); }
 
 // ---- politicians -----------------------------------------------------------
 function loadPol(){ var q='?chamber='+CH+'&type='+KIND+'&ticker='+encodeURIComponent(FILTER.ticker)+'&member='+encodeURIComponent(FILTER.member);
@@ -145,7 +183,8 @@ function renderPol(){ var d=POL, box=document.getElementById('pol-t');
   box.className='tr-tw';
   box.innerHTML='<table class="tr-t"><thead><tr><th>Member</th><th>Ticker</th><th>Asset</th><th>Type</th><th class="r">Amount</th><th>Traded</th><th>Reported</th><th>Owner</th></tr></thead><tbody>'+
     rows.map(function(t){ var lag=daysBetween(t.traded,t.filed);
-      return '<tr><td>'+esc(t.member)+'<span class="sub">'+esc(t.chamber)+(t.state?' · '+esc(t.state):'')+'</span></td><td>'+tkLink(t.ticker)+'</td><td class="wrap">'+esc(t.asset)+
+      var who=t.member_id?'<a href="/politician/'+encodeURIComponent(t.member_id)+'" target="_blank" rel="noopener">'+esc(t.member)+'</a>':esc(t.member);
+      return '<tr><td>'+who+'<span class="sub">'+esc(t.chamber)+(t.state?' · '+esc(t.state):'')+'</span></td><td>'+tkLink(t.ticker)+'</td><td class="wrap">'+esc(t.asset)+
         '</td><td>'+typeCell(t.type)+'</td><td class="r">'+esc(t.amount)+'</td><td>'+fdate(t.traded)+'</td><td><a href="'+esc(t.url)+'" target="_blank" rel="noopener">'+fdate(t.filed)+'</a>'+
         (lag!=null?'<span class="sub">'+lag+' days later</span>':'')+'</td><td>'+esc(t.owner)+'</td></tr>'; }).join('')+'</tbody></table>'+
     ((d.trades||[]).length>SHOWN?'<div style="padding:0 10px"><button class="tr-more" onclick="SHOWN+=100;renderPol()">Show more</button></div>':'');
@@ -182,5 +221,5 @@ function fundSearch(q){ var box=document.getElementById('fund-search');
     box.innerHTML='<div class="chips"><span class="lbl">Funds matching "'+esc(q)+'"</span>'+r.map(function(x){
       return '<button class="chip-b" onclick="setTab(\'fund\');openFund('+x.cik+')">'+esc(x.name)+'<span>'+fdate(x.latest)+'</span></button>'; }).join('')+'</div>';
     if(r.length) setTab(TAB); }); }
-(function(){ if(INITQ){ search(); } else { loadPol(); } })();
+(function(){ loadPeople(); if(INITQ){ search(); } else { loadPol(); } })();
 """

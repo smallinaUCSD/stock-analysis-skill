@@ -761,23 +761,239 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
         who = (request.args.get("member") or "").lower().strip()
         ch = request.args.get("chamber") or ""
         kind = request.args.get("type") or ""
+        window = request.args.get("days", type=int) or (730 if (tk or who) else 90)
+        from datetime import date as _date, timedelta as _td
+        since = (_date.today() - _td(days=window)).isoformat()
+        tr = [t for t in tr if (t.get("filed") or "") >= since]
+        recent = [t for t in (data.get("trades") or []) if (t.get("filed") or "") >= (_date.today() - _td(days=90)).isoformat()]
         if tk:
             tr = [t for t in tr if (t.get("ticker") or "") == tk]
         if who:
             tr = [t for t in tr if who in (t.get("member") or "").lower()]
-        if ch in ("House", "Senate"):
+        if ch in ("House", "Senate", "President"):
             tr = [t for t in tr if t.get("chamber") == ch]
         if kind == "buy":
             tr = [t for t in tr if (t.get("type") or "").startswith("Buy")]
         elif kind == "sell":
             tr = [t for t in tr if (t.get("type") or "").startswith("Sell")]
         from collections import Counter
-        bought = Counter(t["ticker"] for t in (data.get("trades") or [])
+        bought = Counter(t["ticker"] for t in recent
                          if t.get("ticker") and (t.get("type") or "").startswith("Buy"))
-        members = Counter(t["member"] for t in (data.get("trades") or []))
+        members = Counter(t["member"] for t in recent)
+        for t in tr[:400]:
+            t["member_id"] = _member_id(t)
         return jsonify({"ok": True, "loading": data.get("loading"), "as_of": data.get("as_of"),
-                        "days": data.get("days"), "total": len(tr), "trades": tr[:400],
+                        "days": window, "total": len(tr), "trades": tr[:400],
                         "most_bought": bought.most_common(12), "most_active": members.most_common(10)})
+
+    _MEMBERS: dict = {"list": None, "t": 0.0, "map": {}}
+
+    def _members():
+        import time as _t
+        from ..data.politicians import directory
+        if _MEMBERS["list"] is None or _t.time() - _MEMBERS["t"] > 86400:
+            _MEMBERS["list"] = directory(cache_dir)
+            _MEMBERS["t"] = _t.time()
+            _MEMBERS["map"] = {}
+        return _MEMBERS["list"]
+
+    def _member_id(t: dict) -> str | None:
+        """Directory id for a trade's filer (the President is "trump")."""
+        from ..data.politicians import TRUMP_ID, match_member
+        if t.get("chamber") == "President":
+            return TRUMP_ID
+        key = (t.get("chamber"), t.get("member"), t.get("state"))
+        mp = _MEMBERS["map"]
+        if key not in mp:
+            m = match_member(t.get("member") or "", t.get("chamber") or "", t.get("state") or "", _members())
+            mp[key] = m["id"] if m else None
+        return mp[key]
+
+    def _person(pid: str):
+        from ..data.politicians import TRUMP, TRUMP_ID
+        if pid == TRUMP_ID:
+            return TRUMP
+        return next((m for m in _members() if m["id"] == pid), None)
+
+    @app.get("/api/politicians")
+    def politicians_api():
+        """Everyone with reported trades in the window (default 1 year), with
+        party, office, time in office, photo and trade counts. The President first."""
+        from collections import Counter
+        from datetime import date as _date, timedelta as _td
+        from ..data.congress import recent_trades
+        from ..data.politicians import TRUMP_ID
+        days = request.args.get("days", type=int) or 365
+        since = (_date.today() - _td(days=days)).isoformat()
+        data = recent_trades(cache_dir)
+        counts, last = Counter(), {}
+        for t in data.get("trades") or []:
+            if (t.get("filed") or "") < since:
+                continue
+            pid = _member_id(t)
+            if pid:
+                counts[pid] += 1
+                last[pid] = max(last.get(pid, ""), t.get("filed") or "")
+        people = []
+        for pid, n in counts.items():
+            p = _person(pid)
+            if p:
+                people.append({**{k: p.get(k) for k in ("id", "name", "party", "chamber", "state", "district",
+                                                         "since", "photo", "office")},
+                               "trades": n, "last_filed": last.get(pid)})
+        people.sort(key=lambda p: (p["id"] != TRUMP_ID, -p["trades"]))
+        return jsonify({"ok": True, "loading": data.get("loading"), "days": days, "people": people})
+
+    @app.get("/politician/<pid>")
+    def politician_page(pid: str):
+        from .politician_page import politician_html
+        return politician_html(pid)
+
+    @app.get("/api/politician/<pid>")
+    def politician_api(pid: str):
+        """Profile: who they are, their trades, estimated positions, stats."""
+        from ..data.congress import recent_trades
+        from ..signals.politician import positions, stats
+        p = _person(pid)
+        if not p:
+            return jsonify({"ok": False, "error": "unknown politician"}), 404
+        tr = [t for t in (recent_trades(cache_dir).get("trades") or []) if _member_id(t) == pid]
+        tr.sort(key=lambda t: (t.get("traded") or "", t.get("filed") or ""), reverse=True)
+        extra = {}
+        if pid == "trump":
+            from ..data.politicians import trump_coverage
+            extra["coverage"] = trump_coverage(cache_dir)
+        return jsonify({"ok": True, "person": p, "stats": stats(tr), "positions": positions(tr)[:40],
+                        "trades": tr[:1500], "total": len(tr), **extra})
+
+    _PERF: dict = {}
+
+    @app.get("/api/politician/<pid>/performance")
+    def politician_perf(pid: str):
+        """Copy-their-trades performance vs the S&P 500 (prices for the most
+        traded tickers are fetched in the background the first time)."""
+        import threading
+        import time as _t
+        from ..data.congress import recent_trades
+        hit = _PERF.get(pid)
+        if hit and (hit.get("running") or _t.time() - hit.get("t", 0) < 6 * 3600):
+            return jsonify(hit.get("result") or {"ok": True, "working": True})
+        p = _person(pid)
+        if not p:
+            return jsonify({"ok": False, "error": "unknown politician"}), 404
+        tr = [t for t in (recent_trades(cache_dir).get("trades") or []) if _member_id(t) == pid]
+
+        def run():
+            from collections import Counter
+            from ..performance.benchmarks import load_benchmarks
+            from ..signals.politician import committee_overlap, simulate
+            from ..watchlist.pipeline import fetch_one
+            try:
+                top = [tk for tk, _ in Counter(t["ticker"] for t in tr if t.get("ticker")).most_common(40)]
+                prices, sectors = {}, {}
+                for tk in top:
+                    try:
+                        td = fetch_one(tk, period="5y", cache_dir=cache_dir, ttl=cache_ttl)
+                    except Exception:  # noqa: BLE001
+                        continue
+                    o = td.ohlcv or {}
+                    if o.get("close"):
+                        prices[tk] = ([d.isoformat() if hasattr(d, "isoformat") else str(d) for d in o["dates"]],
+                                      o["close"])
+                    if td.snapshot and td.snapshot.sector:
+                        sectors[tk] = td.snapshot.sector
+                spy = load_benchmarks(cache_dir, period, cache_ttl, fetch=True).get("SPY")
+                bench = ([d.isoformat() for d in spy.ohlcv["dates"]], spy.ohlcv["close"]) if spy else None
+                sim = simulate(tr, prices, bench) if bench else None
+                over = committee_overlap(tr, p.get("committees") or [], sectors)
+                _PERF[pid] = {"t": _t.time(), "running": False,
+                              "result": {"ok": True, "working": False, "performance": sim,
+                                         "priced_tickers": len(prices), "committee_trades": over[:50],
+                                         "sectors": sectors}}
+            except Exception as e:  # noqa: BLE001
+                _PERF[pid] = {"t": _t.time(), "running": False, "result": {"ok": False, "error": str(e)}}
+        _PERF[pid] = {"running": True, "t": _t.time()}
+        threading.Thread(target=run, daemon=True).start()
+        return jsonify({"ok": True, "working": True})
+
+    _GRAPH: dict = {}
+
+    @app.get("/graph")
+    def graph_page():
+        from .graph_page import graph_html
+        return graph_html(request.args.get("t", ""))
+
+    @app.get("/api/graph/<ticker>")
+    def graph_api(ticker: str):
+        """Knowledge graph for one company: suppliers, customers, investments
+        (its own 13F), competitors (SEC industry peers) and filing mentions."""
+        if not _TICKER_RE.match(ticker):
+            return jsonify({"error": "invalid ticker"}), 400
+        import time as _t
+        tk = ticker.upper()
+        hit = _GRAPH.get(tk)
+        if hit and _t.time() - hit[0] < 6 * 3600:
+            return jsonify(hit[1])
+        from ..data import funds13f as F
+        from ..data import graph as G
+        from ..data import sec as SEC
+        from ..leverage import registry
+        from ..valuation.peers import group_of
+        from ..watchlist.pipeline import _load_cached
+        from ..watchlist.tickers import parse_tickers
+        rel = G.load_relationships()
+        out = G.neighbors(tk, rel)
+        td = _load_cached(cache_dir, tk) if cache_dir else None
+        snap = td.snapshot if td else None
+        hist = SEC.annual_history(tk, cache_dir, offline=True) or {}
+        name = (snap.name if snap and snap.name else None) or hist.get("name") or tk
+        # stakes it holds, from its own 13F (if it files one)
+        cik = SEC.cik_for(tk, cache_dir, offline=True)
+        if cik:
+            try:
+                rep = F.fund_report(cik, cache_dir, top=15)
+            except Exception:  # noqa: BLE001
+                rep = None
+            for h in (rep or {}).get("holdings", [])[:12]:
+                if h.get("put_call"):
+                    continue
+                out["investments"].append({"ticker": h.get("ticker"), "name": h.get("name", "").title(),
+                                           "what": f"${h['value']/1e6:,.0f}M stake ({h.get('change', '').lower()})",
+                                           "basis": f"its 13F, quarter ended {rep.get('period')}", "source": "13F"})
+        # competitors: watchlist peers in the same SEC industry
+        try:
+            wl = [t for t in parse_tickers(tickers_path)["all"] if registry.get(t) is None]
+        except Exception:  # noqa: BLE001
+            wl = []
+        sics, ciks = {}, {}
+        for t in wl:
+            h = SEC.annual_history(t, cache_dir, offline=True)
+            if h and h.get("sic"):
+                sics[t] = h["sic"]
+            c = SEC.cik_for(t, cache_dir, offline=True)
+            if c:
+                ciks[c] = t
+        if hist.get("sic"):
+            sics[tk] = hist["sic"]
+        members, pre = group_of(tk, sics)
+        out["competitors"] = [{"ticker": t, "name": t, "what": f"Same industry ({hist.get('sic_desc') or pre})",
+                               "basis": "SEC industry code", "source": "peers"} for t in members if t != tk][:10]
+        try:
+            ciks.pop(cik, None)
+            out["mentions"] = G.filing_mentions(name, ciks, cache_dir)
+        except Exception:  # noqa: BLE001
+            out["mentions"] = []
+        # fill in names for watchlist tickers
+        for grp in out.values():
+            for n in grp:
+                t2 = n.get("ticker")
+                if t2 and (n.get("name") in (None, "", t2)):
+                    s2 = _load_cached(cache_dir, t2) if cache_dir else None
+                    n["name"] = (s2.snapshot.name if s2 and s2.snapshot and s2.snapshot.name else t2)
+                n["on_watchlist"] = bool(t2 and t2 in wl)
+        res = {"ok": True, "ticker": tk, "name": name, "sector": snap.sector if snap else None, **out}
+        _GRAPH[tk] = (_t.time(), res)
+        return jsonify(res)
 
     @app.get("/api/funds")
     def funds_api():
