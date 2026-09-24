@@ -27,14 +27,32 @@ def has_fmp() -> bool:
     return bool(_key())
 
 
+# FMP is the primary source; Yahoo is the backup. When FMP says the daily quota is
+# spent (HTTP 429) there is no point asking it again on every call, so it sits out
+# a cooldown and every caller falls straight through to its Yahoo fallback. After
+# the cooldown one request re-probes (quota may have reset); a 429 re-arms it.
+QUOTA_COOLDOWN = 1800.0
+_exhausted_until = 0.0
+
+
+def quota_exhausted() -> bool:
+    import time
+    return time.time() < _exhausted_until
+
+
 def _get(path: str, **params):
+    global _exhausted_until
     key = _key()
-    if not key:
+    if not key or quota_exhausted():
         return None
     params["apikey"] = key
     try:
         import requests
+        import time
         r = requests.get(_BASE + path, params=params, timeout=15)
+        if r.status_code == 429:
+            _exhausted_until = time.time() + QUOTA_COOLDOWN
+            return None
         if r.status_code != 200:
             return None
         return r.json()

@@ -34,12 +34,33 @@ def _fetch_quotes(query: str) -> list[dict]:
     return []
 
 
+# Symbol search backs the add box's type-ahead, which fires on nearly every
+# keystroke - uncached, that alone can spend the FMP daily quota. Results change
+# slowly, so remember each query for an hour (bounded).
+_CACHE: dict[tuple[str, int], tuple[float, list[dict]]] = {}
+_CACHE_TTL = 3600.0
+_CACHE_MAX = 500
+
+
 def search_symbols(query: str, limit: int = 8) -> list[dict]:
     """Return [{symbol, name, type, exchange}] matching ``query``, best first."""
+    import time
     query = (query or "").strip()
     if len(query) < 1:
         return []
+    key = (query.upper(), limit)
+    hit = _CACHE.get(key)
+    if hit and time.time() - hit[0] < _CACHE_TTL:
+        return [dict(r) for r in hit[1]]
+    out = _search_uncached(query, limit)
+    if out:                                   # never cache an outage's empty result
+        if len(_CACHE) >= _CACHE_MAX:
+            _CACHE.clear()
+        _CACHE[key] = (time.time(), [dict(r) for r in out])
+    return out
 
+
+def _search_uncached(query: str, limit: int) -> list[dict]:
     from . import fmp
     results = fmp.search(query, limit=max(limit, 12)) if fmp.has_fmp() else None
 
