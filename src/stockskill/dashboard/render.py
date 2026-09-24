@@ -75,29 +75,80 @@ def _tile(label: str, value_str: str, tone: str = "") -> str:
     )
 
 
-_CSS = """
-:root{
-  --bg:#f6f7f9; --surface:#ffffff; --surface-2:#eef1f4; --border:#dfe3e8;
-  --ink:#1a1d21; --muted:#6b7280; --up:#0f8a5f; --down:#d1495b; --accent:#3b6ea5;
-  --good:#0f8a5f; --warn:#c98a00; --crit:#c0392b; --axis:#c3c9d0;
+# ---- icons -------------------------------------------------------------------
+# A small drawn set (Tabler Icons paths, MIT) so UI affordances never fall back to
+# emoji or unicode glyphs. One stroke weight everywhere; inherits currentColor.
+_ICON_PATHS = {
+    "x": '<path d="M18 6l-12 12"/><path d="M6 6l12 12"/>',
+    "search": '<circle cx="10" cy="10" r="7"/><path d="M21 21l-6-6"/>',
+    "plus": '<path d="M12 5v14"/><path d="M5 12h14"/>',
+    "arrow-up-right": '<path d="M17 7l-10 10"/><path d="M8 7h9v9"/>',
+    "arrow-left": '<path d="M5 12h14"/><path d="M5 12l6 6"/><path d="M5 12l6-6"/>',
+    "chevron-right": '<path d="M9 6l6 6-6 6"/>',
+    "theme": '<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none"/>',
 }
-@media (prefers-color-scheme:dark){
-  :root{
-    --bg:#0f1215; --surface:#171b20; --surface-2:#1e242b; --border:#2a3138;
-    --ink:#e8eaed; --muted:#9aa4af; --up:#3ecf8e; --down:#f2748a; --accent:#6ea8dc;
-    --good:#3ecf8e; --warn:#e0b74a; --crit:#f2748a; --axis:#3a424b;
-  }
-}
+
+
+def icon(name: str, size: int = 16) -> str:
+    """Inline SVG icon (decorative: hidden from assistive tech; label the control)."""
+    return (f'<svg class="ic" width="{size}" height="{size}" viewBox="0 0 24 24" fill="none" '
+            f'stroke="currentColor" stroke-width="1.9" stroke-linecap="round" '
+            f'stroke-linejoin="round" aria-hidden="true">{_ICON_PATHS[name]}</svg>')
+
+
+# ---- shared design system ---------------------------------------------------
+# One cool-neutral family, one accent (interactive/selection only), semantic
+# up/down/warn. Every text/background pair is checked to >=4.5:1 in both themes.
+# Themes: OS preference by default; the board's toggle stores `wl_theme`, which
+# _THEME_BOOT applies on every page (before paint, so there is no flash).
+_LIGHT_TOKENS = """color-scheme:light;
+  --bg:#f6f7f9; --surface:#ffffff; --surface-2:#f1f3f6; --surface-3:#e7eaef;
+  --border:#e1e4e9; --border-strong:#cdd2da;
+  --ink:#15181d; --ink-2:#3a414b; --muted:#5d6672;
+  --up:#0b7d52; --down:#cc3548; --accent:#2f66c8; --accent-ink:#ffffff;
+  --good:#0b7d52; --warn:#946100; --crit:#cc3548; --axis:#c5cbd3;
+  --shadow-pop:0 12px 32px -10px rgba(16,24,40,.22),0 2px 6px -2px rgba(16,24,40,.08);
+  --shadow-modal:0 28px 70px -18px rgba(16,24,40,.35);"""
+_DARK_TOKENS = """color-scheme:dark;
+  --bg:#0b0d10; --surface:#121519; --surface-2:#181c21; --surface-3:#20252c;
+  --border:#232830; --border-strong:#303741;
+  --ink:#e7e9ec; --ink-2:#b9c0c9; --muted:#8b94a1;
+  --up:#3cc48f; --down:#ef6674; --accent:#6b9ff0; --accent-ink:#0b0d10;
+  --good:#3cc48f; --warn:#e2b54f; --crit:#ef6674; --axis:#343b45;
+  --shadow-pop:0 14px 36px -10px rgba(0,0,0,.62);
+  --shadow-modal:0 30px 80px -20px rgba(0,0,0,.78);"""
+_THEME_BOOT = ("<script>try{var t=localStorage.getItem('wl_theme');"
+               "if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>")
+
+_CSS = ("@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400..700"
+        "&family=Geist+Mono:wght@400..600&display=swap');\n"
+        ":root{" + _LIGHT_TOKENS + """
+  --r-sm:6px; --r:8px; --r-lg:12px; --r-xl:16px;
+  --ease-out:cubic-bezier(.22,1,.36,1);
+  --font:"Geist",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  --font-mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,monospace;}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){""" + _DARK_TOKENS + """}}
+:root[data-theme="dark"]{""" + _DARK_TOKENS + """}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);
-  font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+html{scrollbar-color:var(--border-strong) transparent;accent-color:var(--accent)}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 var(--font);
+  font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+::selection{background:color-mix(in srgb,var(--accent) 30%,transparent);color:var(--ink)}
+input,textarea,select,button{font:inherit;color:inherit}
+input,textarea{caret-color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:var(--r-sm)}
+a{color:var(--accent);text-underline-offset:3px}
+button{-webkit-tap-highlight-color:transparent}
+.ic{display:inline-block;vertical-align:-.18em;flex:0 0 auto}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;
+  animation-iteration-count:1!important;transition-duration:.01ms!important}}
 .wrap{max-width:1180px;margin:0 auto;padding:20px}
 header{display:flex;flex-wrap:wrap;align-items:baseline;gap:12px;margin-bottom:4px}
-h1{font-size:20px;margin:0;font-weight:650}
-.status{font-weight:700;font-size:12px;letter-spacing:.04em;padding:3px 9px;
-  border-radius:999px;border:1px solid var(--border)}
-.status.open{color:#fff;background:var(--good);border-color:transparent}
-.status.pre-market,.status.after-hours{color:var(--warn);border-color:var(--warn)}
+h1{font-size:20px;margin:0;font-weight:600;letter-spacing:-.012em}
+.status{font-weight:600;font-size:11.5px;letter-spacing:.02em;padding:3px 9px;
+  border-radius:999px;border:1px solid var(--border);color:var(--muted)}
+.status.open{color:var(--good);background:color-mix(in srgb,var(--good) 14%,transparent);border-color:transparent}
+.status.pre-market,.status.after-hours{color:var(--warn);background:color-mix(in srgb,var(--warn) 12%,transparent);border-color:transparent}
 .status.closed,.status.weekend{color:var(--muted)}
 .sub{color:var(--muted);font-size:12.5px;margin:2px 0 18px}
 .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
@@ -138,7 +189,7 @@ h1{font-size:20px;margin:0;font-weight:650}
   background:var(--surface);border:1px solid var(--border);border-radius:10px;
   font-size:12.5px;font-variant-numeric:tabular-nums}
 .marketbar .mq b{color:var(--muted);font-weight:600;font-size:11px;margin-right:3px}
-"""
+""")
 
 
 def render_dashboard(*, status, updated_et: str, updated_local: str,

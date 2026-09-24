@@ -12,7 +12,7 @@ from __future__ import annotations
 import html as _html
 import os
 
-from ..dashboard.render import _CSS
+from ..dashboard.render import _CSS, _THEME_BOOT, icon
 from ..watchlist.render import _CSS_EXTRA, _pct, _SIG_CLASS
 from ..trade.setup import atr_trade_setup, position_size
 from ..trade.sizing import (win_prob_barrier, kelly_risk_fraction,
@@ -20,30 +20,42 @@ from ..trade.sizing import (win_prob_barrier, kelly_risk_fraction,
 from ..regime import tsmom, dzz_rule, stop_study, voc_timing
 
 _ANALYSIS_CSS = """
-body{font-size:15px}
-.wrap{max-width:min(1120px,100%);padding:20px clamp(16px,3vw,40px)}
-.a-head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin:4px 0 2px}
-.a-head h1{margin:0;font-size:26px}
-.a-price{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;margin-left:auto}
-.a-ext{font-size:13px;color:var(--muted);margin:0 0 6px}
-.agrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:16px;margin-top:12px;align-items:start}
-.asec{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 22px}
-.a-h{font-size:16px;font-weight:700;margin:0 0 10px;display:flex;align-items:center;gap:8px}
-.a-h .stance{font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px}
-.a-h .stance.pos{background:var(--good);color:#fff}.a-h .stance.neg{background:var(--crit);color:#fff}
-.a-h .stance.midtone{color:var(--muted);border:1px solid var(--border)}
-.a-row{display:flex;justify-content:space-between;gap:12px;font-size:14.5px;padding:6px 0;border-top:1px solid var(--border);font-variant-numeric:tabular-nums}
+body{font-size:14.5px}
+.wrap{max-width:min(1080px,100%);padding:22px clamp(16px,3vw,40px) 28px}
+.a-back{display:inline-flex;align-items:center;gap:6px;color:var(--muted);text-decoration:none;
+  font-size:13px;font-weight:500;margin-bottom:14px;transition:color .15s var(--ease-out)}
+.a-back:hover{color:var(--ink)}
+.a-head{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;padding-bottom:18px;
+  border-bottom:1px solid var(--border)}
+.a-id{display:flex;flex-direction:column;gap:4px;min-width:0}
+.a-id-top{display:flex;align-items:center;gap:10px}
+.a-head h1{margin:0;font-size:30px;font-family:var(--font-mono);font-weight:600;letter-spacing:-.02em}
+.a-head .nm{font-size:14px}
+.a-pricebox{margin-left:auto;text-align:right}
+.a-price{font-size:30px;font-weight:600;letter-spacing:-.02em;line-height:1.1}
+.a-price .chg{font-size:15px;font-weight:500;margin-left:4px}
+.a-ext{font-size:12.5px;color:var(--muted);margin-top:3px}
+.agroup{margin-top:30px}
+.agroup>h2{font-size:17px;font-weight:600;letter-spacing:-.01em;margin:0 0 12px}
+.agroup>h2 small{font-size:12.5px;font-weight:400;color:var(--muted);margin-left:8px}
+.agrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(440px,100%),1fr));gap:14px;align-items:start}
+.asec{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px 18px}
+.a-h{font-size:14.5px;font-weight:600;margin:0 0 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.a-h .stance{margin-left:0}
+.a-row{display:flex;justify-content:space-between;align-items:baseline;gap:16px;font-size:13.5px;
+  padding:6px 0;border-top:1px solid var(--border)}
 .a-row:first-of-type{border-top:none}
-.a-row b{color:var(--ink)}
-.a-read{font-size:13px;color:var(--muted);line-height:1.5;margin-top:10px;padding-top:9px;border-top:1px dashed var(--border)}
-.fvtab{width:100%;font-size:14.5px;border-collapse:collapse;margin-top:2px}
+.a-row span{color:var(--ink-2)}
+.a-row b{color:var(--ink);font-weight:600;text-align:right;text-wrap:balance}
+.a-read{font-size:12.5px;color:var(--muted);line-height:1.55;margin-top:10px;padding-top:10px;
+  border-top:1px solid var(--border);max-width:68ch;text-wrap:pretty}
+.fvtab{width:100%;font-size:13.5px;border-collapse:collapse;margin-top:2px}
 .fvtab td{padding:6px 4px;border-top:1px solid var(--border)}.fvtab tr:first-child td{border-top:none}
-.a-help{color:var(--muted);text-decoration:none;font-weight:700;font-size:13px;margin-left:auto}
-.a-help:hover{color:var(--accent)}
-.a-back{display:inline-block;margin:14px 0;color:var(--muted);text-decoration:none;font-size:14px}
-.a-back:hover{color:var(--ink);text-decoration:underline}
-.a-note{color:var(--muted);font-size:12.5px;margin-top:16px;line-height:1.5}
-.a-foot{color:var(--muted);font-size:12px;text-align:center;margin:26px 0 6px;padding-top:14px;border-top:1px solid var(--border)}
+.a-note{color:var(--muted);font-size:12.5px;margin-top:26px;line-height:1.55}
+.a-help{color:var(--accent);text-decoration:none;font-weight:500}
+.a-help:hover{text-decoration:underline}
+.a-foot{color:var(--muted);font-size:12px;text-align:center;margin:22px 0 4px;padding-top:14px;
+  border-top:1px solid var(--border)}
 .up{color:var(--up)}.down{color:var(--down)}.muted{color:var(--muted)}
 """
 
@@ -89,7 +101,7 @@ def _valuation_box(r):
     reco = c.get("reco")
     if reco and reco != "n/a":
         tvp = c.get("target_vs_price")
-        tv = f' &middot; target {_pctpair(tvp)}' if tvp is not None else ""
+        tv = f', target {_pctpair(tvp)}' if tvp is not None else ""
         rows += _r("Analyst consensus", f"{_html.escape(reco)}{tv}")
     read = ("Fair value from a two-stage discounted cash flow, shown as a bear / base / "
             "bull range. Above the price is cheap, below is expensive; the reverse-DCF "
@@ -126,7 +138,7 @@ def _trade_box(r):
     s = atr_trade_setup(r.price, r.atr, d)
     if not s:
         return ""
-    rows = (_r("Direction", f"{d} &middot; {s.rr_ratio:.0f}:1 reward/risk") +
+    rows = (_r("Direction", f"{d.capitalize()}, {s.rr_ratio:.0f}:1 reward/risk") +
             _r("Entry", f"${s.entry:,.2f}") +
             _r("Stop", f"${s.stop:,.2f} (-{s.risk_pct*100:.1f}%)", "down") +
             _r("Target", f"${s.target:,.2f} (+{s.reward_pct*100:.1f}%)", "up"))
@@ -167,7 +179,7 @@ def _sizing_box(r):
             if pl.voltarget_dollars:
                 dollars.append(f"vol ${pl.voltarget_dollars:,.0f}")
             if dollars:
-                rows += _r("Position ($)", " &middot; ".join(dollars))
+                rows += _r("Position ($)", ", ".join(dollars))
         except ValueError:
             pass
     read = ("Three ways to size the trade. Kelly bets bigger when the edge (win probability) "
@@ -277,24 +289,37 @@ def analysis_html(row, closes=None, refresh_seconds: int = 900) -> str:
         lbl = "Pre-market" if st.startswith("PRE") else "After hours"
         ext = f'<div class="a-ext">{lbl} ${row.ext_price:,.2f} {_pctpair(row.ext_change)}</div>'
 
-    boxes = "".join([
-        _valuation_box(row), _mc_box(row), _trade_box(row), _sizing_box(row),
-        _momentum_box(closes), _volume_box(row), _regime_box(closes),
-        _stops_box(closes), _voc_box(closes),
-    ])
+    def group(title, note, *boxes):
+        inner = "".join(b for b in boxes if b)
+        if not inner:
+            return ""
+        sub = f"<small>{note}</small>" if note else ""
+        return f'<section class="agroup"><h2>{title}{sub}</h2><div class="agrid">{inner}</div></section>'
+
+    # Grouped by the question each answers, most decision-relevant first, so the
+    # experimental model no longer carries the same weight as the valuation.
+    sections = (
+        group("Valuation", "what the business is worth", _valuation_box(row), _mc_box(row))
+        + group("Trade plan", "entry, exits and size", _trade_box(row), _sizing_box(row))
+        + group("Trend and flow", "is the move backed?", _momentum_box(closes),
+                _volume_box(row), _regime_box(closes), _stops_box(closes))
+        + group("Experimental", "", _voc_box(closes))
+    )
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{tk} analysis</title><style>{_CSS}{_CSS_EXTRA}{_ANALYSIS_CSS}</style></head>
+<title>{tk} analysis</title>{_THEME_BOOT}<style>{_CSS}{_CSS_EXTRA}{_ANALYSIS_CSS}</style></head>
 <body><div class="wrap">
-<div class="a-head"><h1>{tk}</h1><span class="nm">{name}</span>
-  <span class="badge {sig_cls}">{_html.escape(row.signal)}</span>
-  <span class="a-price">{price} <span class="{dcls}" style="font-size:16px">{dtxt}</span></span></div>
-{ext}
-<a class="a-back" href="/" onclick="return goBack(event)">&larr; back to board</a>
-<div class="agrid">{boxes}</div>
+<a class="a-back" href="/" onclick="return goBack(event)">{icon("arrow-left", 15)}Back to board</a>
+<header class="a-head">
+  <div class="a-id"><div class="a-id-top"><h1>{tk}</h1>
+    <span class="badge {sig_cls}">{_html.escape(row.signal)}</span></div>
+    <span class="nm">{name}</span></div>
+  <div class="a-pricebox"><div class="a-price">{price}<span class="chg {dcls}">{dtxt}</span></div>{ext}</div>
+</header>
+<div class="asections">{sections}</div>
 <p class="a-note">Analysis, not advice. Every figure is a model estimate on free,
 possibly delayed data; the decision is yours.
-<a class="a-help" style="margin:0" href="/interpret" onclick="return openHelp(event)">Full guide &rarr;</a></p>
+<a class="a-help" href="/interpret" onclick="return openHelp(event)">Read the full guide</a></p>
 <div class="a-foot">2026 SMI Investments. All rights reserved.</div>
 </div>
 <script>
@@ -307,7 +332,7 @@ let _busy=false;
 function refresh(){{ if(_busy) return; _busy=true;
   fetch(location.pathname,{{cache:'no-store'}}).then(r=>r.text()).then(t=>{{
     const d=new DOMParser().parseFromString(t,'text/html');
-    ['.agrid','.a-price','.a-ext'].forEach(function(sel){{
+    ['.asections','.a-price','.a-ext'].forEach(function(sel){{
       const n=d.querySelector(sel), o=document.querySelector(sel);
       if(n&&o){{ o.innerHTML=n.innerHTML; }} }});
     const nb=d.querySelector('.a-head .badge'), ob=document.querySelector('.a-head .badge');

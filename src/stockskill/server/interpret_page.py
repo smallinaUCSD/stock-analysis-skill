@@ -8,32 +8,32 @@ just prose; the tested engines produce the numbers elsewhere.
 
 from __future__ import annotations
 
-from ..dashboard.render import _CSS
+from ..dashboard.render import _CSS, _THEME_BOOT
 
 _INTERPRET_CSS = """
 .wrap{max-width:min(900px,100%);padding:22px clamp(16px,3vw,40px)}
-header h1{margin:0 0 4px;font-size:26px}
+header h1{margin:0 0 4px;font-size:26px;letter-spacing:-.015em}
 header .sub{color:var(--muted);font-size:14px;margin:0}
 .toc{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 8px}
-.toc a{font-size:13px;padding:5px 11px;border-radius:999px;text-decoration:none;
-  background:var(--surface-2);border:1px solid var(--border);color:var(--ink)}
-.toc a:hover{border-color:var(--accent);color:var(--accent)}
-.guide{background:var(--surface);border:1px solid var(--border);border-radius:14px;
-  padding:20px 24px;margin:14px 0;scroll-margin-top:12px}
-.guide h2{margin:0 0 4px;font-size:19px}
-.guide .lede{color:var(--muted);font-size:14.5px;margin:0 0 12px;font-style:italic}
-.guide h3{font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--accent);
-  margin:16px 0 5px}
-.guide p{font-size:15px;line-height:1.62;margin:6px 0}
+.toc a{display:inline-flex;align-items:center;height:28px;font-size:13px;font-weight:500;padding:0 12px;
+  border-radius:999px;text-decoration:none;background:transparent;border:1px solid var(--border);
+  color:var(--ink-2);transition:background-color .15s var(--ease-out),border-color .15s var(--ease-out),color .15s var(--ease-out)}
+.toc a:hover{background:var(--surface-2);border-color:var(--border-strong);color:var(--ink)}
+.guide{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
+  padding:22px 26px;margin:14px 0;scroll-margin-top:16px}
+.guide h2{margin:0 0 4px;font-size:20px;font-weight:600;letter-spacing:-.01em}
+.guide .lede{color:var(--muted);font-size:14.5px;margin:0 0 14px}
+.guide h3{font-size:14.5px;font-weight:600;color:var(--ink);margin:18px 0 4px}
+.guide p{font-size:15px;line-height:1.62;margin:6px 0;font-variant-numeric:normal}
 .guide ul{font-size:15px;line-height:1.55;margin:6px 0 6px 2px;padding-left:18px}
 .guide li{margin:5px 0}
 .guide b{color:var(--ink)}
-.ex{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;
+.ex{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r);
   padding:10px 14px;margin:8px 0;font-size:14.5px;line-height:1.55}
-.ex .tag{font-weight:700}.ex .a{color:var(--up)}.ex .b{color:var(--down)}
+.ex .tag{font-weight:600}.ex .a{color:var(--up)}.ex .b{color:var(--down)}
 .arrow-key{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0}
 .arrow-key div{font-size:14px;background:var(--surface-2);border:1px solid var(--border);
-  border-radius:8px;padding:6px 10px}
+  border-radius:var(--r);padding:6px 10px}
 .arrow-key .u{color:var(--up)}.arrow-key .d{color:var(--down)}.arrow-key .m{color:var(--muted)}
 .h-back{display:inline-block;margin:12px 0;color:var(--muted);text-decoration:none;font-size:14px}
 .h-back:hover{color:var(--ink);text-decoration:underline}
@@ -333,7 +333,7 @@ def interpret_html() -> str:
     back = '<a class="h-back" href="/" onclick="return goBack(event)">&larr; back to board</a>'
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>How to read the dashboard</title><style>{_CSS}{_INTERPRET_CSS}</style></head>
+<title>How to read the dashboard</title>{_THEME_BOOT}<style>{_CSS}{_INTERPRET_CSS}</style></head>
 <body><div class="wrap">
 <header><h1>How to read the dashboard</h1>
 <p class="sub">A plain-language guide to the numbers on each card, with worked examples. Analysis, not advice.</p></header>

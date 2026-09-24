@@ -126,7 +126,9 @@ def test_factor_chip_and_cell_render():
     r = SimpleNamespace(factor={"label": "cheap · high quality", "composite": 83,
                                 "value": 90, "quality": 78, "momentum": 40})
     chip = _factor_chip(r)
-    assert "cheap · high quality" in chip and "factor 83" in chip
+    # score first as its own colored figure, then the read in plain punctuation
+    assert '<span class="fscore up">83</span>Cheap, high quality' in chip
+    assert "·" not in chip
     cell = _factor_cell(r)
     assert 'data-sort="83"' in cell and ">83<" in cell
     # a 2-line read lives inside a fixed-height slot (keeps cards aligned)

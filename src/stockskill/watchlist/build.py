@@ -72,7 +72,7 @@ _MACRO_INDICATORS = [("^VIX", "VIX (CBOE)"), ("^VVIX", "VVIX (vol of vol)"),
 
 def _fmt_macro(ticker: str, value: float | None) -> str:
     if value is None:
-        return "—"
+        return "n/a"
     if ticker == "^TNX":                       # CBOE 10Y yield index (yield×10)
         return f"{(value / 10 if value > 20 else value):.2f}%"
     return f"{value:,.1f}"

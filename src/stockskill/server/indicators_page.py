@@ -9,19 +9,19 @@ from __future__ import annotations
 
 import html
 
-from ..dashboard.render import _CSS
+from ..dashboard.render import _CSS, _THEME_BOOT, icon
 
 
 def indicators_html(initial: str = "") -> str:
     init = html.escape(initial.upper())
     return ("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
             "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
-            "<title>Technical indicators</title><style>" + _CSS + _EXTRA_CSS +
+            "<title>Technical indicators</title>" + _THEME_BOOT + "<style>" + _CSS + _EXTRA_CSS +
             "</style></head><body><div class=\"wrap\">"
             "<header><h1>Technical indicators</h1>"
-            "<span class=\"sub\" style=\"margin:0\">Bollinger · Ichimoku · RSI · Stochastic · MACD · ADX · ATR · OBV</span>"
+            "<span class=\"sub\" style=\"margin:0\">Bollinger, Ichimoku, RSI, Stochastic, MACD, ADX, ATR and OBV</span>"
             "<button class=\"h-close\" onclick=\"window.close()\" title=\"Close tab\" "
-            "style=\"margin-left:auto\">✕</button></header>"
+            "style=\"margin-left:auto\" aria-label=\"Close tab\">" + icon("x", 17) + "</button></header>"
             "<p style=\"font-size:12px;margin:-6px 0 12px\">"
             "<a class=\"h-back\" href=\"/\" onclick=\"return goBack(event)\">← back to watchlist</a></p>"
             + _CONTROLS +
