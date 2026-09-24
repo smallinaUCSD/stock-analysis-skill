@@ -97,54 +97,59 @@ def icon(name: str, size: int = 16) -> str:
 
 
 # ---- shared design system ---------------------------------------------------
-# One cool-neutral family, one accent (interactive/selection only), semantic
-# up/down/warn. Every text/background pair is checked to >=4.5:1 in both themes.
-# Themes: OS preference by default; the board's toggle stores `wl_theme`, which
-# _THEME_BOOT applies on every page (before paint, so there is no flash).
+# Follows DESIGN.md (Claude design language): warm cream canvas, coral accent,
+# serif display headings, humanist sans body, JetBrains Mono for tickers/codes.
+# Values are DESIGN.md's; where a pair fell under 4.5:1 it is nudged darker within
+# the same family (muted text, link coral, and the up/down/warn text colors on
+# cream). Dark theme uses DESIGN.md's warm dark product surfaces.
 _LIGHT_TOKENS = """color-scheme:light;
-  --bg:#f6f7f9; --surface:#ffffff; --surface-2:#f1f3f6; --surface-3:#e7eaef;
-  --border:#e1e4e9; --border-strong:#cdd2da;
-  --ink:#15181d; --ink-2:#3a414b; --muted:#5d6672;
-  --up:#0b7d52; --down:#cc3548; --accent:#2f66c8; --accent-ink:#ffffff;
-  --good:#0b7d52; --warn:#946100; --crit:#cc3548; --axis:#c5cbd3;
-  --shadow-pop:0 12px 32px -10px rgba(16,24,40,.22),0 2px 6px -2px rgba(16,24,40,.08);
-  --shadow-modal:0 28px 70px -18px rgba(16,24,40,.35);"""
+  --bg:#faf9f5; --surface:#f5f0e8; --surface-2:#efe9de; --surface-3:#e8e0d2;
+  --border:#e6dfd8; --border-strong:#d6cdbf;
+  --ink:#141413; --ink-2:#3d3d3a; --muted:#66645e;
+  --up:#2a7148; --down:#b83c3c; --good:#2a7148; --warn:#7d6000; --crit:#b83c3c; --axis:#d6cdbf;
+  --accent:#cc785c; --accent-press:#a9583e; --accent-ink:#ffffff; --link:#a9583e;
+  --band:#181715; --on-band:#faf9f5; --on-band-soft:#a09d96;
+  --shadow-pop:0 1px 3px rgba(20,20,19,.08),0 14px 30px -14px rgba(20,20,19,.20);
+  --shadow-modal:0 26px 64px -22px rgba(20,20,19,.32);"""
 _DARK_TOKENS = """color-scheme:dark;
-  --bg:#0b0d10; --surface:#121519; --surface-2:#181c21; --surface-3:#20252c;
-  --border:#232830; --border-strong:#303741;
-  --ink:#e7e9ec; --ink-2:#b9c0c9; --muted:#8b94a1;
-  --up:#3cc48f; --down:#ef6674; --accent:#6b9ff0; --accent-ink:#0b0d10;
-  --good:#3cc48f; --warn:#e2b54f; --crit:#ef6674; --axis:#343b45;
-  --shadow-pop:0 14px 36px -10px rgba(0,0,0,.62);
-  --shadow-modal:0 30px 80px -20px rgba(0,0,0,.78);"""
+  --bg:#181715; --surface:#1f1e1b; --surface-2:#252320; --surface-3:#2e2c28;
+  --border:#302e2a; --border-strong:#3e3b36;
+  --ink:#faf9f5; --ink-2:#d3d0c8; --muted:#a09d96;
+  --up:#5db872; --down:#e0736a; --good:#5db872; --warn:#e0b34a; --crit:#e0736a; --axis:#3e3b36;
+  --accent:#cc785c; --accent-press:#a9583e; --accent-ink:#ffffff; --link:#cc785c;
+  --band:#131210; --on-band:#faf9f5; --on-band-soft:#a09d96;
+  --shadow-pop:0 14px 34px -12px rgba(0,0,0,.6);
+  --shadow-modal:0 30px 72px -20px rgba(0,0,0,.72);"""
 _THEME_BOOT = ("<script>try{var t=localStorage.getItem('wl_theme');"
                "if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>")
 
-_CSS = ("@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400..700"
-        "&family=Geist+Mono:wght@400..600&display=swap');\n"
+_CSS = ("@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600"
+        "&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap');\n"
         ":root{" + _LIGHT_TOKENS + """
   --r-sm:6px; --r:8px; --r-lg:12px; --r-xl:16px;
   --ease-out:cubic-bezier(.22,1,.36,1);
-  --font:"Geist",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-  --font-mono:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,monospace;}
+  --font:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  --font-display:"Cormorant Garamond","Tiempos Headline",Garamond,"Times New Roman",serif;
+  --font-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){""" + _DARK_TOKENS + """}}
 :root[data-theme="dark"]{""" + _DARK_TOKENS + """}
 *{box-sizing:border-box}
 html{scrollbar-color:var(--border-strong) transparent;accent-color:var(--accent)}
 body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 var(--font);
   font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
-::selection{background:color-mix(in srgb,var(--accent) 30%,transparent);color:var(--ink)}
+::selection{background:color-mix(in srgb,var(--accent) 28%,transparent);color:var(--ink)}
 input,textarea,select,button{font:inherit;color:inherit}
 input,textarea{caret-color:var(--accent)}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:var(--r-sm)}
-a{color:var(--accent);text-underline-offset:3px}
+a{color:var(--link);text-underline-offset:3px}
 button{-webkit-tap-highlight-color:transparent}
 .ic{display:inline-block;vertical-align:-.18em;flex:0 0 auto}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;
   animation-iteration-count:1!important;transition-duration:.01ms!important}}
 .wrap{max-width:1180px;margin:0 auto;padding:20px}
 header{display:flex;flex-wrap:wrap;align-items:baseline;gap:12px;margin-bottom:4px}
-h1{font-size:20px;margin:0;font-weight:600;letter-spacing:-.012em}
+h1,h2.display{font-family:var(--font-display);font-weight:500;letter-spacing:-.02em;line-height:1.1}
+h1{font-size:30px;margin:0}
 .status{font-weight:600;font-size:11.5px;letter-spacing:.02em;padding:3px 9px;
   border-radius:999px;border:1px solid var(--border);color:var(--muted)}
 .status.open{color:var(--good);background:color-mix(in srgb,var(--good) 14%,transparent);border-color:transparent}

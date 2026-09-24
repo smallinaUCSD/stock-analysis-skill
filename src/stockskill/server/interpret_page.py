@@ -12,7 +12,7 @@ from ..dashboard.render import _CSS, _THEME_BOOT
 
 _INTERPRET_CSS = """
 .wrap{max-width:min(900px,100%);padding:22px clamp(16px,3vw,40px)}
-header h1{margin:0 0 4px;font-size:26px;letter-spacing:-.015em}
+header h1{margin:0 0 6px;font-size:46px}
 header .sub{color:var(--muted);font-size:14px;margin:0}
 .toc{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 8px}
 .toc a{display:inline-flex;align-items:center;height:28px;font-size:13px;font-weight:500;padding:0 12px;
@@ -21,10 +21,10 @@ header .sub{color:var(--muted);font-size:14px;margin:0}
 .toc a:hover{background:var(--surface-2);border-color:var(--border-strong);color:var(--ink)}
 .guide{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
   padding:22px 26px;margin:14px 0;scroll-margin-top:16px}
-.guide h2{margin:0 0 4px;font-size:20px;font-weight:600;letter-spacing:-.01em}
+.guide h2{margin:0 0 6px;font-family:var(--font-display);font-size:30px;font-weight:500;letter-spacing:-.02em;line-height:1.15}
 .guide .lede{color:var(--muted);font-size:14.5px;margin:0 0 14px}
-.guide h3{font-size:14.5px;font-weight:600;color:var(--ink);margin:18px 0 4px}
-.guide p{font-size:15px;line-height:1.62;margin:6px 0;font-variant-numeric:normal}
+.guide h3{font-size:15px;font-weight:600;color:var(--ink);margin:20px 0 4px}
+.guide p{font-size:16px;line-height:1.6;margin:6px 0;font-variant-numeric:normal;color:var(--ink-2)}
 .guide ul{font-size:15px;line-height:1.55;margin:6px 0 6px 2px;padding-left:18px}
 .guide li{margin:5px 0}
 .guide b{color:var(--ink)}
@@ -37,8 +37,8 @@ header .sub{color:var(--muted);font-size:14px;margin:0}
 .arrow-key .u{color:var(--up)}.arrow-key .d{color:var(--down)}.arrow-key .m{color:var(--muted)}
 .h-back{display:inline-block;margin:12px 0;color:var(--muted);text-decoration:none;font-size:14px}
 .h-back:hover{color:var(--ink);text-decoration:underline}
-.foot{color:var(--muted);font-size:12px;text-align:center;margin:26px 0 6px;
-  padding-top:14px;border-top:1px solid var(--border)}
+.foot{color:var(--on-band-soft);background:var(--band);font-size:12.5px;text-align:center;
+  margin:26px 0 4px;padding:22px 16px;border-radius:var(--r-lg)}
 .disc{color:var(--muted);font-size:12.5px;line-height:1.5;margin-top:14px}
 """
 

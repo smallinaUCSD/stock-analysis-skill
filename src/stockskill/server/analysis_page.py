@@ -25,22 +25,23 @@ body{font-size:14.5px}
 .a-back{display:inline-flex;align-items:center;gap:6px;color:var(--muted);text-decoration:none;
   font-size:13px;font-weight:500;margin-bottom:14px;transition:color .15s var(--ease-out)}
 .a-back:hover{color:var(--ink)}
+.a-tk{font-family:var(--font-mono);font-size:14px;font-weight:600;color:var(--ink-2)}
 .a-head{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;padding-bottom:18px;
   border-bottom:1px solid var(--border)}
 .a-id{display:flex;flex-direction:column;gap:4px;min-width:0}
 .a-id-top{display:flex;align-items:center;gap:10px}
-.a-head h1{margin:0;font-size:30px;font-family:var(--font-mono);font-weight:600;letter-spacing:-.02em}
-.a-head .nm{font-size:14px}
+.a-head h1{margin:2px 0 0;font-size:44px}
 .a-pricebox{margin-left:auto;text-align:right}
-.a-price{font-size:30px;font-weight:600;letter-spacing:-.02em;line-height:1.1}
+.a-price{font-size:32px;font-weight:500;letter-spacing:-.02em;line-height:1.1}
 .a-price .chg{font-size:15px;font-weight:500;margin-left:4px}
 .a-ext{font-size:12.5px;color:var(--muted);margin-top:3px}
-.agroup{margin-top:30px}
-.agroup>h2{font-size:17px;font-weight:600;letter-spacing:-.01em;margin:0 0 12px}
-.agroup>h2 small{font-size:12.5px;font-weight:400;color:var(--muted);margin-left:8px}
+.agroup{margin-top:40px}
+.agroup>h2{font-family:var(--font-display);font-size:30px;font-weight:500;letter-spacing:-.02em;
+  line-height:1.15;margin:0 0 14px}
+.agroup>h2 small{font-family:var(--font);font-size:13px;font-weight:400;letter-spacing:0;color:var(--muted);margin-left:10px}
 .agrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(440px,100%),1fr));gap:14px;align-items:start}
-.asec{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px 18px}
-.a-h{font-size:14.5px;font-weight:600;margin:0 0 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.asec{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:20px 22px}
+.a-h{font-size:16px;font-weight:500;margin:0 0 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .a-h .stance{margin-left:0}
 .a-row{display:flex;justify-content:space-between;align-items:baseline;gap:16px;font-size:13.5px;
   padding:6px 0;border-top:1px solid var(--border)}
@@ -52,10 +53,10 @@ body{font-size:14.5px}
 .fvtab{width:100%;font-size:13.5px;border-collapse:collapse;margin-top:2px}
 .fvtab td{padding:6px 4px;border-top:1px solid var(--border)}.fvtab tr:first-child td{border-top:none}
 .a-note{color:var(--muted);font-size:12.5px;margin-top:26px;line-height:1.55}
-.a-help{color:var(--accent);text-decoration:none;font-weight:500}
+.a-help{color:var(--link);text-decoration:none;font-weight:500}
 .a-help:hover{text-decoration:underline}
-.a-foot{color:var(--muted);font-size:12px;text-align:center;margin:22px 0 4px;padding-top:14px;
-  border-top:1px solid var(--border)}
+.a-foot{color:var(--on-band-soft);background:var(--band);font-size:12.5px;text-align:center;
+  margin:24px 0 4px;padding:22px 16px;border-radius:var(--r-lg)}
 .up{color:var(--up)}.down{color:var(--down)}.muted{color:var(--muted)}
 """
 
@@ -311,9 +312,9 @@ def analysis_html(row, closes=None, refresh_seconds: int = 900) -> str:
 <body><div class="wrap">
 <a class="a-back" href="/" onclick="return goBack(event)">{icon("arrow-left", 15)}Back to board</a>
 <header class="a-head">
-  <div class="a-id"><div class="a-id-top"><h1>{tk}</h1>
+  <div class="a-id"><div class="a-id-top"><span class="a-tk">{tk}</span>
     <span class="badge {sig_cls}">{_html.escape(row.signal)}</span></div>
-    <span class="nm">{name}</span></div>
+    <h1>{name}</h1></div>
   <div class="a-pricebox"><div class="a-price">{price}<span class="chg {dcls}">{dtxt}</span></div>{ext}</div>
 </header>
 <div class="asections">{sections}</div>
