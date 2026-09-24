@@ -629,6 +629,112 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
             "ichimoku": ich,
         })
 
+    _BO_CACHE: dict = {}
+
+    @app.get("/breakouts")
+    def breakouts_page():
+        from .breakouts_page import breakouts_html
+        return breakouts_html()
+
+    @app.get("/api/breakouts")
+    def breakouts_api():
+        """Today's breakouts on the watchlist and how breakouts have done here
+        (cache-only, no network; refreshed every 30 minutes)."""
+        import time as _t
+        hit = _BO_CACHE.get("v")
+        if hit and _t.time() - hit[0] < 1800:
+            return jsonify(hit[1])
+        from ..leverage import registry
+        from ..signals import breakouts as BK
+        from ..watchlist.pipeline import _load_cached
+        from ..watchlist.tickers import parse_tickers
+        spy = _load_cached(cache_dir, "SPY") if cache_dir else None
+        try:
+            tks = [t for t in parse_tickers(tickers_path)["all"] if registry.get(t) is None]
+        except Exception:  # noqa: BLE001
+            tks = []
+        uni, last = {}, ""
+        for t in tks:
+            td = _load_cached(cache_dir, t) if cache_dir else None
+            o = (td.ohlcv if td else None) or {}
+            if not o.get("close"):
+                continue
+            uni[t] = {"close": o["close"], "high": o.get("high"), "volume": o.get("volume"),
+                      "bench": (BK.bench_on(o["dates"], spy.ohlcv["dates"], spy.ohlcv["close"]) if spy else None)}
+            d = o["dates"][-1]
+            last = max(last, d.isoformat() if hasattr(d, "isoformat") else str(d))
+        if not uni:
+            return jsonify({"ok": False, "error": "no cached price history yet"}), 503
+        bt = BK.backtest(uni)
+        n_days = max(len(u["close"]) for u in uni.values())
+        bt["years"] = round((n_days - 252 - 60) / 252, 1)
+        out = {"ok": True, "as_of": last, "universe": len(uni), "candidates": BK.scan(uni), "backtest": bt}
+        _BO_CACHE["v"] = (_t.time(), out)
+        return jsonify(out)
+
+    @app.get("/trades")
+    def trades_page():
+        from .trades_page import trades_html
+        return trades_html(request.args.get("q", ""))
+
+    @app.get("/api/congress")
+    def congress_api():
+        """Recent Congress stock trades (House + Senate PTRs), filterable."""
+        from ..data.congress import recent_trades
+        data = recent_trades(cache_dir)
+        tr = data.get("trades") or []
+        tk = (request.args.get("ticker") or "").upper().strip()
+        who = (request.args.get("member") or "").lower().strip()
+        ch = request.args.get("chamber") or ""
+        kind = request.args.get("type") or ""
+        if tk:
+            tr = [t for t in tr if (t.get("ticker") or "") == tk]
+        if who:
+            tr = [t for t in tr if who in (t.get("member") or "").lower()]
+        if ch in ("House", "Senate"):
+            tr = [t for t in tr if t.get("chamber") == ch]
+        if kind == "buy":
+            tr = [t for t in tr if (t.get("type") or "").startswith("Buy")]
+        elif kind == "sell":
+            tr = [t for t in tr if (t.get("type") or "").startswith("Sell")]
+        from collections import Counter
+        bought = Counter(t["ticker"] for t in (data.get("trades") or [])
+                         if t.get("ticker") and (t.get("type") or "").startswith("Buy"))
+        members = Counter(t["member"] for t in (data.get("trades") or []))
+        return jsonify({"ok": True, "loading": data.get("loading"), "as_of": data.get("as_of"),
+                        "days": data.get("days"), "total": len(tr), "trades": tr[:400],
+                        "most_bought": bought.most_common(12), "most_active": members.most_common(10)})
+
+    @app.get("/api/funds")
+    def funds_api():
+        from ..data import funds13f as F
+        F.warm_all(cache_dir)
+        return jsonify({"ok": True, "funds": F.summaries(cache_dir), "warming": F._WARM["running"]})
+
+    @app.get("/api/funds/search")
+    def funds_search():
+        from ..data import funds13f as F
+        return jsonify({"ok": True, "results": F.search_filers(request.args.get("q", ""))})
+
+    @app.get("/api/funds/<int:cik>")
+    def fund_detail(cik: int):
+        from ..data import funds13f as F
+        rep = F.fund_report(cik, cache_dir)
+        if not rep:
+            return jsonify({"ok": False, "error": "no 13F filings found for that filer"}), 404
+        return jsonify({"ok": True, **rep})
+
+    @app.get("/api/holders/<ticker>")
+    def holders_api(ticker: str):
+        """Tracked funds holding a ticker, and Congress trades in it."""
+        if not _TICKER_RE.match(ticker):
+            return jsonify({"error": "invalid ticker"}), 400
+        from ..data import funds13f as F
+        from ..data.congress import recent_trades
+        tk = ticker.upper()
+        tr = [t for t in (recent_trades(cache_dir).get("trades") or []) if t.get("ticker") == tk]
+        return jsonify({"ok": True, "ticker": tk, "funds": F.holders_of(tk, cache_dir), "congress": tr[:25]})
+
     @app.get("/ipos")
     def ipos_page():
         from .ipos_page import ipos_html

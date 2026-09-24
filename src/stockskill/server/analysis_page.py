@@ -356,7 +356,7 @@ _SIGNAL_BOXES = tuple(
     f'<div class="asec" data-sig="{k}"><div class="a-h">{t}</div>'
     f'<div class="sig-body muted">Loading…</div></div>'
     for k, t in (("insiders", "Insider trades"), ("short", "Short interest"),
-                 ("quality", "Accounting quality")))
+                 ("quality", "Accounting quality"), ("holders", "Politicians &amp; funds")))
 
 
 _VOL_UP = {"accumulation", "bullish-divergence"}
@@ -466,6 +466,7 @@ function refresh(){{ if(_busy) return; _busy=true;
       if(n&&o){{ o.innerHTML=n.innerHTML; }} }});
     if(window.optRender) optRender();
     if(window.sigRender) sigRender();
+    if(window.holdRender) holdRender();
     if(window.calcInit) calcInit();
     const nb=d.querySelector('.a-head .badge'), ob=document.querySelector('.a-head .badge');
     if(nb&&ob){{ ob.className=nb.className; ob.textContent=nb.textContent; }}
@@ -629,6 +630,17 @@ function sigRender(){
     sigSet('quality', h3);
   }
 }
+var HOLD=null;
+function holdRender(){ if(!HOLD) return;
+  var f=HOLD.funds||[], c=HOLD.congress||[];
+  var buys=c.filter(function(t){return (t.type||'').indexOf('Buy')===0;}).length, sells=c.filter(function(t){return (t.type||'').indexOf('Sell')===0;}).length;
+  var h=sigRow('Tracked funds holding it', f.length?f.slice(0,3).map(function(x){ return sigEsc(x.fund)+' <span class="muted">('+(x.weight*100).toFixed(1)+'%, '+sigEsc((x.change||'').toLowerCase())+')</span>'; }).join('<br>'):'<span class="muted">none</span>');
+  h+=sigRow('Congress, last 90 days', c.length?'<span class="up">'+buys+' buys</span> · <span class="down">'+sells+' sells</span>':'<span class="muted">no trades reported</span>');
+  if(c.length){ var t=c[0]; h+=sigRow('Latest', sigEsc(t.member)+' <span class="muted">('+sigEsc(t.chamber)+')</span> '+sigEsc((t.type||'').toLowerCase())+' '+sigEsc(t.amount)); }
+  h+='<div class="a-read">Funds: SEC 13F filings of well-known managers (long positions, up to 45 days old). Congress: members\' '+
+    'reported trades (up to 45 days late; not market-beating on average). <a class="a-help" href="/trades?q='+encodeURIComponent(TK)+'" target="_blank" rel="noopener">See all on Trades</a></div>';
+  sigSet('holders', h); }
+fetch('/api/holders/'+encodeURIComponent(TK)).then(function(r){return r.json();}).then(function(d){ HOLD=d; holdRender(); }).catch(function(){ sigSet('holders','Unavailable right now.',true); });
 (function(){ fetch('/api/signals/'+encodeURIComponent(TK)).then(function(r){return r.json();})
   .then(function(d){ SIG=d; sigRender(); }).catch(function(){ SIG={}; sigRender(); }); })();
 """
