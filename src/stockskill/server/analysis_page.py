@@ -22,9 +22,6 @@ from ..regime import tsmom, dzz_rule, stop_study, voc_timing
 _ANALYSIS_CSS = """
 body{font-size:14px}
 .wrap{max-width:min(1080px,100%);padding:22px clamp(16px,3vw,40px) 28px}
-.a-back{display:inline-flex;align-items:center;gap:6px;color:var(--muted);text-decoration:none;
-  font-size:14px;font-weight:500;margin-bottom:14px;transition:color .15s var(--ease-out)}
-.a-back:hover{color:var(--ink)}
 .a-tk{font-family:var(--font-mono);font-size:14px;font-weight:500;color:var(--ink-2)}
 .a-head{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;padding-bottom:18px;
   border-bottom:1px solid var(--border)}
@@ -32,6 +29,11 @@ body{font-size:14px}
 .a-id-top{display:flex;align-items:center;gap:10px}
 .a-head h1{margin:2px 0 0;font-size:48px}
 .a-pricebox{margin-left:auto;text-align:right}
+.a-head{position:relative}
+.a-head .page-x{position:absolute;top:0;right:0;margin:0}
+.a-id{padding-right:48px}
+.a-pricebox{padding-top:44px}
+@media (max-width:640px){.a-pricebox{padding-top:0}}
 .a-price{font-size:28px;font-weight:500;line-height:1.1}
 .a-price .chg{font-size:16px;font-weight:500;margin-left:4px}
 .a-ext{font-size:13px;color:var(--muted);margin-top:3px}
@@ -382,12 +384,12 @@ def analysis_html(row, closes=None, refresh_seconds: int = 900) -> str:
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{tk} analysis</title>{_THEME_BOOT}<style>{_CSS}{_CSS_EXTRA}{_ANALYSIS_CSS}</style></head>
 <body><div class="wrap">
-<a class="a-back" href="/" onclick="return goBack(event)">{icon("arrow-left", 15)}Back to board</a>
 <header class="a-head">
   <div class="a-id"><div class="a-id-top"><span class="a-tk">{tk}</span>
     <span class="badge {sig_cls}">{_html.escape(row.signal)}</span></div>
     <h1>{name}</h1></div>
   <div class="a-pricebox"><div class="a-price">{price}<span class="chg {dcls}">{dtxt}</span></div>{ext}</div>
+  <button class="page-x" onclick="return goBack(event)" title="Close" aria-label="Close">{icon("x", 17)}</button>
 </header>
 <section class="agroup"><h2>Price<small>candles and volume</small></h2>
 <div class="asec">
