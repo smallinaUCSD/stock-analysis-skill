@@ -775,7 +775,7 @@ def _volume_summary(r):
     rows = [_kv("Read", html.escape(vs["label"].capitalize()), cls)]
     if getattr(r, "mfi", None) is not None:
         rows.append(_kv("Money flow (MFI)", f"{r.mfi:.0f}"))
-    return f'<div class="det-sec"><div class="det-h">Volume</div>{"".join(rows)}</div>'
+    return f'<div class="det-sec vol-sec"><div class="det-h">Volume</div>{"".join(rows)}</div>'
 
 
 _BETA_TIP = ("Beta vs the S&P 500 over the last year (Welch slope-winsorized estimate). "
@@ -1493,7 +1493,8 @@ function openCard(card){{
   const src=document.createElement('div'); src.innerHTML=card.innerHTML;
   const detail=src.querySelector('.card-detail');
   const pick=sel=>detail?detail.querySelector(sel):null;
-  const chart=pick('.chart-sec'), news=pick('.cardnews'), cta=pick('.analysis-btn'), risk=pick('.risk-sec');
+  const chart=pick('.chart-sec'), news=pick('.cardnews'), cta=pick('.analysis-btn'), risk=pick('.risk-sec'),
+        vol=pick('.vol-sec');
   if(detail) detail.remove();
   const head=document.createElement('div'); head.className='mx-head';
   ['.card-top','.nm','.exthrs'].forEach(sel=>{{ const n=src.querySelector(sel); if(n) head.appendChild(n); }});
@@ -1501,12 +1502,13 @@ function openCard(card){{
   const oh=document.createElement('div'); oh.className='det-h'; oh.textContent='Overview';
   sum.appendChild(oh);
   while(src.firstChild) sum.appendChild(src.firstChild);
-  const more=document.createElement('div'); more.className='mx-more';  // valuation, regime, volume
+  const more=document.createElement('div'); more.className='mx-more';  // valuation, regime
   if(detail) Array.from(detail.children).forEach(c=>{{
-    if(c!==chart && c!==news && c!==cta && c!==risk) more.appendChild(c); }});
+    if(c!==chart && c!==news && c!==cta && c!==risk && c!==vol) more.appendChild(c); }});
   const grid=document.createElement('div'); grid.className='mx-grid';
   grid.appendChild(sum);
-  if(risk){{ const r=document.createElement('div'); r.appendChild(risk); grid.appendChild(r); }}
+  if(risk||vol){{ const r=document.createElement('div');               // risk, then volume
+    if(risk) r.appendChild(risk); if(vol) r.appendChild(vol); grid.appendChild(r); }}
   if(more.children.length) grid.appendChild(more);
   const top=document.createElement('div'); top.className='mx-chart';
   if(chart) top.appendChild(chart);
