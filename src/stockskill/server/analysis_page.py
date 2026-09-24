@@ -60,6 +60,16 @@ body{font-size:14px}
 .a-foot{color:var(--on-band-soft);background:var(--band);font-size:13px;text-align:center;
   margin:24px 0 4px;padding:22px 16px;border-radius:var(--r-lg)}
 .up{color:var(--up)}.down{color:var(--down)}.muted{color:var(--muted)}
+.fc-svg{width:100%;height:auto;display:block;margin:6px 0 4px}
+.fc-svg text{fill:var(--muted);font-size:11px;font-family:var(--font)}
+.idea{border-top:1px solid var(--border);padding:10px 0}
+.idea:first-of-type{border-top:none;padding-top:2px}
+.idea-h{font-size:14px;font-weight:500;display:flex;justify-content:space-between;gap:10px}
+.idea-why{font-size:13px;color:var(--muted);margin:3px 0 6px;line-height:1.5}
+.idea-legs{font-size:13px;margin-bottom:6px}
+.idea-legs span{display:inline-block;border:1px solid var(--border);border-radius:5px;padding:0 6px;margin:0 4px 4px 0}
+.idea-nums{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:4px 12px;font-size:13px}
+.idea-nums b{font-weight:500;color:var(--ink)}
 .calc{margin-top:12px;padding-top:10px;border-top:1px solid var(--border)}
 .calc-h{font-size:14px;font-weight:500;margin-bottom:6px}
 .calc label{display:grid;grid-template-columns:1fr auto;gap:2px 10px;font-size:13px;color:var(--ink-2);margin:6px 0}
@@ -351,6 +361,11 @@ _OPTIONS_BOX = ('<div class="asec" data-opt="1"><div class="a-h">Options market<
                 '<div class="opt-body muted">Loading option prices…</div></div>')
 
 
+_FORECAST_BOX = ('<div class="asec" data-fc="1"><div class="a-h">Price range forecast</div>'
+                 '<div class="fc-body muted">Loading…</div></div>')
+_IDEAS_BOX = ('<div class="asec" data-oi="1"><div class="a-h">Option trade ideas</div>'
+              '<div class="oi-body muted">Loading option chain…</div></div>')
+
 # Filled in the browser from /api/signals/<ticker> (Finnhub Form 4 + Yahoo).
 _SIGNAL_BOXES = tuple(
     f'<div class="asec" data-sig="{k}"><div class="a-h">{t}</div>'
@@ -416,6 +431,7 @@ def analysis_html(row, closes=None, refresh_seconds: int = 900) -> str:
     # experimental model no longer carries the same weight as the valuation.
     sections = (
         group("Valuation", "what the business is worth", _valuation_box(row), _mc_box(row))
+        + group("Forecast and option ideas", "a range, not a target", _FORECAST_BOX, _IDEAS_BOX)
         + group("Risk", "how it moves with the market", _risk_box(row))
         + group("Filings and positioning", "insiders, short sellers, the accounts", *_SIGNAL_BOXES)
         + group("Trade plan", "entry, exits and size", _trade_box(row), _sizing_box(row),
@@ -468,6 +484,7 @@ function refresh(){{ if(_busy) return; _busy=true;
     if(window.sigRender) sigRender();
     if(window.holdRender) holdRender();
     if(window.calcInit) calcInit();
+    if(window.fcRender) {{ fcRender(); oiRender(); }}
     const nb=d.querySelector('.a-head .badge'), ob=document.querySelector('.a-head .badge');
     if(nb&&ob){{ ob.className=nb.className; ob.textContent=nb.textContent; }}
   }}).catch(function(){{}}).finally(function(){{ _busy=false; }});
@@ -475,7 +492,7 @@ function refresh(){{ if(_busy) return; _busy=true;
 if(REFRESH>0 && REFRESH<=3600000) setInterval(refresh, Math.max(60000,REFRESH));
 </script>
 <script>var TK="{tk}", RVOL={rvol};
-""" + _PRICE_JS + _OPT_JS + _SIG_JS + _CALC_JS + """</script>
+""" + _PRICE_JS + _OPT_JS + _SIG_JS + _CALC_JS + _FC_JS + """</script>
 </body></html>"""
 
 
@@ -678,4 +695,55 @@ function vbtRender(){ var el=document.querySelector('[data-vbt]'); if(!el||!VBT)
 }
 (function(){ calcInit();
   fetch('/api/valuation/backtest').then(function(x){return x.json();}).then(function(d){ if(d.ok){ VBT=d; vbtRender(); } }).catch(function(){}); })();
+"""
+
+_FC_JS = r"""
+var FC=null, OI=null;
+function fcMoney(v){ return '$'+Number(v).toLocaleString(undefined,{maximumFractionDigits:v<100?2:0}); }
+function fcRender(){ var box=document.querySelector('[data-fc] .fc-body'); if(!box||!FC) return;
+  if(!FC.ok){ box.className='fc-body muted'; box.textContent=FC.error||'Unavailable.'; return; }
+  var lbl={21:'1 month',63:'3 months',126:'6 months',252:'1 year'};
+  var rows=FC.ranges.map(function(r){ return '<div class="a-row"><span>'+lbl[r.days]+'</span><b>'+fcMoney(r.p10)+' to '+fcMoney(r.p90)+
+    ' <span class="muted">(middle half '+fcMoney(r.p25)+' to '+fcMoney(r.p75)+')</span></b></div>'; }).join('');
+  // fan chart
+  var c=FC.cone, W=480, H=150, L=46, R=8, T=8, B=18, n=c.days.length;
+  var lo=Math.min.apply(null,c.p10), hi=Math.max.apply(null,c.p90);
+  var X=function(i){ return L+i/(n-1)*(W-L-R); }, Y=function(v){ return T+(hi-v)/(hi-lo)*(H-T-B); };
+  var band=function(a,b,op){ var top=c[b].map(function(v,i){return X(i).toFixed(1)+','+Y(v).toFixed(1);}), bot=c[a].map(function(v,i){return X(i).toFixed(1)+','+Y(v).toFixed(1);}).reverse();
+    return '<polygon points="'+top.concat(bot).join(' ')+'" fill="var(--accent)" opacity="'+op+'"/>'; };
+  var mid='<polyline points="'+c.p50.map(function(v,i){return X(i).toFixed(1)+','+Y(v).toFixed(1);}).join(' ')+'" fill="none" stroke="var(--accent)" stroke-width="1.5"/>';
+  var sp='<line x1="'+L+'" y1="'+Y(FC.spot)+'" x2="'+(W-R)+'" y2="'+Y(FC.spot)+'" stroke="var(--muted)" stroke-dasharray="3 3" stroke-width="0.8"/>';
+  var ax=[hi,FC.spot,lo].map(function(v){ return '<text x="'+(L-4)+'" y="'+(Y(v)+4)+'" text-anchor="end">'+fcMoney(v)+'</text>'; }).join('')+
+    ['Now','6 mo','1 yr'].map(function(t,k){ return '<text x="'+X([0,(n-1)/2,n-1][k])+'" y="'+(H-4)+'" text-anchor="'+['start','middle','end'][k]+'">'+t+'</text>'; }).join('');
+  var svg='<svg class="fc-svg" viewBox="0 0 '+W+' '+H+'">'+band('p10','p90',0.12)+band('p25','p75',0.22)+mid+sp+ax+'</svg>';
+  var cv=FC.coverage||{}, cov=cv.inside!=null?' On this stock\'s own history, the 3-month 80% range held the real price '+Math.round(cv.inside*100)+'% of the time ('+cv.n+' tests).':'';
+  box.className='fc-body'; box.innerHTML=svg+rows+'<div class="a-read">The shaded bands are where the price lands 80% (light) and 50% (dark) of the time if it moves with '+
+    (FC.source==='implied'?'the <b>'+Math.round(FC.sigma*100)+'%</b> volatility the options market implies':'its past-year volatility of <b>'+Math.round(FC.sigma*100)+'%</b>')+
+    ', drifting like cash. It is a range, not a prediction of direction; big moves happen more often than this bell-shaped model assumes.'+cov+'</div>';
+}
+function oiMoney(v){ return v==null?'unlimited':'$'+(Math.abs(v)*100).toLocaleString(undefined,{maximumFractionDigits:0}); }
+function oiRender(){ var box=document.querySelector('[data-oi] .oi-body'); if(!box||!OI) return;
+  if(!OI.ok){ box.className='oi-body muted'; box.textContent=OI.error||'No option ideas right now.'; return; }
+  if(!OI.ideas.length){ box.className='oi-body muted'; box.textContent='No ideas fit right now.'; return; }
+  var head='<div class="a-row"><span>Expiry</span><b>'+OI.expiry+' <span class="muted">('+OI.days+' days)</span></b></div>'+
+    '<div class="a-row"><span>Read</span><b>'+OI.view.charAt(0).toUpperCase()+OI.view.slice(1)+' trend · options '+
+    (OI.rv&&OI.iv>OI.rv*1.1?'rich':(OI.rv&&OI.iv<OI.rv*0.9?'cheap':'fairly priced'))+' <span class="muted">(IV '+Math.round(OI.iv*100)+'% vs '+(OI.rv?Math.round(OI.rv*100)+'% realized':'n/a')+')</span></b></div>'+
+    (OI.earnings_before_expiry?'<div class="a-row"><span>Note</span><b class="down">Earnings before expiry: moves can be larger</b></div>':'');
+  var cards=OI.ideas.map(function(i){
+    var legs=i.legs.map(function(l){ return '<span>'+(l.side==='buy'?'Buy':'Sell')+' '+(l.kind==='stock'?'100 shares':'$'+l.strike+' '+l.kind)+(l.kind==='stock'?'':' @ $'+l.price.toFixed(2))+'</span>'; }).join('');
+    var net=i.net>=0?'Costs '+oiMoney(i.net):'Collects '+oiMoney(i.net);
+    return '<div class="idea"><div class="idea-h"><span>'+i.name+'</span><span class="muted" style="font-weight:400">'+net+' per contract</span></div>'+
+      '<div class="idea-why">'+i.why+'</div><div class="idea-legs">'+legs+'</div><div class="idea-nums">'+
+      '<span>Max profit <b>'+oiMoney(i.max_profit)+'</b></span><span>Max loss <b class="down">'+oiMoney(i.max_loss)+'</b></span>'+
+      '<span>Breakeven <b>'+(i.breakevens.length?i.breakevens.map(function(b){return '$'+b.toFixed(2);}).join(', '):'-')+'</b></span>'+
+      '<span>Chance of profit <b>'+Math.round(i.pop*100)+'%</b></span></div></div>'; }).join('');
+  box.className='oi-body'; box.innerHTML=head+cards+'<div class="a-read">Priced from the live option chain'+(OI.stale?' (last trades while the market is closed, so approximate)':'')+
+    '. Per contract of 100 shares, held to expiry; chance of profit uses the implied volatility. Options can lose their full cost quickly. '+
+    'Implied volatility has usually run above what followed (the variance risk premium), which is why selling premium needs rich options. Ideas, not advice.</div>';
+}
+(function(){
+  fetch('/api/option-ideas/'+encodeURIComponent(TK)).then(function(r){return r.json();}).then(function(d){ OI=d; oiRender();
+    return fetch('/api/forecast/'+encodeURIComponent(TK)); }).catch(function(){ OI={ok:false}; oiRender(); return fetch('/api/forecast/'+encodeURIComponent(TK)); })
+    .then(function(r){ return r && r.json(); }).then(function(d){ if(d){ FC=d; fcRender(); } }).catch(function(){ FC={ok:false}; fcRender(); });
+})();
 """

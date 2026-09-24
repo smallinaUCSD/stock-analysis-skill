@@ -572,6 +572,80 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
             _OPT_CACHE[tk] = (_t.time(), out)
         return jsonify(out)
 
+    _IDEA_CACHE: dict = {}
+
+    @app.get("/api/option-ideas/<ticker>")
+    def option_ideas_api(ticker: str):
+        """Priced option trade ideas for the ~35-day expiry (Yahoo chain)."""
+        if not _TICKER_RE.match(ticker):
+            return jsonify({"error": "invalid ticker"}), 400
+        import time as _t
+        from ..data.options import chain_near
+        from ..trade.expected_move import straddle_move
+        from ..trade.option_ideas import ideas, nearest, view_from
+        from ..watchlist import build_row
+        from ..watchlist.pipeline import fetch_one
+        from ..watchlist.row import earnings_days
+        tk = ticker.upper()
+        hit = _IDEA_CACHE.get(tk)
+        if hit and _t.time() - hit[0] < 600:
+            return jsonify(hit[1])
+        td = fetch_one(tk, period=period, cache_dir=cache_dir, ttl=cache_ttl)
+        closes = (td.ohlcv or {}).get("close") or []
+        if not closes:
+            return jsonify({"ok": False, "error": "no price history"}), 404
+        spot = closes[-1]
+        try:
+            from ..data import finnhub
+            q = finnhub.quote(tk) if finnhub.has_finnhub() else None
+            spot = (q or {}).get("price") or spot
+        except Exception:  # noqa: BLE001
+            pass
+        ch = chain_near(tk, spot)
+        if not ch or not ch["calls"] or not ch["puts"]:
+            return jsonify({"ok": False, "error": "no listed options near a month out"}), 404
+        c0, p0 = nearest(ch["calls"], spot), nearest(ch["puts"], spot)
+        mv = straddle_move(spot, c0["price"], p0["price"], ch["days"]) if (c0 and p0) else None
+        iv = mv["iv"] if mv else None
+        row = build_row(td)
+        rv = row.vol_annual
+        view = view_from(row.trend_score, (row.regime or {}).get("p_bull"))
+        ed = earnings_days(td.snapshot.next_earnings if td.snapshot else None)
+        earn = ed is not None and ed <= ch["days"]
+        out = {"ok": True, "ticker": tk, "spot": spot, "expiry": ch["expiry"], "days": ch["days"],
+               "iv": iv, "rv": rv, "view": view, "earnings_before_expiry": earn, "stale": ch["stale"],
+               "ideas": ideas(ch["calls"], ch["puts"], spot, iv, rv, ch["days"], view, earn) if iv else []}
+        _IDEA_CACHE[tk] = (_t.time(), out)
+        return jsonify(out)
+
+    @app.get("/api/forecast/<ticker>")
+    def forecast_api(ticker: str):
+        """Price-range forecast (1/3/6/12 months) and its historical coverage."""
+        if not _TICKER_RE.match(ticker):
+            return jsonify({"error": "invalid ticker"}), 400
+        from ..trade.forecast import cone, coverage, ranges, realized_vol
+        from ..watchlist.pipeline import fetch_one
+        tk = ticker.upper()
+        td = fetch_one(tk, period=period, cache_dir=cache_dir, ttl=cache_ttl)
+        closes = (td.ohlcv or {}).get("close") or []
+        if len(closes) < 60:
+            return jsonify({"ok": False, "error": "not enough price history"}), 404
+        spot = closes[-1]
+        rv = realized_vol(closes)
+        iv, src = None, "realized"
+        cached = _OPT_CACHE.get(tk) or _IDEA_CACHE.get(tk)
+        if cached:
+            d = cached[1]
+            iv = d.get("iv") or next((m.get("iv") for m in d.get("moves", []) if m.get("label", "").startswith("About")), None)
+        if iv:
+            src = "implied"
+        sigma = iv or rv
+        if not sigma:
+            return jsonify({"ok": False, "error": "no volatility estimate"}), 404
+        return jsonify({"ok": True, "ticker": tk, "spot": spot, "sigma": sigma, "source": src,
+                        "iv": iv, "rv": rv, "ranges": ranges(spot, sigma), "cone": cone(spot, sigma),
+                        "coverage": coverage(closes)})
+
     @app.get("/api/ohlc/<ticker>")
     def ohlc(ticker: str):
         """Candlestick bars from the cached history (weekly for long periods)."""

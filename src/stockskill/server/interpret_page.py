@@ -426,8 +426,39 @@ def interpret_html() -> str:
              "Short interest is 27% of the float and rising, with 9 insider sales and no buys: many "
              "informed participants are cautious, although a surprise could trigger a squeeze."))])
 
+    newer = _section(
+        "newer", "Filings-based valuation, forecasts, trades and breakouts",
+        "What the newest parts of the app do, and how much to trust them.",
+        [("Valuation from SEC filings",
+          "<p>The DCF now starts from the <b>average of the last three annual reports</b>: operating cash flow "
+          "minus capital spending minus stock-based pay, grown at the company's 3-year revenue growth (from SEC "
+          "filings). Banks and insurers are valued against industry peers instead. When the price needs far more "
+          "growth than the company has shown, it says <b>priced on future growth</b> rather than a precise "
+          "\"overvalued\". Tested on the watchlist from the filings public at the time, the DCF gap has <b>not</b> "
+          "predicted next-year returns, so read it as what current cash flows support, not as a timing signal.</p>"),
+         ("Price range forecast",
+          "<p>A cone of where the price could be in 1, 3, 6 and 12 months, from the volatility the options "
+          "market implies (or the stock's own if there are no options). It is a range, not a direction. The page "
+          "shows how often the 80% range actually held on that stock's history: usually a bit under 80%, because "
+          "big moves are more common than the model assumes.</p>"),
+         ("Option trade ideas",
+          "<p>Structures priced from the real option chain about a month out, chosen from the trend read and whether "
+          "options are rich or cheap versus realized volatility: spreads for a directional view, a cash-secured put "
+          "or iron condor when options are rich, and a covered call for holders. Each shows cost, maximum profit and "
+          "loss, breakeven and the chance of profit. Ideas, not advice; options can lose their full cost quickly.</p>"),
+         ("Trades and breakouts",
+          "<p><b>Trades</b> lists what members of Congress reported buying and selling (up to 45 days late) and what "
+          "21 well-known hedge funds held last quarter and changed (13F filings, 45+ days old). <b>Breakouts</b> lists "
+          "stocks closing above their 20-day high, graded by confirmations, next to how breakouts have done on this "
+          "watchlist: about the same as ordinary days so far.</p>"),
+         ("Two examples", _ex(
+             "Tesla shows <b>priced on future growth</b>: the price needs about 57%/yr growth for 10 years while "
+             "revenue grew about 5%/yr over three. The calculator lets you try your own growth assumption.",
+             "NVDA's option ideas show a bull call spread costing $665 that can make $1,335 by expiry, with a 36% "
+             "chance of profit at today's implied volatility: a defined-risk way to express the uptrend."))])
+
     sections = [reading, factors, dcf, montecarlo, ptarget, kelly, momentum,
-                volume, regime, stops, voc, consensus, risk, compare, options, filings]
+                volume, regime, stops, voc, consensus, risk, compare, options, filings, newer]
     toc = "".join(
         f'<a href="#{sid}">{label}</a>' for sid, label in
         [("reading", "The board"), ("factors", "Factors"), ("dcf", "DCF"),
@@ -436,7 +467,7 @@ def interpret_html() -> str:
          ("regime", "Regime"), ("stops", "Stop study"), ("voc", "Virtue of Complexity"),
          ("consensus", "Analyst consensus"), ("risk", "Beta and alpha"),
          ("compare", "Compare"), ("options", "Options and hedging"),
-         ("filings", "Insiders and pairs")])
+         ("filings", "Insiders and pairs"), ("newer", "Forecasts, trades, breakouts")])
     close = (f'<button class="page-x" onclick="return goBack(event)" title="Close" '
              f'aria-label="Close">{icon("x", 17)}</button>')
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">

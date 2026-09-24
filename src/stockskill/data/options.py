@@ -123,3 +123,45 @@ def expected_moves(ticker: str, spot: float, earnings: str | None = None,
     return {"available": bool(moves), "moves": moves, "stale": stale,
             "note": ("Priced from last trades (the market is closed), so treat these as "
                      "approximate." if stale else "")}
+
+
+def chain_near(ticker: str, spot: float, target_days: int = 35, today=None) -> dict | None:
+    """The option chain for the expiry closest to ``target_days`` out (21-60
+    days): {expiry, days, calls, puts, stale}. Prices are bid/ask midpoints, or
+    the last trade when the market is closed (``stale``)."""
+    from datetime import date
+
+    from ..trade.expected_move import option_price
+    import yfinance as yf
+
+    today = today or date.today()
+    try:
+        t = yf.Ticker(ticker)
+        exps = []
+        for e in t.options or []:
+            y, m, d = (int(x) for x in e.split("-"))
+            n = (date(y, m, d) - today).days
+            if 21 <= n <= 60:
+                exps.append((abs(n - target_days), n, e))
+        if not exps:
+            return None
+        _, days, exp = min(exps)
+        ch = t.option_chain(exp)
+    except Exception:  # noqa: BLE001
+        return None
+    stale = False
+
+    def rows(df):
+        nonlocal stale
+        out = []
+        for _, r in df.iterrows():
+            k = float(r["strike"])
+            if not (0.5 * spot <= k <= 1.6 * spot):
+                continue
+            px, src = option_price(r.get("bid"), r.get("ask"), r.get("lastPrice"))
+            if px is None:
+                continue
+            stale = stale or src != "mid"
+            out.append({"strike": k, "price": round(px, 2)})
+        return out
+    return {"expiry": exp, "days": days, "calls": rows(ch.calls), "puts": rows(ch.puts), "stale": stale}
