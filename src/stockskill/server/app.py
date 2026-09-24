@@ -629,6 +629,22 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
             "ichimoku": ich,
         })
 
+    @app.get("/ipos")
+    def ipos_page():
+        from .ipos_page import ipos_html
+        return ipos_html()
+
+    @app.get("/api/ipos")
+    def ipos_api():
+        from ..data.ipo import calendar
+        try:
+            cal = calendar()
+        except Exception:  # noqa: BLE001
+            cal = None
+        if cal is None:
+            return jsonify({"ok": False, "error": "IPO calendar needs a Finnhub key (FINNHUB_API_KEY)"}), 503
+        return jsonify({"ok": True, **cal})
+
     @app.get("/compare")
     def compare_page():
         from .compare_page import compare_html

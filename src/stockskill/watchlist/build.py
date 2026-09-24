@@ -121,8 +121,16 @@ def _macro_panel() -> dict:
     except Exception:  # noqa: BLE001
         fear_greed = None
 
+    ipos = []
+    try:
+        from ..data.ipo import calendar
+        cal = calendar(quotes=False)
+        ipos = [r for r in (cal or {}).get("upcoming", []) if not r.get("spac")][:4]
+    except Exception:  # noqa: BLE001
+        ipos = []
+
     return {"indicators": indicators, "fomc": next_fomc(), "events": events,
-            "fear_greed": fear_greed}
+            "fear_greed": fear_greed, "ipos": ipos}
 
 
 def _attach_factors(rows, data) -> None:

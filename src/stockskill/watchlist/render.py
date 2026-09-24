@@ -307,6 +307,7 @@ table.wl th:nth-child(15),table.wl td:nth-child(15){text-align:left}
 .mkgroup:first-child{margin-top:0}
 .mkrow{display:grid;grid-template-columns:1fr auto 64px 64px;align-items:baseline;gap:8px;padding:2px 0;font-size:14px}
 .mkpts{text-align:right;font-variant-numeric:tabular-nums}
+.mkrow.ipo{grid-template-columns:1fr auto 48px}
 .mkpts.up{color:var(--up)} .mkpts.down{color:var(--down)}
 .mkname{color:var(--ink)}
 .mkpx{color:var(--muted)}
@@ -1108,6 +1109,20 @@ def _macro_html(macro):
         body += ('<div class="mkgroup">Fed</div>'
                  f'<div class="macro-fomc">Fed decision (FOMC) <b>{when}</b> '
                  f'<span class="muted">{html.escape(iso)}</span></div>')
+
+    ipos = macro.get("ipos") or []
+    if ipos:
+        rows = []
+        for r in ipos:
+            rng = ("" if r.get("low") is None else
+                   (f'${r["low"]:,.0f}' if r["low"] == r["high"] else f'${r["low"]:,.0f}-{r["high"]:,.0f}'))
+            d = r.get("date", "")[5:].replace("-", "/").lstrip("0")
+            rows.append(f'<div class="mkrow ipo"><span class="mkname">{html.escape(r.get("name", "")[:26])}'
+                        f' <span class="muted">{html.escape(r.get("symbol", ""))}</span></span>'
+                        f'<span class="mkpx">{rng}</span><span class="mkchg muted">{html.escape(d)}</span></div>')
+        body += ('<div class="mkgroup">Upcoming IPOs</div>' + "".join(rows) +
+                 '<a class="site-help" style="font-size:13px" href="/ipos" '
+                 'onclick="openTab(\'/ipos\');return false">See all IPOs</a>')
 
     events = macro.get("events", [])
     if events:
