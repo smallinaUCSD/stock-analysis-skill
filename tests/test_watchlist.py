@@ -157,3 +157,13 @@ def test_analysis_page_and_trimmed_modal():
     modal = _card_detail(row)
     assert "analysis-btn" in modal and "/analysis/GOOGL" in modal
     assert modal.count("fvtable") == 0            # dense valuation moved off the modal
+
+
+def test_markets_panel_shows_point_change_and_buttons_are_plain():
+    from types import SimpleNamespace
+    from stockskill.watchlist.render import _markets_html, _points
+    assert _points(6650.0, 0.0048) == "+31.77"          # 6650 - 6650/1.0048
+    assert _points(None, 0.01) == "-" and _points(100.0, None) == "-"
+    q = SimpleNamespace(name="S&P 500", last=6650.0, change=0.0048, group="index", ticker="^GSPC")
+    html = _markets_html([q])
+    assert 'class="mkpts up">+31.77<' in html and "+0.48%" in html

@@ -305,7 +305,9 @@ table.wl th:nth-child(15),table.wl td:nth-child(15){text-align:left}
 .panel-body{overflow:visible}
 .mkgroup{font-size:13px;font-weight:500;color:var(--muted);margin:10px 0 3px}
 .mkgroup:first-child{margin-top:0}
-.mkrow{display:grid;grid-template-columns:1fr auto 64px;align-items:baseline;gap:8px;padding:2px 0;font-size:14px}
+.mkrow{display:grid;grid-template-columns:1fr auto 64px 64px;align-items:baseline;gap:8px;padding:2px 0;font-size:14px}
+.mkpts{text-align:right;font-variant-numeric:tabular-nums}
+.mkpts.up{color:var(--up)} .mkpts.down{color:var(--down)}
 .mkname{color:var(--ink)}
 .mkpx{color:var(--muted)}
 .mkchg{text-align:right;font-weight:500}
@@ -820,9 +822,9 @@ def _card_detail(r):
     tk = html.escape(r.ticker)
     btn = (f'<div class="analysis-btn cta-row">'
            f'<button type="button" class="cta-2" onclick="event.stopPropagation();'
-           f"openTab('/compare?t={tk}')\">Compare {icon('arrow-up-right', 15)}</button>"
+           f"openTab('/compare?t={tk}')\">Compare</button>"
            f'<button type="button" class="cta-1" onclick="event.stopPropagation();'
-           f"openTab('/analysis/{tk}')\">Full analysis {icon('arrow-up-right', 15)}</button></div>")
+           f"openTab('/analysis/{tk}')\">Analysis</button></div>")
     return (f'<div class="card-detail" onclick="event.stopPropagation()">'
             f'{_chart_html(r)}{_valuation_summary(r)}{_risk_summary(r)}{_regime_summary(r)}'
             f'{_volume_summary(r)}{btn}'
@@ -1028,6 +1030,15 @@ def _sector_html(sectors):
 _MKT_GROUP_LABEL = {"index": "Indices", "commodity": "Commodities", "crypto": "Crypto"}
 
 
+def _points(last, chg):
+    """The day's move in points/dollars, backed out of the last price and the
+    % change (prev = last / (1 + chg))."""
+    if last is None or chg is None or chg <= -1:
+        return "-"
+    pts = last - last / (1.0 + chg)
+    return f"{pts:+,.2f}" if abs(pts) < 100 else f"{pts:+,.0f}"
+
+
 def _markets_html(markets):
     quotes = [q for q in (markets or []) if q.last is not None]
     if not quotes:
@@ -1046,6 +1057,7 @@ def _markets_html(markets):
         rows.append(
             f'<div class="mkrow"><span class="mkname">{html.escape(q.name)}</span>'
             f'<span class="mkpx">{px}</span>'
+            f'<span class="mkpts {ccls}">{_points(q.last, chg)}</span>'
             f'<span class="mkchg {ccls}">{chg_txt}</span></div>')
     return ('<section class="panel"><div class="panel-h">Markets</div>'
             '<div class="panel-body">' + "".join(rows) + '</div></section>')
@@ -1488,7 +1500,7 @@ function setView(v){{
 }}
 function openCard(card){{
   // Quick-look, top to bottom: ticker and price, the chart across the full width,
-  // every metric in a grid below it, recent news, then Compare / Full analysis.
+  // every metric in a grid below it, recent news, then Compare / Analysis.
   const body=document.getElementById('modal-body');
   const src=document.createElement('div'); src.innerHTML=card.innerHTML;
   const detail=src.querySelector('.card-detail');
