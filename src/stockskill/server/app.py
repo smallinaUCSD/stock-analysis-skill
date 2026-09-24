@@ -92,6 +92,11 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
             return (f"<p style='font-family:Georgia,serif;padding:24px'>No data for "
                     f"{html.escape(ticker)}.</p>", 404)
         row = build_row(td, SignalConfig.from_env())
+        try:                              # beta/alpha vs SPY and QQQ (cached benchmarks)
+            from ..performance.benchmarks import load_benchmarks, risk_vs_benchmarks
+            row.risk = risk_vs_benchmarks(td, load_benchmarks(cache_dir, period, cache_ttl, fetch=True))
+        except Exception:  # noqa: BLE001
+            row.risk = {}
         # Overlay the live price (Finnhub) + extended-hours (Yahoo) so the page
         # shows the current price, not the days-old committed snapshot.
         status = market_status()
@@ -298,6 +303,24 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
             "var_95": r.var_95, "pctiles": r.pctiles,
         })
 
+    @app.get("/api/ohlc/<ticker>")
+    def ohlc(ticker: str):
+        """Candlestick bars from the cached history (weekly for long periods)."""
+        if not _TICKER_RE.match(ticker):
+            return jsonify({"error": "invalid ticker"}), 400
+        per = request.args.get("period", "1y")
+        from ..technicals.candles import PERIOD_BARS, chart_bars
+        from ..watchlist.pipeline import fetch_one
+        if per not in PERIOD_BARS:
+            per = "1y"
+        td = fetch_one(ticker.upper(), period=period, cache_dir=cache_dir, ttl=cache_ttl)
+        o = td.ohlcv or {}
+        if len(o.get("close") or []) < 5:
+            return jsonify({"error": f"no price history for {ticker.upper()}"}), 404
+        bars = chart_bars(o, per)
+        bars.update({"ticker": ticker.upper(), "period": per})
+        return jsonify(bars)
+
     @app.get("/api/indicators/<ticker>")
     def indicators(ticker: str):
         if not _TICKER_RE.match(ticker):
@@ -325,6 +348,8 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
             "ticker": ticker.upper(), "period": period,
             "dates": [d.isoformat() for d in o.get("dates", [])],
             "close": [round(c, 4) for c in closes],
+            "open": [round(x, 4) for x in (o.get("open") or [])],
+            "high": [round(x, 4) for x in highs], "low": [round(x, 4) for x in lows],
             "sma20": S.sma_series(closes, 20), "sma50": S.sma_series(closes, 50),
             "bb_upper": up, "bb_mid": mid, "bb_lower": lo,
             "rsi": S.rsi_series(closes), "macd": macd_line, "signal": sig, "hist": hist,
@@ -334,6 +359,102 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
             "obv": S.obv_series(closes, vols),
             "ichimoku": ich,
         })
+
+    @app.get("/compare")
+    def compare_page():
+        from .compare_page import compare_html
+        return compare_html(request.args.get("t", ""))
+
+    def _compare_tickers():
+        raw = request.args.get("t", "")
+        tks = []
+        for t in re.split(r"[\s,;]+", raw.upper()):
+            if t and _TICKER_RE.match(t) and t not in tks:
+                tks.append(t)
+        return tks
+
+    def _fetch_many(tks):
+        from concurrent.futures import ThreadPoolExecutor
+        from ..watchlist.pipeline import fetch_one
+        with ThreadPoolExecutor(max_workers=4) as ex:
+            got = list(ex.map(lambda t: fetch_one(t, period=period, cache_dir=cache_dir,
+                                                  ttl=cache_ttl), tks))
+        return dict(zip(tks, got))
+
+    @app.get("/api/compare")
+    def compare_api():
+        from ..leverage import registry
+        from ..performance.benchmarks import load_benchmarks
+        from ..performance.compare import compare
+        tks = _compare_tickers()
+        if not 2 <= len(tks) <= 4:
+            return jsonify({"ok": False, "error": "pick 2 to 4 tickers"}), 400
+        per = request.args.get("period", "5y")
+        if per not in ("1y", "3y", "5y", "max"):
+            per = "5y"
+        data = _fetch_many(tks)
+        missing = [t for t, td in data.items() if not (td and (td.ohlcv or {}).get("close"))]
+        if missing:
+            return jsonify({"ok": False, "error": f"no price data for {', '.join(missing)}"}), 404
+        series = {t: {"dates": td.ohlcv["dates"], "closes": td.ohlcv["close"]}
+                  for t, td in data.items()}
+        spy = load_benchmarks(cache_dir, period, cache_ttl, fetch=True, have=data).get("SPY")
+        bench = ({"dates": spy.ohlcv["dates"], "closes": spy.ohlcv["close"]} if spy else None)
+        out = compare(series, period=per, bench=bench)
+        if not out.get("ok"):
+            return jsonify(out), 422
+        profiles = []
+        for t, td in data.items():
+            s = td.snapshot
+            lev = registry.get(t)
+            price = td.ohlcv["close"][-1]
+            profiles.append({
+                "ticker": t, "name": (s.name if s else None) or (lev.name if lev else t),
+                "type": ("Leveraged " + lev.structure) if lev else ((s.quote_type or "") if s else ""),
+                "sector": s.sector if s else None,
+                "market_cap": s.market_cap if s else None,
+                "pe": (price / s.eps) if (s and s.eps and s.eps > 0) else None,
+                "dividend_yield": (s.dividend_annual / price) if (s and s.dividend_annual and price) else None,
+                "leverage": lev.multiplier if lev else None,
+                "expense_ratio": (lev.expense_ratio or None) if lev else None,
+            })
+        out["profiles"] = profiles
+        return jsonify(out)
+
+    @app.get("/api/compare/holdings")
+    def compare_holdings():
+        from ..data.funds import etf_holdings
+        from ..leverage import registry
+        from ..performance.compare import holdings_overlap
+        tks = _compare_tickers()[:4]
+        if not tks:
+            return jsonify({"ok": False, "error": "no tickers"}), 400
+        data = _fetch_many(tks)
+        funds, weights = [], {}
+        for t in tks:
+            lev = registry.get(t)
+            snap = (data.get(t) or None) and data[t].snapshot
+            qt = ((snap.quote_type if snap else "") or "").upper()
+            if lev:
+                w = lev.normalized_constituents()
+                kind = "single" if lev.kind == "single" else "basket"
+                note = (f"{lev.multiplier:g}x daily exposure to "
+                        + ("one stock" if kind == "single" else "this basket"))
+                sectors = None
+            elif qt in ("ETF", "MUTUALFUND"):
+                eh = etf_holdings(t, limit=10)
+                w = {h["underlying"]: h["weight"] for h in (eh or {}).get("holdings", [])}
+                kind, note = "etf", "Top holdings (the rest of the fund isn't shown)"
+                sectors = (eh or {}).get("sectors")
+            else:
+                w, kind, note, sectors = {t: 1.0}, "stock", "A single company", None
+            weights[t] = w
+            top = sorted(w.items(), key=lambda kv: kv[1], reverse=True)[:10]
+            funds.append({"ticker": t, "kind": kind, "note": note,
+                          "multiplier": lev.multiplier if lev else 1.0,
+                          "holdings": [{"underlying": u, "weight": x} for u, x in top],
+                          "sectors": sectors, "available": bool(w)})
+        return jsonify({"ok": True, "funds": funds, "overlap": holdings_overlap(weights)})
 
     @app.get("/api/pulse")
     def pulse():

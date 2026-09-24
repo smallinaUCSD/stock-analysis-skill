@@ -60,11 +60,11 @@ _EXT_LINKS = [
 
 _CSS_EXTRA = """
 /* ---- controls ---------------------------------------------------------- */
-.tbtn,.tool-b,.icon-btn,.chip-f,.seg button,.tfb,.analysis-btn,.modal-x{
+.tbtn,.tool-b,.icon-btn,.chip-f,.seg button,.tfb,.analysis-btn button,.modal-x{
   transition:background-color .15s var(--ease-out),border-color .15s var(--ease-out),
     color .15s var(--ease-out),box-shadow .15s var(--ease-out),transform .12s var(--ease-out)}
 .tbtn:active,.tool-b:active,.icon-btn:active,.chip-f:active,.seg button:active,
-.tfb:active,.analysis-btn:active,.modal-x:active{transform:scale(.97)}
+.tfb:active,.analysis-btn button:active,.modal-x:active{transform:scale(.97)}
 .tbtn,.tool-b{display:inline-flex;align-items:center;gap:6px;height:40px;padding:0 16px;
   font-size:14px;font-weight:500;line-height:1;border-radius:var(--r);cursor:pointer;
   background:var(--bg);border:1px solid var(--border);color:var(--ink);
@@ -206,10 +206,13 @@ table.wl th:nth-child(15),table.wl td:nth-child(15){text-align:left}
   padding-top:9px;border-top:1px solid var(--border);font-size:13px;font-weight:500;color:var(--muted)}
 .details-cta svg{transition:color .15s ease}
 .details-cta:hover svg{color:var(--link)}
-.analysis-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;
-  margin:14px 0 6px;height:40px;border-radius:var(--r);cursor:pointer;font-weight:500;font-size:14px;
-  border:none;background:var(--accent);color:var(--accent-ink)}
-.analysis-btn:active{background:var(--accent-press)}
+.analysis-btn{display:flex;gap:10px;width:100%;margin:14px 0 6px}
+.analysis-btn button{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;height:40px;
+  border-radius:var(--r);cursor:pointer;font:500 14px var(--font);border:1px solid transparent}
+.analysis-btn .cta-1{background:var(--accent);color:var(--accent-ink)}
+.analysis-btn .cta-1:active{background:var(--accent-press)}
+.analysis-btn .cta-2{flex:0 0 38%;background:var(--surface);color:var(--ink);border-color:var(--border)}
+.analysis-btn .cta-2:hover{background:var(--surface-2)}
 .site-help{color:var(--link);text-decoration:none;font-weight:500}.site-help:hover{text-decoration:underline}
 .site-note{color:var(--muted);font-size:13px;margin-top:18px;line-height:1.5}
 .site-foot{color:var(--on-band-soft);background:var(--band);font-size:13px;text-align:center;
@@ -454,7 +457,7 @@ def _indicator_chips(r):
 # ---------- per-view renderers ---------- #
 _HEADERS = ["Ticker", "Price", "Day", "5D", "1M", "1Y", "52wL", "52wH", "Sector",
             "30d", "Signal", "Trend", "RSI", "Conf", "Indicators", "P/E", "Mkt Cap",
-            "Factor"]
+            "Beta", "Factor"]
 
 
 def _factor_cls(pct):
@@ -486,7 +489,7 @@ def _factor_chip(r):
 def _row_html(r):
     if r.error or r.price is None:
         return (f'<tr class="item" {_data_attrs(r)}><td class="tk">{html.escape(r.ticker)}</td>'
-                f'<td colspan="17" class="muted">no data</td></tr>')
+                f'<td colspan="{len(_HEADERS) - 1}" class="muted">no data</td></tr>')
 
     def cell(x):
         cls, txt = _pct(x)
@@ -518,6 +521,7 @@ def _row_html(r):
         f'<td style="text-align:left">{_indicator_chips(r)}</td>'
         f'<td data-sort="{r.pe if r.pe is not None else -1}">{_num(r.pe,1)}</td>'
         f'<td data-sort="{r.market_cap or 0}">{_mktcap(r.market_cap)}</td>'
+        f'<td data-sort="{r.beta if r.beta is not None else -99}">{_num(r.beta, 2)}</td>'
         + _factor_cell(r) + '</tr>'
     )
 
@@ -746,14 +750,57 @@ def _volume_summary(r):
             f'<div class="det-row"><span class="{cls}">{html.escape(vs["label"])}</span>{extra}</div></div>')
 
 
+_BETA_TIP = ("Beta vs the S&P 500 over the last year (Welch slope-winsorized estimate). "
+             "1.5 = tends to move 1.5x the market.")
+
+
+def _risk_summary(r):
+    """Risk vs the market for the modal: beta vs S&P 500 / Nasdaq-100, alpha
+    (flagged when it's statistically just noise), Sharpe, drawdown, capture."""
+    rk = getattr(r, "risk", None) or {}
+    spy, qqq = rk.get("SPY") or {}, rk.get("QQQ") or {}
+    if not spy:
+        return ""
+
+    def line(label, value, cls="", note=""):
+        note = f' <span class="muted">{note}</span>' if note else ""
+        return (f'<div class="card-row"><span>{label}</span>'
+                f'<b class="{cls}">{value}{note}</b></div>')
+    rows = []
+    beta = _num(spy.get("beta"), 2)
+    if qqq.get("beta") is not None:
+        beta += f' <span class="muted">· {_num(qqq.get("beta"), 2)} vs Nasdaq</span>'
+    rows.append(line("Beta (S&amp;P 500)", beta))
+    a = spy.get("alpha")
+    if a is not None:
+        cls, txt = _pct(a)
+        rows.append(line("Alpha, per year", txt, cls if spy.get("alpha_significant") else "",
+                         "" if spy.get("alpha_significant") else "(within noise)"))
+    rows.append(line("Sharpe · Sortino",
+                     f'{_num(spy.get("sharpe"), 2)} · {_num(spy.get("sortino"), 2)}'))
+    dcls, dtxt = _pct(spy.get("max_drawdown"))
+    rows.append(line("Max drawdown", dtxt, "down" if spy.get("max_drawdown") else ""))
+    up, dn = spy.get("up_capture"), spy.get("down_capture")
+    if up is not None and dn is not None:
+        rows.append(line("Up · down capture", f"{up*100:.0f}% · {dn*100:.0f}%"))
+    return (f'<div class="det-sec"><div class="det-h">Risk vs the market '
+            f'<span class="muted" style="font-weight:400">(1 year)</span></div>'
+            f'{"".join(rows)}</div>')
+
+
 def _card_detail(r):
     """Modal quick-look: chart + compact summaries + news, with a button to the
     full, roomier analysis page. The dense valuation/trade/regime detail lives on
     /analysis/<ticker> to keep the modal readable."""
-    btn = (f'<button type="button" class="analysis-btn" onclick="event.stopPropagation();'
-           f"openTab('/analysis/{html.escape(r.ticker)}')\">Full analysis {icon('arrow-up-right', 15)}</button>")
+    tk = html.escape(r.ticker)
+    btn = (f'<div class="analysis-btn cta-row">'
+           f'<button type="button" class="cta-2" onclick="event.stopPropagation();'
+           f"openTab('/compare?t={tk}')\">Compare {icon('arrow-up-right', 15)}</button>"
+           f'<button type="button" class="cta-1" onclick="event.stopPropagation();'
+           f"openTab('/analysis/{tk}')\">Full analysis {icon('arrow-up-right', 15)}</button></div>")
     return (f'<div class="card-detail" onclick="event.stopPropagation()">'
-            f'{_chart_html(r)}{_valuation_summary(r)}{_regime_summary(r)}{_volume_summary(r)}{btn}'
+            f'{_chart_html(r)}{_valuation_summary(r)}{_risk_summary(r)}{_regime_summary(r)}'
+            f'{_volume_summary(r)}{btn}'
             f'<div class="cardnews" data-ticker="{html.escape(r.ticker)}"></div></div>')
 
 
@@ -822,6 +869,7 @@ def _card_html(r):
         + f'<div class="card-row"><span>RSI</span><b>{_num(r.rsi,0)}</b></div>'
         f'<div class="card-row"><span>P/E</span><b>{_num(r.pe,1)}</b></div>'
         f'<div class="card-row"><span>Market cap</span><b>{_mktcap(r.market_cap)}</b></div>'
+        f'<div class="card-row" title="{_BETA_TIP}"><span>Beta</span><b>{_num(r.beta, 2)}</b></div>'
         f'<div class="links" onclick="event.stopPropagation()" style="margin-top:8px">{links}</div>'
         f'<div class="details-cta"><span>Details</span>{icon("chevron-right", 14)}</div>'
     )
@@ -1280,6 +1328,7 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
         '<button class="tool-b" onclick="openTool(\'evaluate\')">Evaluate</button>'
         '<button class="tool-b" onclick="openTool(\'lookthrough\')">Look-through</button>'
         '<button class="tool-b" onclick="openTool(\'montecarlo\')">Monte Carlo</button>'
+        '<button class="tool-b" onclick="openTab(\'/compare\')">Compare</button>'
         '<button class="tool-b" onclick="openTab(\'/indicators\')">Indicators</button>'
         '<button class="tool-b" onclick="openTab(\'/interpret\')">Interpret</button>'
         + _holdings_btn + '</span>'

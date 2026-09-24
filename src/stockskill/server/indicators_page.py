@@ -54,6 +54,9 @@ _CONTROLS = """
     <button data-p="1y" class="on">1Y</button><button data-p="2y">2Y</button>
     <button data-p="5y">5Y</button>
   </span>
+  <span class="seg" id="modeseg">
+    <button data-m="line" class="on">Line</button><button data-m="candle">Candles</button>
+  </span>
 </div>
 <div class="ind-bar" style="gap:6px 14px">
   <span class="ind-grp">Overlays:</span>
@@ -105,7 +108,7 @@ function goBack(e){ if(e) e.preventDefault();
   if(window.opener && !window.opener.closed){ try{window.opener.focus();}catch(_){}; window.close(); }
   else location.href='/'; return false; }
 var W=900, ML=52, MR=12, MT=10, PH=330, MB=18;
-var DATA=null, PERIOD='1y';
+var DATA=null, PERIOD='1y', MODE='line';
 // series palette from DESIGN.md: coral (primary series), amber, teal, warm neutrals
 var C={close:'var(--ink)', sma20:'#e8a55a', sma50:'#5db8a6', bb:'var(--muted)',
        tenkan:'var(--accent)', kijun:'#5db8a6', up:'var(--up)', down:'var(--down)',
@@ -136,7 +139,8 @@ function panelLabel(svg,txt){ var t=el('text',{x:ML+4,y:MT+10}); t.textContent=t
 function drawPrice(){
   var svg=document.getElementById('p-price'); svg.innerHTML=''; svg.style.display='';
   var d=DATA, n=d.close.length, y0=PH-MB, y1=MT;
-  var arrs=[d.close]; if(on('bb')){arrs.push(d.bb_upper,d.bb_lower);} if(on('sma')){arrs.push(d.sma20,d.sma50);}
+  var candle=MODE==='candle' && d.open && d.open.length===n;
+  var arrs=candle?[d.high,d.low]:[d.close]; if(on('bb')){arrs.push(d.bb_upper,d.bb_lower);} if(on('sma')){arrs.push(d.sma20,d.sma50);}
   if(on('ich')){arrs.push(d.ichimoku.tenkan,d.ichimoku.kijun,d.ichimoku.span_a,d.ichimoku.span_b);}
   var mm=minmax(arrs), lo=mm[0], hi=mm[1], pad=(hi-lo)*0.05; lo-=pad; hi+=pad;
   var Y=function(v){ return y0-(v-lo)/(hi-lo)*(y0-y1); };
@@ -157,10 +161,15 @@ function drawPrice(){
     if(top.length) svg.appendChild(el('polygon',{points:top.concat(bot).join(' '),fill:C.bb,opacity:0.07}));
     polyline(svg,d.bb_upper,n,Y,C.bb,1,'3 3'); polyline(svg,d.bb_lower,n,Y,C.bb,1,'3 3'); }
   if(on('sma')){ polyline(svg,d.sma20,n,Y,C.sma20,1.3); polyline(svg,d.sma50,n,Y,C.sma50,1.3); }
-  polyline(svg,d.close,n,Y,C.close,1.6);
+  if(candle){ var slot=(W-ML-MR)/Math.max(1,n-1), bw=Math.max(1,Math.min(10,slot*0.62));
+    for(var ci=0;ci<n;ci++){ var cu=d.close[ci]>=d.open[ci], cc=cu?C.up:C.down, cx=xAt(ci,n);
+      svg.appendChild(el('line',{x1:cx,y1:Y(d.high[ci]),x2:cx,y2:Y(d.low[ci]),stroke:cc,'stroke-width':1}));
+      var yo=Y(d.open[ci]), yc=Y(d.close[ci]);
+      svg.appendChild(el('rect',{x:cx-bw/2,y:Math.min(yo,yc),width:bw,height:Math.max(1,Math.abs(yo-yc)),fill:cc})); } }
+  else polyline(svg,d.close,n,Y,C.close,1.6);
   crosshair(svg,'cx-price',y1,y0);
   // legend + x dates
-  var leg=[['Close',C.close]]; if(on('sma')){leg.push(['SMA20',C.sma20],['SMA50',C.sma50]);}
+  var leg=candle?[]:[['Close',C.close]]; if(on('sma')){leg.push(['SMA20',C.sma20],['SMA50',C.sma50]);}
   if(on('bb'))leg.push(['Bollinger',C.bb]); if(on('ich'))leg.push(['Tenkan',C.tenkan],['Kijun',C.kijun]);
   var lx=ML+4; leg.forEach(function(it){ svg.appendChild(el('line',{x1:lx,y1:MT+6,x2:lx+14,y2:MT+6,stroke:it[1],'stroke-width':2}));
     var t=el('text',{x:lx+18,y:MT+9}); t.textContent=it[0]; svg.appendChild(t); lx+=18+it[0].length*6.1+14; });
@@ -224,7 +233,8 @@ function hover(ev){ if(!DATA)return; var svg=document.getElementById('p-price');
   document.getElementById('readout').innerHTML=readoutAt(i);
 }
 function readoutAt(i){ var d=DATA;
-  var p=['<span class="k">'+_date(d.dates[i])+'</span> &nbsp; <b>'+_fmt(d.close[i])+'</b>'];
+  var p=['<span class="k">'+_date(d.dates[i])+'</span> &nbsp; '+(MODE==='candle'&&d.open?
+    ('<span class="k">O</span> '+_fmt(d.open[i])+' <span class="k">H</span> '+_fmt(d.high[i])+' <span class="k">L</span> '+_fmt(d.low[i])+' <span class="k">C</span> '):'')+'<b>'+_fmt(d.close[i])+'</b>'];
   if(on('rsi')) p.push('<span class="k">RSI</span> '+num(d.rsi[i],0));
   if(on('stoch')) p.push('<span class="k">Stoch</span> '+num(d.stoch_k[i],0)+'/'+num(d.stoch_d[i],0));
   if(on('macd')) p.push('<span class="k">MACD</span> '+num(d.macd[i],2)+'/'+num(d.signal[i],2));
@@ -243,6 +253,8 @@ function loadInd(){ var t=(document.getElementById('itk').value||'').trim().toUp
     DATA=d; document.getElementById('ind-msg').textContent=''; redraw(); hoverOff();
   }).catch(function(){ document.getElementById('ind-msg').textContent='Failed to load.'; });
 }
+document.getElementById('modeseg').addEventListener('click', function(e){ var b=e.target.closest('button'); if(!b)return;
+  [].forEach.call(this.querySelectorAll('button'),function(x){x.classList.toggle('on',x===b);}); MODE=b.dataset.m; redraw(); });
 document.getElementById('perseg').addEventListener('click', function(e){ var b=e.target.closest('button'); if(!b)return;
   [].forEach.call(this.querySelectorAll('button'),function(x){x.classList.toggle('on',x===b);}); PERIOD=b.dataset.p; loadInd(); });
 

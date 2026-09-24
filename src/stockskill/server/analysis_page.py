@@ -58,6 +58,17 @@ body{font-size:14px}
 .a-foot{color:var(--on-band-soft);background:var(--band);font-size:13px;text-align:center;
   margin:24px 0 4px;padding:22px 16px;border-radius:var(--r-lg)}
 .up{color:var(--up)}.down{color:var(--down)}.muted{color:var(--muted)}
+.apx-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+.apx-bar .seg{display:inline-flex;border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.apx-bar .seg button{font:500 13px var(--font);padding:0 12px;height:34px;border:none;background:var(--surface);
+  color:var(--muted);cursor:pointer}
+.apx-bar .seg button:hover{color:var(--ink)}
+.apx-bar .seg button.on{background:var(--surface-3);color:var(--ink)}
+.apx-int{font-size:13px;color:var(--muted);margin-left:auto}
+#apx{width:100%;height:auto;display:block}
+#apx text{fill:var(--muted);font-size:12px;font-family:var(--font)}
+.apx-ro{font-size:13px;min-height:20px;margin-top:8px;font-variant-numeric:tabular-nums}
+.apx-ro b{color:var(--ink);font-weight:500}
 """
 
 
@@ -247,6 +258,40 @@ def _voc_box(closes):
     return _box("Virtue of Complexity (experimental)", rows, read, "voc")
 
 
+def _risk_box(r):
+    rk = getattr(r, "risk", None) or {}
+    spy, qqq = rk.get("SPY") or {}, rk.get("QQQ") or {}
+    if not spy:
+        return ""
+
+    def n2(x):
+        return "n/a" if x is None else f"{x:.2f}"
+    rows = _r("Beta vs S&amp;P 500", n2(spy.get("beta")))
+    if qqq.get("beta") is not None:
+        rows += _r("Beta vs Nasdaq-100", n2(qqq.get("beta")))
+    if spy.get("alpha") is not None:
+        sig = spy.get("alpha_significant")
+        t = spy.get("alpha_t")
+        note = "" if sig else ' <span class="muted">(within noise'
+        note += (f", t {t:+.1f})</span>" if (not sig and t is not None) else (")</span>" if not sig else ""))
+        rows += _r("Alpha, per year", _pctpair(spy["alpha"]) + note)
+    rows += _r("Sharpe · Sortino", f'{n2(spy.get("sharpe"))} · {n2(spy.get("sortino"))}')
+    if spy.get("vol") is not None:
+        rows += _r("Volatility", f'{spy["vol"]*100:.0f}% a year')
+    if spy.get("max_drawdown") is not None:
+        rows += _r("Max drawdown", _pctpair(spy["max_drawdown"]))
+    if spy.get("up_capture") is not None and spy.get("down_capture") is not None:
+        rows += _r("Up · down capture", f'{spy["up_capture"]*100:.0f}% · {spy["down_capture"]*100:.0f}%')
+    if spy.get("correlation") is not None:
+        rows += _r("Correlation with the S&amp;P 500", n2(spy["correlation"]))
+    read = ("Measured over the last year of daily returns. Beta is how much it tends to move "
+            "when the market moves (Welch's robust estimate, which damps one-off jumps). Alpha "
+            "is the return left over after accounting for that market exposure; over one year "
+            "it is usually too noisy to trust, which is what &ldquo;within noise&rdquo; means. "
+            "Capture compares its average up-day and down-day moves with the market's.")
+    return _box("Risk vs the market", rows, read, "risk")
+
+
 _VOL_UP = {"accumulation", "bullish-divergence"}
 _VOL_DOWN = {"distribution", "bearish-divergence"}
 
@@ -301,6 +346,7 @@ def analysis_html(row, closes=None, refresh_seconds: int = 900) -> str:
     # experimental model no longer carries the same weight as the valuation.
     sections = (
         group("Valuation", "what the business is worth", _valuation_box(row), _mc_box(row))
+        + group("Risk", "how it moves with the market", _risk_box(row))
         + group("Trade plan", "entry, exits and size", _trade_box(row), _sizing_box(row))
         + group("Trend and flow", "is the move backed?", _momentum_box(closes),
                 _volume_box(row), _regime_box(closes), _stops_box(closes))
@@ -317,6 +363,16 @@ def analysis_html(row, closes=None, refresh_seconds: int = 900) -> str:
     <h1>{name}</h1></div>
   <div class="a-pricebox"><div class="a-price">{price}<span class="chg {dcls}">{dtxt}</span></div>{ext}</div>
 </header>
+<section class="agroup"><h2>Price<small>candles and volume</small></h2>
+<div class="asec">
+  <div class="apx-bar">
+    <span class="seg" id="apx-per"><button data-p="1mo">1M</button><button data-p="3mo">3M</button><button data-p="6mo" class="on">6M</button><button data-p="1y">1Y</button><button data-p="2y">2Y</button><button data-p="5y">5Y</button></span>
+    <span class="seg" id="apx-mode"><button data-m="candle" class="on">Candles</button><button data-m="line">Line</button></span>
+    <span id="apx-int" class="apx-int"></span>
+  </div>
+  <svg id="apx" viewBox="0 0 1000 340" preserveAspectRatio="xMidYMid meet" role="img" aria-label="{tk} price chart"></svg>
+  <div id="apx-ro" class="apx-ro muted">Loading price history…</div>
+</div></section>
 <div class="asections">{sections}</div>
 <p class="a-note">Analysis, not advice. Every figure is a model estimate on free,
 possibly delayed data; the decision is yours.
@@ -342,4 +398,82 @@ function refresh(){{ if(_busy) return; _busy=true;
 }}
 if(REFRESH>0 && REFRESH<=3600000) setInterval(refresh, Math.max(60000,REFRESH));
 </script>
+<script>var TK="{tk}";
+""" + _PRICE_JS + """</script>
 </body></html>"""
+
+
+_PRICE_JS = r"""
+var APX={per:'6mo', mode:'candle', d:null}, AW=1000, AH=340, AML=58, AMR=12, AMT=10;
+function apxEl(t,a){ var e=document.createElementNS('http://www.w3.org/2000/svg',t); for(var k in a) e.setAttribute(k,a[k]); return e; }
+function apxStep(r,t){ var raw=(r||1)/Math.max(1,t), p=Math.pow(10,Math.floor(Math.log10(raw))), n=raw/p;
+  return (n<1.5?1:(n<3?2:(n<7?5:10)))*p; }
+function apxMoney(v){ return '$'+Number(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function apxVol(v){ var a=Math.abs(v); return a>=1e9?(v/1e9).toFixed(2)+'B':(a>=1e6?(v/1e6).toFixed(1)+'M':(a>=1e3?(v/1e3).toFixed(0)+'k':''+v)); }
+function apxDate(iso){ var p=iso.split('-'); return (+p[1])+'/'+(+p[2])+'/'+p[0].slice(2); }
+function apxLoad(){
+  document.getElementById('apx-ro').textContent='Loading price history…';
+  fetch('/api/ohlc/'+encodeURIComponent(TK)+'?period='+APX.per).then(function(r){return r.json();}).then(function(d){
+    if(d.error){ document.getElementById('apx-ro').textContent=d.error; return; }
+    APX.d=d; apxDraw(); }).catch(function(){ document.getElementById('apx-ro').textContent='Price history unavailable.'; });
+}
+function apxDraw(){
+  var d=APX.d; if(!d) return; var svg=document.getElementById('apx'); svg.innerHTML='';
+  AW=(svg.parentNode.clientWidth||1000)<640?560:1000; AH=AW<1000?300:340; svg.setAttribute('viewBox','0 0 '+AW+' '+AH);
+  var n=d.close.length, VH=AW<1000?46:58, gap=10, xb=AH-20, py0=xb-VH-gap, py1=AMT;
+  var slot=(AW-AML-AMR)/n, X=function(i){ return AML+slot*(i+0.5); };
+  var candle=APX.mode==='candle';
+  var lo=Math.min.apply(null,candle?d.low:d.close), hi=Math.max.apply(null,candle?d.high:d.close);
+  var pad=(hi-lo)*0.05||1; lo-=pad; hi+=pad;
+  var Y=function(v){ return py0-(v-lo)/(hi-lo)*(py0-py1); };
+  var st=apxStep(hi-lo,5);
+  for(var g=Math.ceil(lo/st)*st; g<=hi; g+=st){ if(g<=0) continue; var yy=Y(g);
+    svg.appendChild(apxEl('line',{x1:AML,y1:yy,x2:AW-AMR,y2:yy,stroke:'var(--border)','stroke-width':0.7,opacity:0.7}));
+    var t=apxEl('text',{x:AML-6,y:yy+4,'text-anchor':'end'}); t.textContent='$'+(g>=1000?(g/1000).toFixed(1)+'k':(g<10?g.toFixed(2):g.toFixed(0))); svg.appendChild(t); }
+  var vmax=Math.max.apply(null,d.volume.concat([1]));
+  var bw=Math.max(1,Math.min(14,slot*0.66));
+  for(var i=0;i<n;i++){
+    var up=d.close[i]>=d.open[i], col=up?'var(--up)':'var(--down)', x=X(i);
+    var vh=(d.volume[i]||0)/vmax*VH;
+    svg.appendChild(apxEl('rect',{x:x-bw/2,y:xb-vh,width:bw,height:Math.max(0,vh),fill:col,opacity:0.28}));
+    if(candle){
+      svg.appendChild(apxEl('line',{x1:x,y1:Y(d.high[i]),x2:x,y2:Y(d.low[i]),stroke:col,'stroke-width':1}));
+      var yo=Y(d.open[i]), yc=Y(d.close[i]);
+      svg.appendChild(apxEl('rect',{x:x-bw/2,y:Math.min(yo,yc),width:bw,height:Math.max(1,Math.abs(yo-yc)),fill:col}));
+    }
+  }
+  if(!candle){
+    var up2=d.close[n-1]>=d.close[0], lc=up2?'var(--up)':'var(--down)';
+    var pts=d.close.map(function(v,i){ return X(i).toFixed(1)+','+Y(v).toFixed(1); }).join(' ');
+    svg.appendChild(apxEl('polygon',{points:X(0).toFixed(1)+','+py0+' '+pts+' '+X(n-1).toFixed(1)+','+py0,fill:lc,opacity:0.08}));
+    svg.appendChild(apxEl('polyline',{points:pts,fill:'none',stroke:lc,'stroke-width':1.7}));
+  }
+  svg.appendChild(apxEl('line',{x1:AML,y1:xb,x2:AW-AMR,y2:xb,stroke:'var(--border)','stroke-width':0.8}));
+  var tv=apxEl('text',{x:AML-6,y:xb-VH+10,'text-anchor':'end'}); tv.textContent='Vol'; svg.appendChild(tv);
+  var ticks=AW<1000?[0,Math.floor((n-1)/2),n-1]:[0,Math.floor((n-1)/4),Math.floor((n-1)/2),Math.floor(3*(n-1)/4),n-1];
+  ticks.forEach(function(i,k){ var t=apxEl('text',{x:X(i),y:AH-5,'text-anchor':k===0?'start':(k===ticks.length-1?'end':'middle')});
+    t.textContent=apxDate(d.dates[i]); svg.appendChild(t); });
+  svg.appendChild(apxEl('line',{id:'apx-cx',x1:0,y1:py1,x2:0,y2:xb,stroke:'var(--muted)','stroke-width':1,style:'display:none'}));
+  svg._g={X:X,n:n,slot:slot};
+  document.getElementById('apx-int').textContent=d.interval==='1wk'?'Weekly bars':'Daily bars';
+  apxRead(n-1);
+}
+function apxRead(i){ var d=APX.d, ch=i>0?d.close[i]/d.close[i-1]-1:null;
+  var cls=ch==null?'':(ch>=0?'up':'down');
+  document.getElementById('apx-ro').innerHTML='<span>'+apxDate(d.dates[i])+(d.interval==='1wk'?' (week)':'')+'</span> &nbsp; '+
+    'O <b>'+apxMoney(d.open[i])+'</b> &nbsp; H <b>'+apxMoney(d.high[i])+'</b> &nbsp; L <b>'+apxMoney(d.low[i])+
+    '</b> &nbsp; C <b>'+apxMoney(d.close[i])+'</b>'+(ch==null?'':' <span class="'+cls+'">'+(ch>=0?'+':'')+(ch*100).toFixed(2)+'%</span>')+
+    ' &nbsp; Vol <b>'+apxVol(d.volume[i]||0)+'</b>'; }
+(function(){
+  var svg=document.getElementById('apx');
+  svg.addEventListener('mousemove',function(e){ var g=svg._g; if(!g) return; var r=svg.getBoundingClientRect();
+    var vx=(e.clientX-r.left)*(AW/r.width), i=Math.floor((vx-AML)/g.slot); i=Math.max(0,Math.min(g.n-1,i));
+    var cx=document.getElementById('apx-cx'); cx.setAttribute('x1',g.X(i)); cx.setAttribute('x2',g.X(i)); cx.style.display=''; apxRead(i); });
+  svg.addEventListener('mouseleave',function(){ var cx=document.getElementById('apx-cx'); if(cx) cx.style.display='none'; if(APX.d) apxRead(APX.d.close.length-1); });
+  function seg(id,key,after){ document.getElementById(id).addEventListener('click',function(e){ var b=e.target.closest('button'); if(!b) return;
+    [].forEach.call(this.querySelectorAll('button'),function(x){ x.classList.toggle('on',x===b); }); APX[key]=b.dataset[key==='per'?'p':'m']; after(); }); }
+  seg('apx-per','per',apxLoad); seg('apx-mode','mode',apxDraw);
+  var t=null; window.addEventListener('resize',function(){ clearTimeout(t); t=setTimeout(apxDraw,150); });
+  apxLoad();
+})();
+"""

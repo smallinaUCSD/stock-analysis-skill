@@ -26,6 +26,7 @@ import os
 from stockskill.watchlist.tickers import parse_tickers
 from stockskill.watchlist import fetch_all
 tk=parse_tickers(os.environ['STK_TICKERS'])['all']
+tk += [b for b in ('SPY', 'QQQ') if b not in tk]      # benchmarks for beta/alpha
 data=fetch_all(tk, period=os.environ['STK_PERIOD'], workers=6,
                cache_dir=os.environ['STK_CACHE'], ttl=float(os.environ['STK_TTL']))
 ok=[t for t in tk if t in data and (data[t].ohlcv or {}).get('close')]

@@ -322,15 +322,65 @@ def interpret_html() -> str:
              "target: the market is pricing in heavy optimism, which is upside if it plays "
              "out and downside risk if it fades."))])
 
+    risk = _section(
+        "risk", "Risk vs the market", "How much a stock swings with the S&amp;P 500, and "
+        "whether it earned more than that exposure explains.",
+        [("Beta",
+          "<p>How much it tends to move when the market moves. <b>1.0</b> moves with the "
+          "S&amp;P 500, <b>1.5</b> moves about 50% more (up and down), <b>0.5</b> half as "
+          "much, and below zero tends to move the other way. We use Welch's robust estimate "
+          "over the last year, which damps one-off jumps (earnings, news) that would "
+          "otherwise distort it, and weights recent months more. A 3x leveraged fund on the "
+          "Nasdaq shows a beta near 3 or more.</p>"),
+         ("Alpha",
+          "<p>The yearly return left over after accounting for beta. Positive means it did "
+          "better than its market exposure explains. Over a single year alpha is mostly "
+          "luck, so we mark it <b>&ldquo;within noise&rdquo;</b> unless it is statistically "
+          "clear (a t-statistic of 2 or more). Treat noisy alpha as zero.</p>"),
+         ("Sharpe, Sortino, drawdown, capture",
+          "<p><b>Sharpe</b> is return above cash per unit of volatility (above 1 is good). "
+          "<b>Sortino</b> is the same but only counts downside swings. <b>Max drawdown</b> "
+          "is the worst fall from a high. <b>Up / down capture</b> compares its average move "
+          "on the market's up days and down days: 120% / 80% means it rises more and falls "
+          "less than the market, the combination you want.</p>"),
+         ("Two examples", _ex(
+             "Beta <b>1.8</b>, alpha <b>+1% (within noise)</b>: it simply amplified the "
+             "market. Its big gains came from market exposure, not an edge, and it will fall "
+             "about 1.8x as hard in a selloff.",
+             "Beta <b>0.6</b>, up / down capture <b>75% / 45%</b>: a steadier name that "
+             "gives up some upside but falls much less, which is useful ballast next to "
+             "leveraged holdings."))])
+
+    compare = _section(
+        "compare", "Compare and candlesticks", "Putting two to four tickers side by side, "
+        "and reading a candle chart.",
+        [("Compare",
+          "<p>Open <b>Compare</b> from the board (or a card) and add up to four tickers. "
+          "Every line starts at $10,000 on the first day they all traded, so the "
+          "growth chart is fair even when one fund is newer. The <b>drawdown</b> chart shows "
+          "how far each sat below its previous high: the pain you would have sat through. "
+          "For funds, <b>What's inside</b> lists top holdings and how much two funds overlap.</p>"),
+         ("Candlesticks",
+          "<p>Each candle is one day (or one week on long ranges). The body runs from the "
+          "open to the close: <b class='up'>green</b> closed higher than it opened, "
+          "<b class='down'>red</b> lower. The thin wick shows the day's high and low. The "
+          "bars underneath are volume.</p>"),
+         ("Two examples", _ex(
+             "VOO vs FNGU: FNGU may end higher, but its drawdown chart shows falls of 60% "
+             "or more along the way, and its beta is over 3. Same direction, very different ride.",
+             "QQQ and VOO overlap heavily (the same mega-caps top both), so owning both adds "
+             "less diversification than two tickers suggests."))])
+
     sections = [reading, factors, dcf, montecarlo, ptarget, kelly, momentum,
-                volume, regime, stops, voc, consensus]
+                volume, regime, stops, voc, consensus, risk, compare]
     toc = "".join(
         f'<a href="#{sid}">{label}</a>' for sid, label in
         [("reading", "The board"), ("factors", "Factors"), ("dcf", "DCF"),
          ("montecarlo", "Monte Carlo"), ("ptarget", "P(target before stop)"),
          ("kelly", "Position sizing"), ("momentum", "Momentum"), ("volume", "Volume"),
          ("regime", "Regime"), ("stops", "Stop study"), ("voc", "Virtue of Complexity"),
-         ("consensus", "Analyst consensus")])
+         ("consensus", "Analyst consensus"), ("risk", "Beta and alpha"),
+         ("compare", "Compare")])
     close = (f'<button class="page-x" onclick="return goBack(event)" title="Close" '
              f'aria-label="Close">{icon("x", 17)}</button>')
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">

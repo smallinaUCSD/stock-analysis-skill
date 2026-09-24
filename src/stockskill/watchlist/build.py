@@ -156,6 +156,26 @@ def _attach_factors(rows, data) -> None:
         return
 
 
+def _attach_risk(rows, data, benches) -> None:
+    """Beta/alpha/Sharpe/drawdown vs SPY and QQQ on each row (pure math over the
+    cached price history). Beta shown on the board is the Welch estimate vs SPY,
+    falling back to the vendor's when there's no benchmark. Never raises."""
+    if not benches:
+        return
+    from ..performance.benchmarks import risk_vs_benchmarks
+    for r in rows:
+        td = data.get(r.ticker)
+        if not td:
+            continue
+        try:
+            r.risk = risk_vs_benchmarks(td, benches)
+        except Exception:  # noqa: BLE001
+            continue
+        spy = r.risk.get("SPY") or {}
+        if spy.get("beta") is not None:
+            r.beta = spy["beta"]
+
+
 # Last live quote per ticker: {TICKER: (fetched_at, quote)}. Lets a rebuild that
 # was triggered by ADDING tickers fetch only the new names instead of re-pulling
 # the whole board through the rate-limited quote API (which took minutes and
@@ -309,6 +329,12 @@ def build_watchlist_html(tickers_spec, *, period: str = "5y", workers: int = 5,
     else:
         # Fast path: don't touch Yahoo; fall through to the cached panels below.
         sectors, markets, macro = [], [], {}
+
+    # Benchmarks for beta/alpha: refreshed with the panels on a full live build,
+    # read from the cache otherwise (the fast and incremental builds stay offline).
+    from ..performance.benchmarks import load_benchmarks
+    _attach_risk(rows, data, load_benchmarks(cache_dir, period, ttl,
+                                             fetch=live and panels, have=data))
 
     # Keep the last good panel data so a failed/rate-limited fetch doesn't blank
     # the Sector / Markets / Macro panels (in memory + on disk when cached).
