@@ -95,6 +95,34 @@ def quote(symbol: str) -> dict | None:
     return {"price": c, "change_pct": (dp / 100.0) if dp is not None else None}
 
 
+def news_raw(symbol: str, limit: int = 12, days: int = 10) -> list[dict] | None:
+    """Recent company news -> [{title, summary, publisher, url, published}].
+
+    Free tier covers North American companies and ETFs. None on failure/no data.
+    """
+    from datetime import date, datetime, timedelta, timezone
+
+    today = date.today()
+    j = _get("/company-news", symbol=symbol,
+             **{"from": str(today - timedelta(days=days)), "to": str(today)})
+    if not isinstance(j, list) or not j:
+        return None
+    out = []
+    for it in j[:limit]:
+        if not isinstance(it, dict) or not (it.get("headline") or "").strip():
+            continue
+        ts = it.get("datetime")
+        out.append({
+            "title": it["headline"].strip(),
+            "summary": it.get("summary") or "",
+            "publisher": it.get("source") or "",
+            "url": it.get("url") or "",
+            "published": (datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
+                          if isinstance(ts, (int, float)) and ts > 0 else ""),
+        })
+    return out or None
+
+
 def batch_quotes(tickers: list[str], workers: int = 4) -> dict[str, dict]:
     """Quotes for many symbols (one call each, rate-limited). {} on total failure."""
     from concurrent.futures import ThreadPoolExecutor

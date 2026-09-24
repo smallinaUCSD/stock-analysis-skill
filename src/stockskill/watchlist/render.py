@@ -189,8 +189,10 @@ table.wl th:nth-child(15),table.wl td:nth-child(15){text-align:left}
 .card-row b{color:var(--ink);font-weight:500}
 .card-spark{margin:8px 0}
 .links{margin-top:10px;display:flex;flex-wrap:wrap;gap:4px 10px}
-.links a{font-size:13px;color:var(--muted);text-decoration:none}
-.links a:hover{color:var(--link);text-decoration:underline}
+.links a,.details-cta span{text-decoration:underline;text-decoration-color:transparent;
+  text-underline-offset:3px;transition:color .15s ease,text-decoration-color .15s ease}
+.links a{font-size:13px;color:var(--muted)}
+.links a:hover,.details-cta:hover span{color:var(--link);text-decoration-color:currentColor}
 .trendline{font-size:13px;font-weight:500;margin:2px 0 6px;display:flex;align-items:center;gap:6px}
 .tscore{font-size:13px;font-weight:500;color:var(--muted);padding:0 5px;border-radius:5px;
   background:var(--surface-2)}
@@ -202,7 +204,8 @@ table.wl th:nth-child(15),table.wl td:nth-child(15){text-align:left}
 .fchip .fscore.down{color:var(--crit);background:color-mix(in srgb,var(--crit) 14%,transparent)}
 .details-cta{display:flex;align-items:center;justify-content:space-between;margin-top:10px;
   padding-top:9px;border-top:1px solid var(--border);font-size:13px;font-weight:500;color:var(--muted)}
-.card-item:hover .details-cta{color:var(--link)}
+.details-cta svg{transition:color .15s ease}
+.details-cta:hover svg{color:var(--link)}
 .analysis-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;
   margin:14px 0 6px;height:40px;border-radius:var(--r);cursor:pointer;font-weight:500;font-size:14px;
   border:none;background:var(--accent);color:var(--accent-ink)}
@@ -1433,7 +1436,18 @@ function openCard(card){{
   body.innerHTML=''; body.appendChild(wrap);
   document.getElementById('modal').classList.add('show');
   drawCharts(body);
+  fitChart(body);
   if(typeof loadNews==='function') loadNews(body);
+}}
+function fitChart(body){{
+  // Stretch the quick-look chart to the height of the metrics column beside it
+  // (side-by-side layout only; stacked on phones it keeps its natural height).
+  const el=body.querySelector('.mx-chart .pricechart'), meta=body.querySelector('.mx-meta');
+  if(!el||!meta||!el._series||window.matchMedia('(max-width:820px)').matches) return;
+  const sec=el.closest('.chart-sec'), extra=sec.offsetHeight-el.offsetHeight;
+  el._h=Math.max(176, Math.min(720, meta.offsetHeight-extra));
+  const on=sec.querySelector('.tfb.on')||sec.querySelector('.tfb');
+  renderChart(el, on?on.dataset.tf:'1y');
 }}
 const TF_DAYS={{'5d':8,'1mo':31,'3mo':92,'6mo':183,'1y':366,'2y':731,'5y':1827,'max':1e9}};
 function drawCharts(root){{
@@ -1462,7 +1476,7 @@ function renderChart(el, tf){{
   let start=0; for(let i=0;i<n;i++){{ if(new Date(s.d[i]).getTime()>=cutoff){{ start=i; break; }} }}
   if(start>n-2) start=Math.max(0,n-2);
   const c=s.c.slice(start), d=s.d.slice(start);
-  const W=Math.max(280, Math.round(el.clientWidth||340)), H=176;
+  const W=Math.max(280, Math.round(el.clientWidth||340)), H=el._h||176;
   const ML=48, MR=10, MT=8, MB=22, x0=ML, x1=W-MR, y0=H-MB, y1=MT;
   let lo=Math.min.apply(null,c), hi=Math.max.apply(null,c);
   const dataLo=lo, pad=(hi-lo)*0.06||1; lo-=pad; hi+=pad; if(dataLo>=0 && lo<0) lo=0;
@@ -1474,7 +1488,7 @@ function renderChart(el, tf){{
   const line=c.map((v,i)=>X(i).toFixed(1)+','+Y(v).toFixed(1)).join(' ');
   const area=x0.toFixed(1)+','+y0+' '+line+' '+x1.toFixed(1)+','+y0;
   // y gridlines + labels (nice steps)
-  const step=niceStep(hi-lo,4); let grid='', ylab='';
+  const step=niceStep(hi-lo,Math.max(4,Math.round(H/55))); let grid='', ylab='';
   for(let v=Math.ceil(lo/step)*step; v<=hi+1e-9; v+=step){{ const yy=Y(v).toFixed(1);
     grid+='<line x1="'+x0+'" y1="'+yy+'" x2="'+x1+'" y2="'+yy+'" stroke="var(--border)" stroke-width="0.6" opacity="0.55"/>';
     ylab+='<text x="'+(x0-5)+'" y="'+(parseFloat(yy)+3)+'" text-anchor="end" class="axl">'+fmtAxisPrice(v)+'</text>'; }}

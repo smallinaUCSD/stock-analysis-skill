@@ -3,15 +3,16 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def _isolate_live_quote_cache():
-    """Module-level caches (live quotes, failed-fetch backoff, symbol search, the
+    """Module-level caches (live quotes, failed-fetch backoff, symbol search, news, the
     FMP quota cooldown) are cleared around every test so mocks never leak."""
     from stockskill.watchlist import build, pipeline
-    from stockskill.data import fmp, search
+    from stockskill.data import fmp, news, search
 
     def reset():
         build._QUOTES.clear()
         pipeline._FAIL_UNTIL.clear()
         search._CACHE.clear()
+        news._CACHE.clear()
         fmp._exhausted_until = 0.0
 
     reset()

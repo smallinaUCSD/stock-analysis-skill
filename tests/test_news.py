@@ -91,3 +91,29 @@ def test_fetch_news_falls_back_when_nothing_relevant(monkeypatch):
     monkeypatch.setattr("yfinance.Ticker", _T, raising=False)
     out = fetch_news("AAPL", limit=6, name="Apple Inc.")
     assert len(out) == 2   # nothing matched -> fall back to all (don't blank the section)
+
+
+def test_fetch_news_uses_finnhub_when_fmp_has_none_and_caches(monkeypatch):
+    """FMP news is paid-only and Yahoo's news endpoint can be down: Finnhub's free
+    company news fills the gap, and a reopened card doesn't refetch."""
+    from stockskill.data import finnhub, fmp
+    from stockskill.data.news import fetch_news
+
+    monkeypatch.setattr(fmp, "has_fmp", lambda: True)
+    monkeypatch.setattr(fmp, "news_raw", lambda t, limit=12: None)       # 402 on free
+    monkeypatch.setenv("FINNHUB_API_KEY", "k")
+    calls = []
+
+    def fake_get(path, **params):
+        calls.append((path, params["symbol"]))
+        return [{"headline": "Apple ships new chips", "summary": "", "source": "Reuters",
+                 "url": "https://x/1", "datetime": 1790226881},
+                {"headline": "", "datetime": 1}]
+    monkeypatch.setattr(finnhub, "_get", fake_get)
+    monkeypatch.setattr("yfinance.Ticker", lambda t: (_ for _ in ()).throw(AssertionError("yf")))
+
+    items = fetch_news("AAPL", limit=6, name="Apple Inc.")
+    assert [(n["title"], n["publisher"]) for n in items] == [("Apple ships new chips", "Reuters")]
+    assert items[0]["published"].startswith("2026-")
+    fetch_news("AAPL", limit=6, name="Apple Inc.")
+    assert calls == [("/company-news", "AAPL")]

@@ -1,4 +1,4 @@
-"""Recent news headlines per ticker (yfinance). Best-effort, normalized.
+"""Recent news headlines per ticker (FMP / Finnhub / yfinance). Best-effort, normalized.
 
 Handles both the current yfinance shape (``{id, content:{...}}``) and the older
 flat shape (``{title, publisher, link, providerPublishTime}``). Returns a list of
@@ -7,6 +7,7 @@ flat shape (``{title, publisher, link, providerPublishTime}``). Returns a list o
 
 from __future__ import annotations
 
+import time
 from datetime import datetime, timezone
 
 
@@ -107,14 +108,33 @@ def fetch_news(ticker: str, limit: int = 6, name: str | None = None) -> list[dic
 
     When ``name`` is given, keep only items whose headline/summary mentions the
     ticker or a company-name token (drops broad market roundups). Falls back to
-    the unfiltered set if that would leave nothing. Prefers FMP when a key is
-    configured (works from datacenter IPs), falling back to yfinance.
+    the unfiltered set if that would leave nothing. Sources in order: FMP (paid
+    plans only), Finnhub (free company news), then yfinance. Results are cached
+    for 10 minutes so reopening cards doesn't spend API calls.
     """
-    from . import fmp
+    key = (ticker, limit, name or "")
+    hit = _CACHE.get(key)
+    if hit and time.time() - hit[0] < _TTL:
+        return [dict(n) for n in hit[1]]
+    out = _fetch(ticker, limit, name)
+    if out:                              # don't cache an outage
+        _CACHE[key] = (time.time(), out)
+    return [dict(n) for n in out]
 
+
+_CACHE: dict[tuple, tuple[float, list[dict]]] = {}
+_TTL = 600.0
+
+
+def _fetch(ticker: str, limit: int, name: str | None) -> list[dict]:
+    from . import finnhub, fmp
+
+    want = max(limit * 2, 12)
     raw = None
-    if fmp.has_fmp():
-        raw = fmp.news_raw(ticker, limit=max(limit * 2, 12))
+    if fmp.has_fmp() and not fmp.quota_exhausted():
+        raw = fmp.news_raw(ticker, limit=want)
+    if not raw and finnhub.has_finnhub():
+        raw = finnhub.news_raw(ticker, limit=max(want, 60))   # free; filtered below
     if not raw:
         raw = _yf_raw(ticker)
 
