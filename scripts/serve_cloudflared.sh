@@ -60,13 +60,20 @@ if [ -z "${SKIP_REFRESH:-}" ]; then
   ./scripts/refresh_data.sh || echo "!! data refresh failed; using the existing snapshot"
 fi
 
+# Keep the terminal quiet: server and tunnel logs go to files (.cache is gitignored).
+LOGDIR=".cache/serve"; mkdir -p "$LOGDIR"
+BOARD_LOG="$LOGDIR/board.log"; TUNNEL_LOG="$LOGDIR/tunnel.log"
+: > "$BOARD_LOG"; : > "$TUNNEL_LOG"
+
 echo ">> Starting the board on http://127.0.0.1:${PORT} ..."
 uv run gunicorn -w 1 -k gthread --threads 8 -t 120 \
-  -b "127.0.0.1:${PORT}" 'stockskill.server:create_app()' &
+  -b "127.0.0.1:${PORT}" 'stockskill.server:create_app()' >>"$BOARD_LOG" 2>&1 &
 SERVER_PID=$!
+TUNNEL_PID=""
 
 cleanup() {
-  echo; echo ">> Stopping server..."
+  echo; echo ">> Stopping tunnel and server..."
+  [ -n "$TUNNEL_PID" ] && kill "$TUNNEL_PID" 2>/dev/null || true
   pkill -P "$SERVER_PID" 2>/dev/null || true
   kill "$SERVER_PID" 2>/dev/null || true
   lsof -nP -tiTCP:"${PORT}" -sTCP:LISTEN 2>/dev/null | xargs kill 2>/dev/null || true
@@ -77,7 +84,55 @@ for _ in $(seq 1 30); do
   if curl -fsS -m 2 "http://127.0.0.1:${PORT}/healthz" >/dev/null 2>&1; then break; fi
   sleep 1
 done
+if ! curl -fsS -m 2 "http://127.0.0.1:${PORT}/healthz" >/dev/null 2>&1; then
+  echo "!! The board didn't start. Last lines of $BOARD_LOG:"; tail -20 "$BOARD_LOG"; exit 1
+fi
+echo "   Board is up locally: http://127.0.0.1:${PORT}"
 
-echo ">> Opening a Cloudflare quick tunnel. Share the https://<name>.trycloudflare.com"
-echo "   URL it prints below. (Press Ctrl-C to stop both the tunnel and the server.)"
-cloudflared tunnel --url "http://localhost:${PORT}"
+echo ">> Opening a Cloudflare tunnel (this takes a few seconds)..."
+cloudflared tunnel --url "http://localhost:${PORT}" >>"$TUNNEL_LOG" 2>&1 &
+TUNNEL_PID=$!
+
+URL=""
+for _ in $(seq 1 30); do
+  URL=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$TUNNEL_LOG" | grep -v '://api\.' | head -1 || true)
+  [ -n "$URL" ] && break
+  sleep 1
+done
+if [ -z "$URL" ]; then
+  echo "!! Cloudflare didn't hand out a URL. Last lines of $TUNNEL_LOG:"; tail -20 "$TUNNEL_LOG"; exit 1
+fi
+HOST="${URL#https://}"
+
+# A new quick-tunnel name takes a little while to exist in DNS. If anyone (Safari,
+# or this script) looks it up too early, macOS caches "not found" and the link
+# keeps failing ("Safari can't find the server") until that cache expires. So:
+# ask Cloudflare's DNS directly (dig bypasses the Mac's cache) and test the tunnel
+# pinned to that IP, and only print the link once it actually answers.
+echo "   Waiting for the link to go live (don't open it yet)..."
+READY=""
+for _ in $(seq 1 60); do
+  IP=$(dig +short @1.1.1.1 "$HOST" A 2>/dev/null | grep -E '^[0-9.]+$' | head -1 || true)
+  if [ -n "$IP" ] && [ "$(curl -s -m 8 -o /dev/null -w '%{http_code}' --resolve "$HOST:443:$IP" "$URL/healthz")" = "200" ]; then
+    READY=1; break
+  fi
+  sleep 2
+done
+
+echo
+if [ -n "$READY" ]; then
+  echo "  ============================================================"
+  echo "   Your board is live. Share this link:"
+  echo
+  echo "     $URL"
+  echo
+  echo "  ============================================================"
+else
+  echo "!! The link hasn't come up yet (Cloudflare can be slow). It may still work in a"
+  echo "   minute: $URL"
+fi
+echo "   It changes every time you restart this script. Press Ctrl-C to stop."
+echo "   Logs: $BOARD_LOG, $TUNNEL_LOG"
+echo "   If Safari says it can't find the server, clear the Mac's DNS cache:"
+echo "     sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder"
+wait "$TUNNEL_PID"
