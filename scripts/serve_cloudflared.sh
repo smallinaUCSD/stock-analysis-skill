@@ -131,7 +131,16 @@ if [ -n "$READY" ]; then
   # Open it in Safari now that it answers (opening earlier is what made macOS
   # cache "not found"). Skip with NO_OPEN=1.
   if [ -z "${NO_OPEN:-}" ] && [ "$(uname)" = "Darwin" ]; then
-    open -a Safari "$URL" 2>/dev/null || open "$URL" 2>/dev/null || true
+    echo "   Opening it in Safari..."
+    if ! err=$(open -a Safari "$URL" 2>&1); then
+      # LaunchServices can refuse from some embedded terminals; AppleScript still works.
+      if ! err2=$(osascript -e 'tell application "Safari" to activate' \
+                            -e "tell application \"Safari\" to open location \"$URL\"" 2>&1); then
+        echo "!! Couldn't open Safari automatically (${err:-$err2}). Open the link above by hand."
+      fi
+    fi
+    # bring Safari to the front even if it opened behind this window / on another desktop
+    osascript -e 'tell application "Safari" to activate' >/dev/null 2>&1 || true
   fi
 else
   echo "!! The link hasn't come up yet (Cloudflare can be slow). It may still work in a"

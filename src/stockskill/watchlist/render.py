@@ -256,6 +256,13 @@ table.wl th:nth-child(15),table.wl td:nth-child(15){text-align:left}
   margin-top:20px;padding-top:18px;border-top:1px solid var(--border)}
 .mx-grid>div{min-width:0}
 .mx-grid .det-sec:first-child,.mx-sum>:first-child{margin-top:0}
+.mx-grid .det-h{margin-bottom:8px}
+.mx-grid .card-row{margin-top:0;padding:4px 0;gap:12px}
+.mx-grid .card-row b{text-align:right}
+.mx-grid .det-sec+.det-sec{margin-top:18px}
+.mx-sum .trendline{margin:0 0 6px}
+.mx-sum .fchip{min-height:0;margin:0 0 8px}
+.mx-sum .links{margin-top:10px!important}
 .mx-news{margin-top:22px;padding-top:16px;border-top:1px solid var(--border)}
 .mx .analysis-btn{margin:22px 0 2px}
 @media (max-width:900px){.mx-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -705,10 +712,15 @@ def _chart_html(r):
             f'<div class="chart-tip muted">Hover the chart for price at a date</div></div>')
 
 
+def _kv(label, value, cls="", title=""):
+    """One label-left / value-right row, the same in every quick-look column."""
+    t = f' title="{html.escape(title, quote=True)}"' if title else ""
+    return f'<div class="card-row"{t}><span>{label}</span><b class="{cls}">{value}</b></div>'
+
+
 def _valuation_summary(r):
-    """Valuation stance + Monte Carlo P(undervalued) for the modal, and the
-    reverse DCF: the growth today's price already assumes, next to the growth
-    the company actually reported."""
+    """Valuation for the modal: verdict, base fair value, Monte Carlo chance it's
+    undervalued, and the reverse DCF (growth the price assumes vs reported)."""
     payload = r.valuation or {}
     v = payload.get("valuation") if "valuation" in payload else payload
     v = v or {}
@@ -716,55 +728,54 @@ def _valuation_summary(r):
         return ""                      # ETFs / no cash flows: the full analysis explains why
     mos = v.get("margin_of_safety") or 0.0
     stance = "Undervalued" if mos >= 0.10 else ("Overvalued" if mos <= -0.10 else "Fairly valued")
-    scls = "up" if mos >= 0.10 else ("down" if mos <= -0.10 else "muted")
-    bits = []
+    scls = "up" if mos >= 0.10 else ("down" if mos <= -0.10 else "")
+    rows = [_kv("Verdict", stance, scls)]
     if v.get("base"):
-        bits.append(f'base ${v["base"]:,.0f}')
+        rows.append(_kv("Fair value (base)", f'${v["base"]:,.0f}'))
     if v.get("mc_prob_undervalued") is not None:
-        bits.append(f'MC P(undervalued) {v["mc_prob_undervalued"]*100:.0f}%')
-    tail = f' <span class="muted" style="font-weight:400">· {" · ".join(bits)}</span>' if bits else ''
-    implied = ""
+        rows.append(_kv("Chance undervalued", f'{v["mc_prob_undervalued"]*100:.0f}%',
+                        title="Monte Carlo DCF: share of simulated fair values above today's price"))
     ig = v.get("implied_market_growth")
     if ig is not None:
+        rows.append(_kv("Price assumes", f"{ig*100:.0f}%/yr growth",
+                        title="Reverse DCF: the 10-year growth rate that justifies today's price"))
         asm = v.get("assumptions") or {}
         grew = asm.get("reported_growth")
-        src = (asm.get("growth_source") or "").split(",")[0]
-        vs = (f' <span class="muted">vs {grew*100:.0f}% reported {html.escape(src)}</span>'
-              if grew is not None and src and not src.startswith("default") else "")
-        implied = (f'<div class="det-line" title="Reverse DCF: the 10-year growth rate that '
-                   f'justifies today\'s price">Price assumes <b>{ig*100:.0f}%/yr</b> growth{vs}</div>')
-    return (f'<div class="det-sec"><div class="det-h">Valuation</div>'
-            f'<div class="det-line"><b class="{scls}">{stance}</b>{tail}</div>{implied}</div>')
+        src = (asm.get("growth_source") or "").split(",")[0].replace(" growth", "")
+        if grew is not None and src and not src.startswith("default"):
+            rows.append(_kv("Reported growth", f"{grew*100:.0f}% {html.escape(src)}"))
+    return f'<div class="det-sec"><div class="det-h">Valuation</div>{"".join(rows)}</div>'
 
 
 def _regime_summary(r):
-    """One-line regime + trend read for the modal."""
+    """Regime + 12-month trend for the modal."""
     rg = r.regime or {}
-    parts = []
+    rows = []
     if rg.get("state"):
-        pb = rg.get("p_bull")
-        parts.append(rg["state"] + (f' (P bull {pb*100:.0f}%)' if pb is not None else ''))
+        rows.append(_kv("Regime", html.escape(rg["state"].capitalize())))
+    if rg.get("p_bull") is not None:
+        pb = rg["p_bull"]
+        rows.append(_kv("Chance of a bull regime", f"{pb*100:.0f}%",
+                        "up" if pb >= 0.6 else ("down" if pb <= 0.4 else "")))
     if rg.get("tsmom_label"):
-        parts.append(rg["tsmom_label"])
-    if not parts:
+        rows.append(_kv("12-month trend", html.escape(rg["tsmom_label"].capitalize())))
+    if not rows:
         return ""
-    return (f'<div class="det-sec"><div class="det-h">Regime &amp; trend</div>'
-            f'<div class="det-line muted">{html.escape(" · ".join(parts))}</div></div>')
+    return f'<div class="det-sec"><div class="det-h">Regime &amp; trend</div>{"".join(rows)}</div>'
 
 
 def _volume_summary(r):
-    """One-line volume/money-flow read for the modal."""
+    """Volume / money-flow read for the modal."""
     vs = getattr(r, "volume_signal", None) or {}
     if not vs.get("label"):
         return ""
     st = vs.get("state", "")
     cls = "up" if st in ("accumulation", "bullish-divergence") else \
-          ("down" if st in ("distribution", "bearish-divergence") else "muted")
-    extra = ""
+          ("down" if st in ("distribution", "bearish-divergence") else "")
+    rows = [_kv("Read", html.escape(vs["label"].capitalize()), cls)]
     if getattr(r, "mfi", None) is not None:
-        extra = f' <span class="muted">· MFI {r.mfi:.0f}</span>'
-    return (f'<div class="det-sec"><div class="det-h">Volume</div>'
-            f'<div class="det-line"><span class="{cls}">{html.escape(vs["label"])}</span>{extra}</div></div>')
+        rows.append(_kv("Money flow (MFI)", f"{r.mfi:.0f}"))
+    return f'<div class="det-sec"><div class="det-h">Volume</div>{"".join(rows)}</div>'
 
 
 _BETA_TIP = ("Beta vs the S&P 500 over the last year (Welch slope-winsorized estimate). "
@@ -778,28 +789,25 @@ def _risk_summary(r):
     spy, qqq = rk.get("SPY") or {}, rk.get("QQQ") or {}
     if not spy:
         return ""
-
-    def line(label, value, cls="", note=""):
-        note = f' <span class="muted">{note}</span>' if note else ""
-        return (f'<div class="card-row"><span>{label}</span>'
-                f'<b class="{cls}">{value}{note}</b></div>')
-    rows = []
-    beta = _num(spy.get("beta"), 2)
+    rows = [_kv("Beta vs S&amp;P 500", _num(spy.get("beta"), 2), title=_BETA_TIP)]
     if qqq.get("beta") is not None:
-        beta += f' <span class="muted">· {_num(qqq.get("beta"), 2)} vs Nasdaq</span>'
-    rows.append(line("Beta (S&amp;P 500)", beta))
+        rows.append(_kv("Beta vs Nasdaq-100", _num(qqq.get("beta"), 2)))
     a = spy.get("alpha")
     if a is not None:
         cls, txt = _pct(a)
-        rows.append(line("Alpha, per year", txt, cls if spy.get("alpha_significant") else "",
-                         "" if spy.get("alpha_significant") else "(within noise)"))
-    rows.append(line("Sharpe · Sortino",
-                     f'{_num(spy.get("sharpe"), 2)} · {_num(spy.get("sortino"), 2)}'))
-    dcls, dtxt = _pct(spy.get("max_drawdown"))
-    rows.append(line("Max drawdown", dtxt, "down" if spy.get("max_drawdown") else ""))
+        sig = spy.get("alpha_significant")
+        rows.append(_kv("Alpha, per year",
+                        txt + ("" if sig else ' <span class="muted" style="font-weight:400">(noise)</span>'),
+                        cls if sig else "",
+                        title="Return beyond what market exposure explains; "
+                              "'noise' = too small for one year of data to tell from luck"))
+    rows.append(_kv("Sharpe · Sortino",
+                    f'{_num(spy.get("sharpe"), 2)} · {_num(spy.get("sortino"), 2)}'))
+    _, dtxt = _pct(spy.get("max_drawdown"))
+    rows.append(_kv("Max drawdown", dtxt, "down" if spy.get("max_drawdown") else ""))
     up, dn = spy.get("up_capture"), spy.get("down_capture")
     if up is not None and dn is not None:
-        rows.append(line("Up · down capture", f"{up*100:.0f}% · {dn*100:.0f}%"))
+        rows.append(_kv("Up · down capture", f"{up*100:.0f}% · {dn*100:.0f}%"))
     return (f'<div class="det-sec risk-sec"><div class="det-h">Risk vs the market '
             f'<span class="muted" style="font-weight:400">(1 year)</span></div>'
             f'{"".join(rows)}</div>')
@@ -1490,6 +1498,8 @@ function openCard(card){{
   const head=document.createElement('div'); head.className='mx-head';
   ['.card-top','.nm','.exthrs'].forEach(sel=>{{ const n=src.querySelector(sel); if(n) head.appendChild(n); }});
   const sum=document.createElement('div'); sum.className='mx-sum';     // trend, factors, stats, links
+  const oh=document.createElement('div'); oh.className='det-h'; oh.textContent='Overview';
+  sum.appendChild(oh);
   while(src.firstChild) sum.appendChild(src.firstChild);
   const more=document.createElement('div'); more.className='mx-more';  // valuation, regime, volume
   if(detail) Array.from(detail.children).forEach(c=>{{
