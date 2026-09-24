@@ -9,8 +9,9 @@
 #   1. cp .env.example .env   and paste your keys (from the Render dashboard)
 #   2. brew install cloudflared
 #
-# Then just:  ./scripts/serve_cloudflared.sh        (uses port 8787)
+# Then just:  ./scripts/serve_cloudflared.sh        (uses port 8787; opens Safari when live)
 # Or pick a port:  PORT=8899 ./scripts/serve_cloudflared.sh
+# Don't open a browser:  NO_OPEN=1 ./scripts/serve_cloudflared.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -127,6 +128,11 @@ if [ -n "$READY" ]; then
   echo "     $URL"
   echo
   echo "  ============================================================"
+  # Open it in Safari now that it answers (opening earlier is what made macOS
+  # cache "not found"). Skip with NO_OPEN=1.
+  if [ -z "${NO_OPEN:-}" ] && [ "$(uname)" = "Darwin" ]; then
+    open -a Safari "$URL" 2>/dev/null || open "$URL" 2>/dev/null || true
+  fi
 else
   echo "!! The link hasn't come up yet (Cloudflare can be slow). It may still work in a"
   echo "   minute: $URL"
