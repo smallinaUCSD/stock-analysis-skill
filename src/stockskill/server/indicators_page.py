@@ -22,10 +22,10 @@ def indicators_html(initial: str = "") -> str:
             "<span class=\"sub\" style=\"margin:0\">Bollinger, Ichimoku, RSI, Stochastic, MACD, ADX, ATR and OBV</span>"
             "<button class=\"h-close\" onclick=\"window.close()\" title=\"Close tab\" "
             "style=\"margin-left:auto\" aria-label=\"Close tab\">" + icon("x", 17) + "</button></header>"
-            "<p style=\"font-size:12px;margin:-6px 0 12px\">"
+            "<p style=\"font-size:13px;margin:-6px 0 12px\">"
             "<a class=\"h-back\" href=\"/\" onclick=\"return goBack(event)\">← back to watchlist</a></p>"
             + _CONTROLS +
-            "<div id=\"ind-msg\" class=\"muted\" style=\"font-size:13px;margin:8px 0\"></div>"
+            "<div id=\"ind-msg\" class=\"muted\" style=\"font-size:14px;margin:8px 0\"></div>"
             "<div id=\"readout\" class=\"ind-readout\"></div>"
             "<div id=\"panels\">"
             "<svg id=\"p-price\" class=\"ind-svg\" viewBox=\"0 0 900 330\" preserveAspectRatio=\"xMidYMid meet\"></svg>"
@@ -36,7 +36,7 @@ def indicators_html(initial: str = "") -> str:
             "<svg id=\"p-atr\" class=\"ind-svg\" viewBox=\"0 0 900 110\" preserveAspectRatio=\"xMidYMid meet\"></svg>"
             "<svg id=\"p-obv\" class=\"ind-svg\" viewBox=\"0 0 900 120\" preserveAspectRatio=\"xMidYMid meet\"></svg>"
             "</div>"
-            "<p class=\"muted\" style=\"font-size:11.5px;margin-top:12px\">"
+            "<p class=\"muted\" style=\"font-size:13px;margin-top:12px\">"
             "Indicator states, not advice. Free data (yfinance) may be delayed. "
             "All series computed by tested Python.</p>"
             "</div><script>var INIT=\"" + init + "\";\n" + _JS + "</script></body></html>")
@@ -74,31 +74,31 @@ _CONTROLS = """
 _EXTRA_CSS = """
 .ind-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px}
 .ind-bar #itk{width:100%;padding:8px 11px;border-radius:9px;border:1px solid var(--border);
-  background:var(--surface);color:var(--ink);font-size:13px}
+  background:var(--surface);color:var(--ink);font-size:14px}
 .ind-bar .seg{display:inline-flex;border:1px solid var(--border);border-radius:9px;overflow:hidden}
-.ind-bar .seg button{font:600 12px inherit;padding:7px 12px;border:none;background:var(--surface);
+.ind-bar .seg button{font:500 13px inherit;padding:7px 12px;border:none;background:var(--surface);
   color:var(--muted);cursor:pointer}
 .ind-bar .seg button:hover{color:var(--ink)}
 .ind-bar .seg button.on{background:var(--accent);color:#fff}
-.ind-bar .tbtn{font:650 12.5px inherit;line-height:1;padding:8px 15px;border-radius:9px;cursor:pointer;
+.ind-bar .tbtn{font:500 13px inherit;line-height:1;padding:8px 15px;border-radius:9px;cursor:pointer;
   background:var(--accent);color:#fff;border:1px solid transparent}
 .ind-bar .tbtn:hover{filter:brightness(1.08)}
-.ind-grp{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
-.ind-chk{font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:4px}
+.ind-grp{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px}
+.ind-chk{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:4px}
 .h-back{color:var(--muted);text-decoration:none}.h-back:hover{color:var(--ink);text-decoration:underline}
 .h-close{width:34px;height:34px;border:1px solid var(--border);border-radius:50%;background:var(--surface-2);
-  color:var(--ink);font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+  color:var(--ink);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .h-close:hover{background:var(--crit);color:#fff;border-color:transparent}
 #panels{display:flex;flex-direction:column;gap:6px}
 .ind-svg{width:100%;height:auto;background:var(--surface);border:1px solid var(--border);border-radius:10px}
-.ind-svg text{fill:var(--muted);font-size:10px;font-family:inherit}
-.ind-readout{font-size:12.5px;min-height:20px;font-variant-numeric:tabular-nums;margin-bottom:4px}
+.ind-svg text{fill:var(--muted);font-size:13px;font-family:inherit}
+.ind-readout{font-size:13px;min-height:20px;font-variant-numeric:tabular-nums;margin-bottom:4px}
 .ind-readout b{color:var(--ink)} .ind-readout .k{color:var(--muted)}
 .addsug{display:none;position:absolute;z-index:60;left:0;right:0;top:calc(100% + 4px);
   background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;
   box-shadow:var(--shadow-pop)}
-.sug{padding:7px 11px;font-size:13px;cursor:pointer;display:flex;gap:8px;align-items:baseline}
-.sug:hover{background:var(--surface-2)} .sug b{color:var(--ink)} .sug span{color:var(--muted);font-size:11.5px}
+.sug{padding:7px 11px;font-size:14px;cursor:pointer;display:flex;gap:8px;align-items:baseline}
+.sug:hover{background:var(--surface-2)} .sug b{color:var(--ink)} .sug span{color:var(--muted);font-size:13px}
 """
 
 _JS = r"""

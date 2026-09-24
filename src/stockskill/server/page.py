@@ -12,10 +12,10 @@ from ..dashboard.render import _CSS
 
 _EXTRA_CSS = """
 .search{display:flex;gap:8px;margin:14px 0 4px}
-.search input{flex:1;font-size:15px;padding:10px 12px;border-radius:10px;
+.search input{flex:1;font-size:16px;padding:10px 12px;border-radius:10px;
   border:1px solid var(--border);background:var(--surface);color:var(--ink)}
 .search button{font-size:14px;padding:10px 16px;border-radius:10px;border:none;
-  background:var(--accent);color:#fff;font-weight:650;cursor:pointer}
+  background:var(--accent);color:#fff;font-weight:500;cursor:pointer}
 .searchwrap{position:relative}
 .sug{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:20;
   background:var(--surface);border:1px solid var(--border);border-radius:10px;
@@ -24,56 +24,56 @@ _EXTRA_CSS = """
 .sug-item:hover,.sug-item.active{background:var(--surface-2)}
 .sug-item b{font-variant-numeric:tabular-nums}
 .sug-item .nm{flex:1;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sug-item .ex{color:var(--muted);font-size:11px}
+.sug-item .ex{color:var(--muted);font-size:13px}
 .quick{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
-.quick button{font-size:12px;padding:4px 10px;border-radius:999px;cursor:pointer;
+.quick button{font-size:13px;padding:4px 10px;border-radius:999px;cursor:pointer;
   background:var(--surface-2);border:1px solid var(--border);color:var(--ink)}
-.signal{display:inline-block;font-weight:750;font-size:13px;padding:5px 12px;
+.signal{display:inline-block;font-weight:500;font-size:14px;padding:5px 12px;
   border-radius:999px;margin-left:8px}
 .signal.good{background:var(--good);color:#fff}
 .signal.warn{background:var(--warn);color:#111}
 .signal.crit{background:var(--crit);color:#fff}
 .signal.mid{background:var(--surface-2);color:var(--ink);border:1px solid var(--border)}
-.big{font-size:28px;font-weight:720;font-variant-numeric:tabular-nums}
-.kv{display:grid;grid-template-columns:1fr auto;gap:6px 14px;font-size:13px}
-.kv .k{color:var(--muted)} .kv .v{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.big{font-size:28px;font-weight:500;font-variant-numeric:tabular-nums}
+.kv{display:grid;grid-template-columns:1fr auto;gap:6px 14px;font-size:14px}
+.kv .k{color:var(--muted)} .kv .v{text-align:right;font-variant-numeric:tabular-nums;font-weight:500}
 .scenario{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:10px 0}
 .scn{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:10px}
-.scn .lab{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
-.scn .val{font-size:18px;font-weight:680;font-variant-numeric:tabular-nums;margin-top:3px}
+.scn .lab{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px}
+.scn .val{font-size:18px;font-weight:500;font-variant-numeric:tabular-nums;margin-top:3px}
 .scn.bear .val{color:var(--down)} .scn.bull .val{color:var(--up)}
 .muted{color:var(--muted)} .up{color:var(--up)} .down{color:var(--down)}
 .hidden{display:none}
-.loader{color:var(--muted);font-size:13px;padding:14px 0}
-.vnote{font-size:12.5px;color:var(--ink);background:var(--surface-2);
+.loader{color:var(--muted);font-size:14px;padding:14px 0}
+.vnote{font-size:13px;color:var(--ink);background:var(--surface-2);
   border:1px solid var(--warn);border-radius:8px;padding:8px 10px;margin-bottom:10px}
-.disclaimer{font-size:11.5px;color:var(--muted);margin-top:14px;line-height:1.5;
+.disclaimer{font-size:13px;color:var(--muted);margin-top:14px;line-height:1.5;
   border-top:1px solid var(--border);padding-top:10px}
-table.methods{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}
+table.methods{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px}
 table.methods td{padding:3px 0;border-bottom:1px solid var(--border)}
-table.methods td.r{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+table.methods td.r{text-align:right;font-variant-numeric:tabular-nums;font-weight:500}
 /* market climate */
 .climate{background:var(--surface);border:1px solid var(--border);border-radius:12px;
   padding:12px 16px;margin:14px 0}
-.climate .lab{font-size:15px;font-weight:700}
+.climate .lab{font-size:16px;font-weight:500}
 .climate.good .lab{color:var(--good)} .climate.warn .lab{color:var(--warn)} .climate.crit .lab{color:var(--crit)}
-.climate .notes{font-size:12.5px;color:var(--muted);margin-top:4px}
-.climate .metrics{font-size:12px;margin-top:6px;font-variant-numeric:tabular-nums}
+.climate .notes{font-size:13px;color:var(--muted);margin-top:4px}
+.climate .metrics{font-size:13px;margin-top:6px;font-variant-numeric:tabular-nums}
 /* trade evaluator */
 .evalcard{background:var(--surface);border:1px solid var(--border);border-radius:12px;
   padding:14px 16px;margin:16px 0}
-.evalcard h2{font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 10px}
+.evalcard h2{font-size:12px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin:0 0 10px}
 .evform{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-.evform input,.evform select{font-size:13px;padding:8px 10px;border-radius:9px;
+.evform input,.evform select{font-size:14px;padding:8px 10px;border-radius:9px;
   border:1px solid var(--border);background:var(--surface-2);color:var(--ink)}
 .evform input{width:110px} .evform #ev-ticker{width:120px}
-.evform button{font-size:13px;padding:8px 16px;border-radius:9px;border:none;
-  background:var(--accent);color:#fff;font-weight:650;cursor:pointer}
-.factor{display:flex;gap:8px;align-items:baseline;font-size:13px;padding:3px 0;border-bottom:1px solid var(--border)}
-.factor .mk{font-weight:700;width:16px}
+.evform button{font-size:14px;padding:8px 16px;border-radius:9px;border:none;
+  background:var(--accent);color:#fff;font-weight:500;cursor:pointer}
+.factor{display:flex;gap:8px;align-items:baseline;font-size:14px;padding:3px 0;border-bottom:1px solid var(--border)}
+.factor .mk{font-weight:500;width:16px}
 .factor.support .mk{color:var(--good)} .factor.against .mk{color:var(--crit)} .factor.neutral .mk{color:var(--muted)}
-.factor .fn{font-weight:600;min-width:120px} .factor .fd{color:var(--muted)}
-.align{margin-top:10px;padding:8px 12px;border-radius:9px;font-weight:650;font-size:13px}
+.factor .fn{font-weight:500;min-width:120px} .factor .fd{color:var(--muted)}
+.align{margin-top:10px;padding:8px 12px;border-radius:9px;font-weight:500;font-size:14px}
 .align.pos{background:var(--good);color:#fff} .align.neg{background:var(--crit);color:#fff}
 .align.mid{background:var(--surface-2);border:1px solid var(--border)}
 """
@@ -114,7 +114,7 @@ PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 this tool's DCF-based fair value (assumptions shown); bear/base/bull vary growth and discount
 rate; analyst consensus is reported third-party data. Options figures are informational.
 The buy / sell / hold decision is yours. Free data (yfinance) may be delayed or incomplete.</div>
-<p class="muted" style="font-size:12px;margin-top:16px">
+<p class="muted" style="font-size:13px;margin-top:16px">
 Market pulse &amp; your portfolio: run <code>stockskill dashboard --open</code>.</p>
 </div>
 <script>
@@ -174,7 +174,7 @@ async function go(){
       const r2 = await analyze(top.symbol, g);
       if(r2.ok){
         const note = document.createElement('div');
-        note.className='muted'; note.style='font-size:12px;margin:6px 2px';
+        note.className='muted'; note.style='font-size:13px;margin:6px 2px';
         note.textContent = 'Showing '+top.symbol+' ('+top.name+') for “'+raw+'”.';
         out.prepend(note);
       }
@@ -223,7 +223,7 @@ function render(d){
   const methods = (v.methods||[]).map(m=>
     '<tr><td>'+m.method+'</td><td class="r">'+money(m.fair_value)+'</td><td class="muted">'+(m.note||'')+'</td></tr>').join('');
   const opt = (!o||o.available===false)
-    ? '<div class="muted" style="font-size:12.5px">Options: '+((o&&o.note)||'n/a')+'</div>'
+    ? '<div class="muted" style="font-size:13px">Options: '+((o&&o.note)||'n/a')+'</div>'
     : '<div class="kv">'
       + '<div class="k">Nearest expiry</div><div class="v">'+(o.expiry||'n/a')+'</div>'
       + '<div class="k">ATM call ($'+num(o.atm_call?.strike,0)+')</div><div class="v">'+money(o.atm_call?.last_price)+' · IV '+pct(o.atm_call?.implied_vol)+'</div>'
@@ -231,11 +231,11 @@ function render(d){
       + '<div class="k">Put−call IV skew</div><div class="v">'+pctS(o.put_call_iv_skew)+'</div></div>';
 
   return '<div class="grid">'
-   + '<div class="card wide"><h2 style="text-transform:none;font-size:15px;color:var(--ink)">'
+   + '<div class="card wide"><h2 style="text-transform:none;font-size:16px;color:var(--ink)">'
      + d.name+' <span class="muted">'+d.ticker+'</span>'
      + '<span class="signal '+signalClass(sig)+'">'+sig+'</span></h2>'
      + '<div class="big">'+money(d.price)+'</div>'
-     + '<div class="muted" style="font-size:12px">as of '+d.as_of+' · beta '+num(d.beta)+' · div yield '+pct(d.dividend_yield)+'</div>'
+     + '<div class="muted" style="font-size:13px">as of '+d.as_of+' · beta '+num(d.beta)+' · div yield '+pct(d.dividend_yield)+'</div>'
    + '</div>'
    + '<div class="card"><h2>Valuation - bear / base / bull fair value</h2>'
      + (v.note ? '<div class="vnote">'+esc(v.note)+'</div>' : '')
@@ -248,7 +248,7 @@ function render(d){
      + '<div class="k">Price vs base fair value</div><div class="v '+(v.margin_of_safety>=0?'up':'down')+'">'+pctS(v.margin_of_safety)+'</div>'
      + '<div class="k">Reverse-DCF: implied growth in price</div><div class="v">'+pct(v.implied_market_growth)+'</div>'
      + '<div class="k">Discount rate · base growth</div><div class="v">'+pct(v.discount_rate)+' · '+pct(v.assumptions?.stage1_growth)+'</div>'
-     + '<div class="k muted" style="font-size:11px">growth source</div><div class="v muted" style="font-size:11px;font-weight:400">'+(v.assumptions?.growth_source||'')+'</div>'
+     + '<div class="k muted" style="font-size:13px">growth source</div><div class="v muted" style="font-size:13px;font-weight:400">'+(v.assumptions?.growth_source||'')+'</div>'
      + '</div>'
      + '<table class="methods">'+methods+'</table></div>'
    + '<div class="card"><h2>Analyst consensus (reported) &amp; options</h2>'
@@ -287,11 +287,11 @@ function renderEval(d){
   const net = d.n_support - d.n_against;
   const acls = net>=2?'pos':(net<=-2?'neg':'mid');
   const rr = d.rr!=null ? ' · R:R '+d.rr.toFixed(1)+':1' : '';
-  return '<div style="font-weight:700;margin-bottom:6px">'+esc(d.action)+' '+esc(d.ticker)
+  return '<div style="font-weight:500;margin-bottom:6px">'+esc(d.action)+' '+esc(d.ticker)
     + ' @ '+money(d.price)+'</div>'+facs
     + '<div class="align '+acls+'">Support '+d.n_support+' · Against '+d.n_against+rr
     + ' - '+esc(d.alignment)+'</div>'
-    + '<div class="muted" style="font-size:11px;margin-top:6px">Analysis, not advice - the decision is yours.</div>';
+    + '<div class="muted" style="font-size:13px;margin-top:6px">Analysis, not advice - the decision is yours.</div>';
 }
 document.getElementById('ev-ticker').addEventListener('keydown', e=>{ if(e.key==='Enter') runEval(); });
 </script>

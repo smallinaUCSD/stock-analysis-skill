@@ -135,7 +135,7 @@ _CSS = ("@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamon
 :root[data-theme="dark"]{""" + _DARK_TOKENS + """}
 *{box-sizing:border-box}
 html{scrollbar-color:var(--border-strong) transparent;accent-color:var(--accent)}
-body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 var(--font);
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 var(--font);
   font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
 ::selection{background:color-mix(in srgb,var(--accent) 28%,transparent);color:var(--ink)}
 input,textarea,select,button{font:inherit;color:inherit}
@@ -144,37 +144,38 @@ input,textarea{caret-color:var(--accent)}
 a{color:var(--link);text-underline-offset:3px}
 button{-webkit-tap-highlight-color:transparent}
 .ic{display:inline-block;vertical-align:-.18em;flex:0 0 auto}
+b,strong{font-weight:500}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;
   animation-iteration-count:1!important;transition-duration:.01ms!important}}
 .wrap{max-width:1180px;margin:0 auto;padding:20px}
 header{display:flex;flex-wrap:wrap;align-items:baseline;gap:12px;margin-bottom:4px}
 h1,h2.display{font-family:var(--font-display);font-weight:500;letter-spacing:-.02em;line-height:1.1}
-h1{font-size:30px;margin:0}
-.status{font-weight:600;font-size:11.5px;letter-spacing:.02em;padding:3px 9px;
+h1{font-size:28px;margin:0}
+.status{font-weight:500;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;padding:3px 9px;
   border-radius:999px;border:1px solid var(--border);color:var(--muted)}
 .status.open{color:var(--good);background:color-mix(in srgb,var(--good) 14%,transparent);border-color:transparent}
 .status.pre-market,.status.after-hours{color:var(--warn);background:color-mix(in srgb,var(--warn) 12%,transparent);border-color:transparent}
 .status.closed,.status.weekend{color:var(--muted)}
-.sub{color:var(--muted);font-size:12.5px;margin:2px 0 18px}
+.sub{color:var(--muted);font-size:13px;margin:2px 0 18px}
 .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
 @media (max-width:820px){.grid{grid-template-columns:1fr}}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;
   padding:14px 16px}
-.card h2{font-size:12.5px;text-transform:uppercase;letter-spacing:.05em;
-  color:var(--muted);margin:0 0 12px;font-weight:650}
+.card h2{font-size:12px;text-transform:uppercase;letter-spacing:1.5px;
+  color:var(--muted);margin:0 0 12px;font-weight:500}
 .card.wide{grid-column:1 / -1}
 .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:10px}
 .tile{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;
   padding:10px 12px}
-.tile-val{font-size:19px;font-weight:680;font-variant-numeric:tabular-nums}
-.tile-lab{font-size:11px;color:var(--muted);margin-top:3px}
+.tile-val{font-size:22px;font-weight:500;font-variant-numeric:tabular-nums}
+.tile-lab{font-size:13px;color:var(--muted);margin-top:3px}
 .tile.good .tile-val{color:var(--good)} .tile.warn .tile-val{color:var(--warn)}
 .tile.crit .tile-val{color:var(--crit)}
 .row{display:grid;grid-template-columns:180px 1fr 64px;align-items:center;
   gap:10px;padding:3px 0}
-.row-label{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tk{color:var(--muted);font-size:11px}
-.row-val{text-align:right;font-variant-numeric:tabular-nums;font-size:12.5px;font-weight:600}
+.row-label{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tk{color:var(--muted);font-size:13px}
+.row-val{text-align:right;font-variant-numeric:tabular-nums;font-size:13px;font-weight:500}
 .row-val.up,.up{color:var(--up)} .row-val.down,.down{color:var(--down)}
 .row-val.muted{color:var(--muted)}
 .dbar{display:flex;align-items:center;height:15px}
@@ -186,14 +187,14 @@ h1{font-size:30px;margin:0}
 .fill.accent{background:var(--accent)}
 .mbar{height:11px;background:var(--surface-2);border-radius:3px;overflow:hidden}
 .flags{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
-.flag{font-size:11px;padding:2px 8px;border-radius:999px;font-weight:600;
+.flag{font-size:13px;padding:2px 8px;border-radius:999px;font-weight:500;
   background:var(--surface-2);border:1px solid var(--border)}
 .flag.on{color:#fff;background:var(--crit);border-color:transparent}
-.foot{color:var(--muted);font-size:11.5px;margin-top:16px;line-height:1.5}
+.foot{color:var(--muted);font-size:13px;margin-top:16px;line-height:1.5}
 .marketbar{display:flex;flex-wrap:wrap;gap:8px 16px;padding:10px 14px;margin-bottom:16px;
   background:var(--surface);border:1px solid var(--border);border-radius:10px;
-  font-size:12.5px;font-variant-numeric:tabular-nums}
-.marketbar .mq b{color:var(--muted);font-weight:600;font-size:11px;margin-right:3px}
+  font-size:13px;font-variant-numeric:tabular-nums}
+.marketbar .mq b{color:var(--muted);font-weight:500;font-size:13px;margin-right:3px}
 """)
 
 

@@ -12,34 +12,34 @@ from ..dashboard.render import _CSS, _THEME_BOOT
 
 _INTERPRET_CSS = """
 .wrap{max-width:min(900px,100%);padding:22px clamp(16px,3vw,40px)}
-header h1{margin:0 0 6px;font-size:46px}
+header h1{margin:0 0 6px;font-size:48px}
 header .sub{color:var(--muted);font-size:14px;margin:0}
 .toc{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0 8px}
-.toc a{display:inline-flex;align-items:center;height:28px;font-size:13px;font-weight:500;padding:0 12px;
+.toc a{display:inline-flex;align-items:center;height:28px;font-size:14px;font-weight:500;padding:0 12px;
   border-radius:999px;text-decoration:none;background:transparent;border:1px solid var(--border);
   color:var(--ink-2);transition:background-color .15s var(--ease-out),border-color .15s var(--ease-out),color .15s var(--ease-out)}
 .toc a:hover{background:var(--surface-2);border-color:var(--border-strong);color:var(--ink)}
 .guide{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
   padding:22px 26px;margin:14px 0;scroll-margin-top:16px}
-.guide h2{margin:0 0 6px;font-family:var(--font-display);font-size:30px;font-weight:500;letter-spacing:-.02em;line-height:1.15}
-.guide .lede{color:var(--muted);font-size:14.5px;margin:0 0 14px}
-.guide h3{font-size:15px;font-weight:600;color:var(--ink);margin:20px 0 4px}
+.guide h2{margin:0 0 6px;font-family:var(--font-display);font-size:28px;font-weight:500;letter-spacing:-.02em;line-height:1.15}
+.guide .lede{color:var(--muted);font-size:14px;margin:0 0 14px}
+.guide h3{font-size:16px;font-weight:500;color:var(--ink);margin:20px 0 4px}
 .guide p{font-size:16px;line-height:1.6;margin:6px 0;font-variant-numeric:normal;color:var(--ink-2)}
-.guide ul{font-size:15px;line-height:1.55;margin:6px 0 6px 2px;padding-left:18px}
+.guide ul{font-size:16px;line-height:1.55;margin:6px 0 6px 2px;padding-left:18px}
 .guide li{margin:5px 0}
 .guide b{color:var(--ink)}
 .ex{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r);
-  padding:10px 14px;margin:8px 0;font-size:14.5px;line-height:1.55}
-.ex .tag{font-weight:600}.ex .a{color:var(--up)}.ex .b{color:var(--down)}
+  padding:10px 14px;margin:8px 0;font-size:14px;line-height:1.55}
+.ex .tag{font-weight:500}.ex .a{color:var(--up)}.ex .b{color:var(--down)}
 .arrow-key{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0}
 .arrow-key div{font-size:14px;background:var(--surface-2);border:1px solid var(--border);
   border-radius:var(--r);padding:6px 10px}
 .arrow-key .u{color:var(--up)}.arrow-key .d{color:var(--down)}.arrow-key .m{color:var(--muted)}
 .h-back{display:inline-block;margin:12px 0;color:var(--muted);text-decoration:none;font-size:14px}
 .h-back:hover{color:var(--ink);text-decoration:underline}
-.foot{color:var(--on-band-soft);background:var(--band);font-size:12.5px;text-align:center;
+.foot{color:var(--on-band-soft);background:var(--band);font-size:13px;text-align:center;
   margin:26px 0 4px;padding:22px 16px;border-radius:var(--r-lg)}
-.disc{color:var(--muted);font-size:12.5px;line-height:1.5;margin-top:14px}
+.disc{color:var(--muted);font-size:13px;line-height:1.5;margin-top:14px}
 """
 
 

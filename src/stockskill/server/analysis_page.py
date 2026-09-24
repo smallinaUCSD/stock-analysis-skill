@@ -20,42 +20,42 @@ from ..trade.sizing import (win_prob_barrier, kelly_risk_fraction,
 from ..regime import tsmom, dzz_rule, stop_study, voc_timing
 
 _ANALYSIS_CSS = """
-body{font-size:14.5px}
+body{font-size:14px}
 .wrap{max-width:min(1080px,100%);padding:22px clamp(16px,3vw,40px) 28px}
 .a-back{display:inline-flex;align-items:center;gap:6px;color:var(--muted);text-decoration:none;
-  font-size:13px;font-weight:500;margin-bottom:14px;transition:color .15s var(--ease-out)}
+  font-size:14px;font-weight:500;margin-bottom:14px;transition:color .15s var(--ease-out)}
 .a-back:hover{color:var(--ink)}
-.a-tk{font-family:var(--font-mono);font-size:14px;font-weight:600;color:var(--ink-2)}
+.a-tk{font-family:var(--font-mono);font-size:14px;font-weight:500;color:var(--ink-2)}
 .a-head{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;padding-bottom:18px;
   border-bottom:1px solid var(--border)}
 .a-id{display:flex;flex-direction:column;gap:4px;min-width:0}
 .a-id-top{display:flex;align-items:center;gap:10px}
-.a-head h1{margin:2px 0 0;font-size:44px}
+.a-head h1{margin:2px 0 0;font-size:48px}
 .a-pricebox{margin-left:auto;text-align:right}
-.a-price{font-size:32px;font-weight:500;letter-spacing:-.02em;line-height:1.1}
-.a-price .chg{font-size:15px;font-weight:500;margin-left:4px}
-.a-ext{font-size:12.5px;color:var(--muted);margin-top:3px}
+.a-price{font-size:28px;font-weight:500;line-height:1.1}
+.a-price .chg{font-size:16px;font-weight:500;margin-left:4px}
+.a-ext{font-size:13px;color:var(--muted);margin-top:3px}
 .agroup{margin-top:40px}
-.agroup>h2{font-family:var(--font-display);font-size:30px;font-weight:500;letter-spacing:-.02em;
+.agroup>h2{font-family:var(--font-display);font-size:28px;font-weight:500;letter-spacing:-.02em;
   line-height:1.15;margin:0 0 14px}
-.agroup>h2 small{font-family:var(--font);font-size:13px;font-weight:400;letter-spacing:0;color:var(--muted);margin-left:10px}
+.agroup>h2 small{font-family:var(--font);font-size:14px;font-weight:400;color:var(--muted);margin-left:10px}
 .agrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(440px,100%),1fr));gap:14px;align-items:start}
 .asec{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:20px 22px}
 .a-h{font-size:16px;font-weight:500;margin:0 0 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .a-h .stance{margin-left:0}
-.a-row{display:flex;justify-content:space-between;align-items:baseline;gap:16px;font-size:13.5px;
+.a-row{display:flex;justify-content:space-between;align-items:baseline;gap:16px;font-size:14px;
   padding:6px 0;border-top:1px solid var(--border)}
 .a-row:first-of-type{border-top:none}
 .a-row span{color:var(--ink-2)}
-.a-row b{color:var(--ink);font-weight:600;text-align:right;text-wrap:balance}
-.a-read{font-size:12.5px;color:var(--muted);line-height:1.55;margin-top:10px;padding-top:10px;
+.a-row b{color:var(--ink);font-weight:500;text-align:right;text-wrap:balance}
+.a-read{font-size:13px;color:var(--muted);line-height:1.55;margin-top:10px;padding-top:10px;
   border-top:1px solid var(--border);max-width:68ch;text-wrap:pretty}
-.fvtab{width:100%;font-size:13.5px;border-collapse:collapse;margin-top:2px}
+.fvtab{width:100%;font-size:14px;border-collapse:collapse;margin-top:2px}
 .fvtab td{padding:6px 4px;border-top:1px solid var(--border)}.fvtab tr:first-child td{border-top:none}
-.a-note{color:var(--muted);font-size:12.5px;margin-top:26px;line-height:1.55}
+.a-note{color:var(--muted);font-size:13px;margin-top:26px;line-height:1.55}
 .a-help{color:var(--link);text-decoration:none;font-weight:500}
 .a-help:hover{text-decoration:underline}
-.a-foot{color:var(--on-band-soft);background:var(--band);font-size:12.5px;text-align:center;
+.a-foot{color:var(--on-band-soft);background:var(--band);font-size:13px;text-align:center;
   margin:24px 0 4px;padding:22px 16px;border-radius:var(--r-lg)}
 .up{color:var(--up)}.down{color:var(--down)}.muted{color:var(--muted)}
 """

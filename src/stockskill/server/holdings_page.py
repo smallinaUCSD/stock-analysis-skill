@@ -110,7 +110,7 @@ def holdings_html(snap: dict, updated: str = "") -> str:
   <span class="status closed">LOCAL ONLY</span>
   <span class="sub" style="margin:0">Updated {html.escape(updated)}</span>
   <button class="h-close" onclick="window.close()" title="Close tab" style="margin-left:auto">✕</button></header>
-<p style="font-size:12px;margin:-6px 0 14px">
+<p style="font-size:13px;margin:-6px 0 14px">
   <a class="h-back" href="/" onclick="return goBack(event)">← back to watchlist</a></p>
 
 <div class="h-tiles">
@@ -153,7 +153,7 @@ def holdings_html(snap: dict, updated: str = "") -> str:
   </section>
 </div>
 
-<p class="muted" style="font-size:11.5px;margin-top:14px">
+<p class="muted" style="font-size:13px;margin-top:14px">
 Bookkeeping only - records what you did elsewhere; it does not place orders.
 Prices are live (yfinance, may be delayed); shares are inferred from value when
 not recorded with a price. Net gain needs a cost basis.</p>
@@ -198,44 +198,44 @@ _EXTRA_CSS = """
 .h-tiles{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px}
 .h-tile{flex:1 1 140px;background:var(--surface);border:1px solid var(--border);
   border-radius:12px;padding:12px 16px}
-.h-tile>span{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
-.h-tile b{font-size:23px;font-weight:700;font-variant-numeric:tabular-nums}
+.h-tile>span{display:block;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px}
+.h-tile b{font-size:22px;font-weight:500;font-variant-numeric:tabular-nums}
 /* softer back link + circular close (matches the card modal ✕) */
 .h-back{color:var(--muted);text-decoration:none}
 .h-back:hover{color:var(--ink);text-decoration:underline}
 .h-close{width:34px;height:34px;border:1px solid var(--border);border-radius:50%;
-  background:var(--surface-2);color:var(--ink);font-size:17px;cursor:pointer;line-height:1;
+  background:var(--surface-2);color:var(--ink);font-size:18px;cursor:pointer;line-height:1;
   display:flex;align-items:center;justify-content:center}
 .h-close:hover{background:var(--crit);color:#fff;border-color:transparent}
 /* accounts stacked vertically */
 .h-accounts{display:flex;flex-direction:column;gap:12px;margin-bottom:18px}
 .h-acct{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 16px}
 .h-acct-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;gap:10px;flex-wrap:wrap}
-.h-acct-name{font-weight:650;font-size:15px}
-.h-acct-meta{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
-.h-acct-total{font-size:15px;color:var(--accent)}
+.h-acct-name{font-weight:500;font-size:16px}
+.h-acct-meta{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.h-acct-total{font-size:16px;color:var(--accent)}
 .htable-wrap{overflow-x:auto}
-.htable{width:100%;border-collapse:collapse;font-size:12.5px;min-width:780px}
-.htable th{text-align:right;color:var(--muted);font-size:10px;text-transform:uppercase;
-  letter-spacing:.04em;padding:3px 8px;border-bottom:1px solid var(--border)}
+.htable{width:100%;border-collapse:collapse;font-size:13px;min-width:780px}
+.htable th{text-align:right;color:var(--muted);font-size:12px;text-transform:uppercase;
+  letter-spacing:1.5px;padding:3px 8px;border-bottom:1px solid var(--border)}
 .htable th:first-child{text-align:left}
 .htable td{padding:5px 8px;text-align:right;font-variant-numeric:tabular-nums;border-bottom:1px dashed var(--border)}
-.htable td.h-tk{text-align:left;font-weight:600}
-.htable td.h-mv{font-weight:600} .htable td.h-pct{color:var(--muted);width:56px}
+.htable td.h-tk{text-align:left;font-weight:500}
+.htable td.h-mv{font-weight:500} .htable td.h-pct{color:var(--muted);width:56px}
 .htable tr.h-cash td{color:var(--muted)}
 .up{color:var(--up)} .down{color:var(--down)}
 .h-forms{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media (max-width:640px){.h-forms{grid-template-columns:1fr}}
 .h-form{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 16px}
-.h-form-h{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px}
+.h-form-h{font-size:12px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px}
 .t-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;align-items:center}
 .t-row input,.t-row select{padding:8px 10px;border-radius:8px;border:1px solid var(--border);
-  background:var(--bg);color:var(--ink);font-size:13px}
+  background:var(--bg);color:var(--ink);font-size:14px}
 .t-row input{flex:1 1 100px;min-width:80px}
 .t-row input:focus,.t-row select:focus{outline:none;border-color:var(--accent)}
-.h-chk{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px}
-.h-hint{font-size:11px;margin:2px 0}
-.tbtn.add{background:var(--accent);color:#fff;border:none;font-weight:650;padding:8px 14px;border-radius:8px;cursor:pointer}
-.h-msg{font-size:12px;min-height:16px;margin-top:2px}
+.h-chk{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:4px}
+.h-hint{font-size:13px;margin:2px 0}
+.tbtn.add{background:var(--accent);color:#fff;border:none;font-weight:500;padding:8px 14px;border-radius:8px;cursor:pointer}
+.h-msg{font-size:13px;min-height:16px;margin-top:2px}
 .h-msg.ok{color:var(--up)} .h-msg.bad{color:var(--down)}
 """
