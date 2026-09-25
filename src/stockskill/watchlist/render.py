@@ -1424,6 +1424,9 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
     ) if served else ""
     js_served = _SERVED_JS if served else ""
     from ..server.graph_js import GRAPH_CSS as graph_css, GRAPH_JS as graph_js
+    from ..server.analyst_js import ANALYST_CSS as an_css, ANALYST_JS as an_js
+    graph_css += an_css
+    graph_js += an_js
     table = "".join(_row_html(r) for r in rows)
     cards = "".join(_card_html(r) for r in rows)
     tiles = _heatmap_html(rows)
@@ -1572,6 +1575,9 @@ function openCard(card){{
     'href="/graph?t='+encodeURIComponent(tkr)+'" onclick="openTab(this.href);return false">Open the full map</a></div>'+
     '<div class="kg-mini muted" style="font-size:13px">Loading connections…</div>';
   wrap.appendChild(kg);
+  const an=document.createElement('div'); an.className='mx-an';
+  an.innerHTML='<div class="det-h">Analyst ratings</div><div class="an-body muted" style="font-size:13px">Loading…</div>';
+  wrap.appendChild(an);
   if(news){{ news.classList.add('mx-news'); wrap.appendChild(news); }}
   if(cta) wrap.appendChild(cta);
   body.innerHTML=''; body.appendChild(wrap);
@@ -1580,6 +1586,7 @@ function openCard(card){{
   drawCharts(body);
   if(typeof loadNews==='function') loadNews(body);
   loadMiniGraph(body, tkr);
+  if(typeof loadAnalysts==='function') loadAnalysts(body.querySelector('.an-body'), tkr);
 }}
 function loadMiniGraph(body, tkr){{
   const el=body.querySelector('.kg-mini'); if(!el||!tkr||typeof drawGraph!=='function') return;

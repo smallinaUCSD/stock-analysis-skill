@@ -348,6 +348,22 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
         from ..data.search import search_symbols
         return jsonify({"results": search_symbols(request.args.get("q", ""))})
 
+    @app.get("/api/analysts/<ticker>")
+    def analysts_api(ticker: str):
+        """Analyst buy/hold/sell split by month, consensus and price target."""
+        if not _TICKER_RE.match(ticker):
+            return jsonify({"error": "invalid ticker"}), 400
+        from ..data.analysts import ratings, summarize
+        from ..watchlist.pipeline import _load_cached
+        tk = ticker.upper()
+        td = _load_cached(cache_dir, tk) if cache_dir else None
+        snap = td.snapshot if td else None
+        price = (td.ohlcv.get("close") or [None])[-1] if td and td.ohlcv else None
+        s = summarize(ratings(tk, cache_dir) or [], snap.target_mean if snap else None, price)
+        if not s.get("analysts") and not s.get("target_mean"):
+            return jsonify({"ok": False, "error": f"No analyst coverage found for {tk}."})
+        return jsonify({"ok": True, "ticker": tk, **s})
+
     @app.get("/api/news/<ticker>")
     def news(ticker: str):
         if not _TICKER_RE.match(ticker):

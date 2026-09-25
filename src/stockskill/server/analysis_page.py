@@ -361,6 +361,22 @@ _OPTIONS_BOX = ('<div class="asec" data-opt="1"><div class="a-h">Options market<
                 '<div class="opt-body muted">Loading option prices…</div></div>')
 
 
+from .analyst_js import ANALYST_CSS, ANALYST_JS
+
+# fetched once per page; re-drawn after each auto-refresh swaps the sections
+_AN_JS = r"""
+var _AN=null;
+function anRender(){ var el=document.querySelector('[data-an] .an-body'); if(!el) return;
+  if(_AN){ el.classList.remove('muted'); el.innerHTML=anHTML(_AN); return; }
+  fetch('/api/analysts/'+encodeURIComponent(TK)).then(function(r){return r.json();}).then(function(d){ _AN=d; anRender(); })
+    .catch(function(){ el.textContent='Analyst ratings unavailable.'; }); }
+anRender();
+"""
+
+_ANALYST_BOX = ('<div class="asec" data-an="1"><div class="a-h">Analyst ratings</div>'
+                '<div class="an-body muted">Loading…</div></div>')
+
+
 _FORECAST_BOX = ('<div class="asec" data-fc="1"><div class="a-h">Price range forecast</div>'
                  '<div class="fc-body muted">Loading…</div></div>')
 _IDEAS_BOX = ('<div class="asec" data-oi="1"><div class="a-h">Option trade ideas</div>'
@@ -430,7 +446,7 @@ def analysis_html(row, closes=None, refresh_seconds: int = 900) -> str:
     # Grouped by the question each answers, most decision-relevant first, so the
     # experimental model no longer carries the same weight as the valuation.
     sections = (
-        group("Valuation", "what the business is worth", _valuation_box(row), _mc_box(row))
+        group("Valuation", "what the business is worth", _valuation_box(row), _mc_box(row), _ANALYST_BOX)
         + group("Forecast and option ideas", "a range, not a target", _FORECAST_BOX, _IDEAS_BOX)
         + group("Risk", "how it moves with the market", _risk_box(row))
         + group("Filings and positioning", "insiders, short sellers, the accounts", *_SIGNAL_BOXES)
@@ -442,7 +458,7 @@ def analysis_html(row, closes=None, refresh_seconds: int = 900) -> str:
     )
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{tk} analysis</title>{_THEME_BOOT}<style>{_CSS}{_CSS_EXTRA}{_ANALYSIS_CSS}</style></head>
+<title>{tk} analysis</title>{_THEME_BOOT}<style>{_CSS}{_CSS_EXTRA}{_ANALYSIS_CSS}{ANALYST_CSS}</style></head>
 <body><div class="wrap">
 <header class="a-head">
   <div class="a-id"><div class="a-id-top"><span class="a-tk">{tk}</span>
@@ -488,6 +504,7 @@ function refresh(){{ if(_busy) return; _busy=true;
     if(window.holdRender) holdRender();
     if(window.calcInit) calcInit();
     if(window.fcRender) {{ fcRender(); oiRender(); }}
+    if(window.anRender) anRender();
     const nb=d.querySelector('.a-head .badge'), ob=document.querySelector('.a-head .badge');
     if(nb&&ob){{ ob.className=nb.className; ob.textContent=nb.textContent; }}
   }}).catch(function(){{}}).finally(function(){{ _busy=false; }});
@@ -495,7 +512,7 @@ function refresh(){{ if(_busy) return; _busy=true;
 if(REFRESH>0 && REFRESH<=3600000) setInterval(refresh, Math.max(60000,REFRESH));
 </script>
 <script>var TK="{tk}", RVOL={rvol};
-""" + _PRICE_JS + _OPT_JS + _SIG_JS + _CALC_JS + _FC_JS + """</script>
+""" + _PRICE_JS + _OPT_JS + _SIG_JS + _CALC_JS + _FC_JS + ANALYST_JS + _AN_JS + """</script>
 </body></html>"""
 
 
