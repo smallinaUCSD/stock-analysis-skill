@@ -27,6 +27,18 @@ APP_HOME="$(dscl . -read "/Users/$APP_USER" NFSHomeDirectory | awk '{print $2}')
 if id -Gn "$APP_USER" | tr ' ' '\n' | grep -qx admin; then
   echo "!! Note: $APP_USER is an administrator. A standard (non-admin) user is safer."
 fi
+case "$REPO/" in
+  "$APP_HOME"/Desktop/*|"$APP_HOME"/Documents/*|"$APP_HOME"/Downloads/*|"$APP_HOME"/Library/Mobile\ Documents/*)
+    cat <<EOF
+!! The repo is in a folder macOS keeps private from background services
+   ($REPO), so the app would fail with "Operation not permitted".
+   Move it into the home folder and run the installer from there:
+     sudo $REPO/scripts/macmini/uninstall.sh
+     mv "$REPO" "$APP_HOME/stock-analysis-skill" && rm -rf "$APP_HOME/stock-analysis-skill/.venv"
+     sudo "$APP_HOME/stock-analysis-skill/scripts/macmini/install.sh" $APP_USER
+EOF
+    exit 1 ;;
+esac
 echo ">> Repo: $REPO"
 echo ">> App user: $APP_USER ($APP_HOME)"
 
