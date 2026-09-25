@@ -27,6 +27,8 @@ def _no_network_board_builds(monkeypatch):
     (enough to get a home IP throttled) and could write into the real cache, for
     nothing: no test needs it. Tests drive builds directly instead."""
     from stockskill.server.watchlist_service import WatchlistService
+    if not hasattr(WatchlistService, "_real_start_bg_build"):      # for the tests of the method itself
+        WatchlistService._real_start_bg_build = WatchlistService._start_bg_build
     monkeypatch.setattr(WatchlistService, "_start_bg_build", lambda self: None)
 
 

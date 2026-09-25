@@ -60,6 +60,13 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
                              public=public, bmc_url=bmc_url, period=period,
                              cache_ttl=cache_ttl)
     board.wait_ready(0)   # start building the board in the background at startup
+    if os.environ.get("STOCKSKILL_KEEP_FRESH") == "1":
+        board.keep_fresh()    # rebuild whenever stale, not only when someone visits
+
+    @app.get("/api/board/meta")
+    def board_meta():
+        """When the board was last rebuilt (open pages poll this cheaply)."""
+        return jsonify({"ok": True, **board.meta()})
 
     # --- accounts (public site): landing, sign-in, onboarding, per-user lists ---
     auth = os.environ.get("STOCKSKILL_AUTH", "").lower() in ("1", "true", "yes")

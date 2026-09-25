@@ -13,7 +13,12 @@ for s in public private refresh; do
   fi
 done
 for port in 8787 8788; do
-  if curl -fsS -m 3 "http://127.0.0.1:$port/healthz" >/dev/null 2>&1; then echo "  :$port answering"; else echo "  :$port NOT answering"; fi
+  if curl -fsS -m 3 "http://127.0.0.1:$port/healthz" >/dev/null 2>&1; then
+    age=$(curl -fsS -m 3 "http://127.0.0.1:$port/api/board/meta" 2>/dev/null | /usr/bin/python3 -c 'import json,sys
+d=json.load(sys.stdin); a=d.get("age")
+print(("board updated %d min ago (%s)" % (a//60, d.get("session") or "?")) if a is not None else "board not built yet", "- rebuilding now" if d.get("building") else "")' 2>/dev/null)
+    echo "  :$port answering, $age"
+  else echo "  :$port NOT answering"; fi
 done
 TS="$(command -v tailscale || echo /opt/homebrew/bin/tailscale)"
 if [ -x "$TS" ]; then echo; "$TS" serve status 2>/dev/null || echo "  tailscale: not connected"; fi

@@ -19,6 +19,7 @@ export STOCKSKILL_PERIOD="${STOCKSKILL_PERIOD:-5y}"
 export STOCKSKILL_CACHE_TTL="${STOCKSKILL_CACHE_TTL:-2592000}"
 export STOCKSKILL_ADDED_FILE="${STOCKSKILL_ADDED_FILE:-data/added.json}"
 export OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES     # gunicorn + macOS fork safety
+export STOCKSKILL_KEEP_FRESH=1                      # rebuild the board whenever it goes stale
 
 case "${1:-}" in
   public)

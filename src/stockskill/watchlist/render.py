@@ -1751,11 +1751,24 @@ function _schedulePoll(){{
   const ms=_pollMs(); if(!ms) return;
   setTimeout(function(){{ refreshData(); _schedulePoll(); }}, ms);
 }}
+// Also ask every minute whether the server has rebuilt the board (a tiny
+// request); pull the new data as soon as it lands instead of waiting a cycle.
+let _boardTs=Date.now()/1000;
+function _watchBoard(){{
+  if(!SERVED) return;
+  setInterval(function(){{
+    if(document.hidden) return;
+    fetch('/api/board/meta',{{cache:'no-store'}}).then(r=>r.ok?r.json():null).then(m=>{{
+      if(m && m.ts && m.ts>_boardTs+1){{ _boardTs=m.ts; refreshData(); }}
+    }}).catch(()=>{{}});
+  }}, 60000);
+}}
 (function init(){{
   const t=localStorage.getItem('wl_theme'); if(t) document.documentElement.setAttribute('data-theme', t);
   const b=document.getElementById('banner');
   if(b && localStorage.getItem('wl_banner')===b.dataset.sig) b.style.display='none';
   setView(view);
+  _watchBoard();
   fmtUpdated();
   wireTableScroll();
   _schedulePoll();

@@ -45,7 +45,7 @@ REFERRALS = {"friend": "A friend or colleague", "search": "Search engine", "soci
              "reddit": "Reddit or a forum", "news": "News or a blog", "other": "Other"}
 _PUBLIC_PATHS = {"/", "/login", "/signup", "/terms", "/privacy", "/healthz", "/favicon.ico", "/logout",
                  "/sw.js", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/apple-touch-icon.png",
-                 "/notifications/verify", "/notifications/unsubscribe"}
+                 "/notifications/verify", "/notifications/unsubscribe", "/api/board/meta"}
 _ONBOARD_OK = {"/welcome", "/account", "/logout", "/terms", "/privacy"}
 
 

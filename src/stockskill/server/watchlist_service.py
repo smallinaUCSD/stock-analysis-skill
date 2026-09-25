@@ -66,6 +66,11 @@ class WatchlistService:
         self._ts = 0.0
         self._refresh = 1800
         self._building = False
+        self._build_started = 0.0
+        self._build_serial = 0               # every full build gets a number...
+        self._html_serial = 0                # ...and only a newer one may replace the board
+        self._session = None                 # market session the current board was built in
+        self._keeper = False
         self._lock = threading.Lock()
         self._fast_lock = threading.Lock()
         # Board generation: bumped on every add/remove. A build records the gen it
@@ -123,9 +128,11 @@ class WatchlistService:
     # --- build / cache -------------------------------------------------
     def _rebuild(self, live: bool = True, interval: float | None = None,
                  quote_max_age: float = 0.0, panels: bool = True,
-                 touch_ts: bool = True) -> str:
+                 touch_ts: bool = True, serial: int | None = None) -> str:
+        from ..marketclock import market_status
         with self._lock:
             gen = self._gen
+        session = market_status().label
         html, meta = build_watchlist_html(
             self._spec(), period=self._period, cache_dir=self._cache_dir, served=True,
             public=self._public, bmc_url=self._bmc_url, ttl=self._cache_ttl, live=live,
@@ -133,11 +140,16 @@ class WatchlistService:
         with self._lock:
             if gen < self._html_gen:         # a newer board already landed; keep it
                 return self._html or html
+            if serial is not None and serial < self._html_serial:
+                return self._html or html    # a build that started later already finished
             self._html = html
             self._html_gen = gen
+            if serial is not None:
+                self._html_serial = serial
             self._refresh = meta["refresh"]
             if touch_ts:
                 self._ts = time.time()
+                self._session = session
         return html
 
     def _quick_rebuild(self) -> str:
@@ -167,29 +179,74 @@ class WatchlistService:
             return html
 
     def _start_bg_build(self) -> None:
+        import sys
         with self._lock:
             if self._building:
-                return
+                # a build that has run 15+ minutes is stuck (a hung network call):
+                # start a fresh one; the serial check keeps the old one from landing late
+                if time.time() - self._build_started < 900:
+                    return
+                print(f"board build stuck for {int(time.time() - self._build_started)}s; starting another",
+                      file=sys.stderr, flush=True)
             self._building = True
+            self._build_started = time.time()
+            self._build_serial += 1
+            serial = self._build_serial
 
         def run():
+            t0 = time.time()
+            print(f"board build {serial} started", file=sys.stderr, flush=True)
             try:
                 self._ensure_loaded()   # restore persisted adds off the boot path
-                self._rebuild()
-            except Exception:  # noqa: BLE001
-                pass
+                self._rebuild(serial=serial)
+                print(f"board build {serial} finished in {time.time() - t0:.0f}s", file=sys.stderr, flush=True)
+            except Exception as e:  # noqa: BLE001
+                print(f"board build {serial} failed after {time.time() - t0:.0f}s: {e!r}", file=sys.stderr, flush=True)
             finally:
                 with self._lock:
-                    self._building = False
+                    if self._build_serial == serial:
+                        self._building = False
         threading.Thread(target=run, daemon=True).start()
+
+    def is_fresh(self) -> bool:
+        """Built recently AND in the current market session: a board built
+        before the open goes stale the moment the market opens."""
+        from ..marketclock import market_status
+        with self._lock:
+            if self._html is None or time.time() - self._ts >= self._refresh:
+                return False
+            built_in = self._session
+        return built_in is None or built_in == market_status().label
+
+    def keep_fresh(self, every: float = 60.0) -> None:
+        """Background loop: rebuild whenever the board goes stale, so it is
+        already current when someone opens it (enabled by run.sh)."""
+        with self._lock:
+            if self._keeper:
+                return
+            self._keeper = True
+
+        def loop():
+            while True:
+                try:
+                    if not self.is_fresh():
+                        self._start_bg_build()
+                except Exception:  # noqa: BLE001
+                    pass
+                time.sleep(every)
+        threading.Thread(target=loop, daemon=True).start()
+
+    def meta(self) -> dict:
+        with self._lock:
+            return {"ts": self._ts, "session": self._session, "building": self._building,
+                    "age": (time.time() - self._ts) if self._ts else None}
 
     def html(self, force: bool = False) -> str:
         """Never block the request on a full fetch: return the (stale) board and
         rebuild in the background, or a lightweight 'loading' page until the first
         build finishes. This keeps the hosted app from 502-ing on a slow build."""
+        fresh = self.is_fresh()
         with self._lock:
-            fresh = (self._html is not None
-                     and (time.time() - self._ts) < self._refresh)
             cached = self._html
         if fresh and not force:
             return cached
