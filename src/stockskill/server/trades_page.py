@@ -171,7 +171,8 @@ function renderPeople(){ var box=document.getElementById('people'); if(!PEOPLE) 
 // ---- politicians -----------------------------------------------------------
 function loadPol(){ var q='?chamber='+CH+'&type='+KIND+'&ticker='+encodeURIComponent(FILTER.ticker)+'&member='+encodeURIComponent(FILTER.member);
   fetch('/api/congress'+q).then(function(r){return r.json();}).then(function(d){ POL=d; SHOWN=100; renderPol();
-    if(d.loading && !(d.trades||[]).length) setTimeout(loadPol,8000); }).catch(function(){
+    if(d.loading && !(d.trades||[]).length) setTimeout(loadPol,8000);
+    else if(d.error && !d.as_of) setTimeout(loadPol,60000); }).catch(function(){
     document.getElementById('pol-t').textContent='Congress data unavailable right now.'; }); }
 function renderPol(){ var d=POL, box=document.getElementById('pol-t');
   document.getElementById('pol-meta').textContent=(d.loading?'Updating… ':'')+(d.as_of?'Updated '+d.as_of.replace('T',' ')+' · ':'')+d.total+' trades'+(d.days?' filed in the last '+d.days+' days':'');
@@ -179,7 +180,8 @@ function renderPol(){ var d=POL, box=document.getElementById('pol-t');
   var act=(d.most_active||[]).slice(0,6).map(function(x){ return '<button class="chip-b" onclick="pickMember(\''+esc(x[0]).replace(/'/g,'')+'\')">'+esc(x[0])+'<span>'+x[1]+'</span></button>'; }).join('');
   document.getElementById('pol-top').innerHTML=(top?'<div class="chips"><span class="lbl">Most bought</span>'+top+'</div>':'')+(act?'<div class="chips"><span class="lbl">Most active</span>'+act+'</div>':'');
   var rows=(d.trades||[]).slice(0,SHOWN);
-  if(!rows.length){ box.className='tr-tw muted'; box.textContent=d.loading?'Collecting the latest filings from the House and Senate (about a minute the first time)…':'No trades match.'; return; }
+  if(!rows.length){ box.className='tr-tw muted'; box.textContent=d.loading?'Collecting the latest filings from the House and Senate (a few minutes the first time)…':
+    (d.error&&!d.as_of?'Couldn\'t load the filings yet ('+d.error+'). Trying again in a few minutes.':'No trades match.'); return; }
   box.className='tr-tw';
   box.innerHTML='<table class="tr-t"><thead><tr><th>Member</th><th>Ticker</th><th>Asset</th><th>Type</th><th class="r">Amount</th><th>Traded</th><th>Reported</th><th>Owner</th></tr></thead><tbody>'+
     rows.map(function(t){ var lag=daysBetween(t.traded,t.filed);

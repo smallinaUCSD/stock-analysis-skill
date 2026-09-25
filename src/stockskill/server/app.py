@@ -790,7 +790,7 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
         for t in tr[:400]:
             t["member_id"] = _member_id(t)
         return jsonify({"ok": True, "loading": data.get("loading"), "as_of": data.get("as_of"),
-                        "days": window, "total": len(tr), "trades": tr[:400],
+                        "error": data.get("error"), "days": window, "total": len(tr), "trades": tr[:400],
                         "most_bought": bought.most_common(12), "most_active": members.most_common(10)})
 
     _MEMBERS: dict = {"list": None, "t": 0.0, "map": {}}

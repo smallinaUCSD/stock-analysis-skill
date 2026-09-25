@@ -86,3 +86,26 @@ def test_trades_routes(tmp_path, monkeypatch):
     assert h["funds"] == [{"fund": "F"}] and len(h["congress"]) == 1
     assert len(c.get("/api/funds").get_json()["funds"]) >= 20
     assert "Politicians" in c.get("/trades?q=NVDA").get_data(as_text=True)
+
+
+def test_refresh_failure_keeps_previous_trades(tmp_path, monkeypatch):
+    import json
+    import os
+    from stockskill.data import congress as C
+    d = C._dir(str(tmp_path))
+    good = {"as_of": "2026-09-01T10:00", "days": 730, "trades": [{"ticker": "NVDA", "filed": "2026-08-30"}]}
+    with open(os.path.join(d, "trades.json"), "w") as f:
+        json.dump(good, f)
+
+    def boom(*a):
+        raise RuntimeError("offline")
+    monkeypatch.setattr(C, "_house", boom)
+    monkeypatch.setattr(C, "_senate", boom)
+    monkeypatch.setattr(C, "_http", lambda: None)
+    import stockskill.data.politicians as P
+    monkeypatch.setattr(P, "trump_trades", lambda cache_dir=None: [{"ticker": "X", "filed": "2026-09-01"}])
+    monkeypatch.setitem(C._STATE, "retry_after", 0)
+    C._refresh(730, str(tmp_path))
+    assert json.load(open(os.path.join(d, "trades.json"))) == good          # not overwritten
+    assert "offline" in C._STATE["error"] and C._STATE["retry_after"] > 0
+    C._STATE.update(error=None, retry_after=0)

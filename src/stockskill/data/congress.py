@@ -242,6 +242,8 @@ def _senate(days: int, cache_dir, s) -> list[dict]:
 
 
 def _refresh(days: int, cache_dir) -> None:
+    import sys
+    errors = []
     try:
         s = _http()
         trades = []
@@ -249,16 +251,33 @@ def _refresh(days: int, cache_dir) -> None:
             try:
                 trades += fn(days, cache_dir, s)
             except Exception as e:  # noqa: BLE001 - one chamber failing keeps the other
-                _STATE["error"] = f"{fn.__name__.strip('_')}: {e}"
+                errors.append(f"{fn.__name__.strip('_')}: {e}")
+        congress = len(trades)
         try:                                     # the President's OGE 278-T reports
             from .politicians import trump_trades
             trades += trump_trades(cache_dir)
         except Exception as e:  # noqa: BLE001
-            _STATE["error"] = f"president: {e}"
+            errors.append(f"president: {e}")
+        if errors:
+            print(f"congress refresh: {'; '.join(errors)}", file=sys.stderr, flush=True)
+        if not congress:
+            # nothing from either chamber (offline, blocked, site change): keep
+            # whatever we had and try again on the next request
+            _STATE["error"] = "; ".join(errors) or "no House or Senate filings were returned"
+            _STATE["retry_after"] = time.time() + 300
+            return
         trades.sort(key=lambda t: (t.get("filed") or "", t.get("traded") or ""), reverse=True)
-        with open(os.path.join(_dir(cache_dir), "trades.json"), "w") as f:
+        path = os.path.join(_dir(cache_dir), "trades.json")
+        tmp = f"{path}.{os.getpid()}.tmp"
+        with open(tmp, "w") as f:
             json.dump({"as_of": datetime.now().isoformat(timespec="minutes"), "days": days,
                        "trades": trades}, f)
+        os.replace(tmp, path)
+        _STATE["error"] = "; ".join(errors) or None
+    except Exception as e:  # noqa: BLE001
+        _STATE["error"] = str(e)
+        _STATE["retry_after"] = time.time() + 300
+        print(f"congress refresh failed: {e}", file=sys.stderr, flush=True)
     finally:
         _STATE["loading"] = False
 
@@ -275,7 +294,7 @@ def recent_trades(cache_dir=None, days: int = 730, max_age: float = 6 * 3600) ->
     stale = (data is None or time.time() - os.path.getmtime(path) > max_age
              or (data.get("days") or 0) < days)          # the window was widened
     with _LOCK:
-        if stale and not _STATE["loading"]:
+        if stale and not _STATE["loading"] and time.time() >= _STATE.get("retry_after", 0):
             _STATE["loading"] = True
             threading.Thread(target=_refresh, args=(days, cache_dir), daemon=True).start()
     return {**(data or {"trades": []}), "loading": _STATE["loading"], "error": _STATE["error"]}
