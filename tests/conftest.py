@@ -39,3 +39,10 @@ def _no_api_keys(monkeypatch):
     for k in ("FMP_API_KEY", "FINNHUB_API_KEY", "UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN",
               "SEC_USER_AGENT", "NTFY_TOPIC", "STOCKSKILL_ALERTS_FILE", "STOCKSKILL_PUBLIC_URL"):
         monkeypatch.delenv(k, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _analytics_to_tmp(tmp_path, monkeypatch):
+    """Analytics from the accounts tests go to a throwaway file, never data/."""
+    monkeypatch.setenv("STOCKSKILL_ANALYTICS_DB", str(tmp_path / "analytics.db"))
+    monkeypatch.delenv("STOCKSKILL_ADMINS", raising=False)

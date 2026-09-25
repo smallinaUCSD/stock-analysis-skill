@@ -1282,6 +1282,7 @@ function doAdd(sym){ doAddMany([sym]); }
 // Adding runs as a background job on the server: this returns at once and polls
 // for progress, so the board, cards and analysis pages stay usable meanwhile.
 function doAddMany(list){
+  if(typeof track==='function') track('watch_add', list.join(','));
   document.getElementById('addsug').style.display='none';
   clearTimeout(_addPoll);
   addMsg('adding '+(list.length===1?list[0]:list.length+' tickers')+'…','muted');
@@ -1650,16 +1651,20 @@ document.addEventListener('click',e=>{{ document.querySelectorAll('.tool-more[op
   if(!m.contains(e.target) || e.target.closest('.tool-menu button')) m.removeAttribute('open'); }}); }});
 document.addEventListener('click',e=>{{ const b=e.target.closest('.wl-rm'); if(!b) return;
   e.preventDefault(); e.stopPropagation(); if(typeof window.wlRemove==='function') window.wlRemove(b.dataset.rm); }}, true);
+function track(n,d){{ try{{ navigator.sendBeacon('/api/t', new Blob([JSON.stringify({{name:n,detail:d||''}})],{{type:'application/json'}})); }}catch(_){{}} }}
+let _uiReady=false;
 function setDensity(d){{
+  if(_uiReady) track('density_'+d);
   document.body.classList.toggle('simple', d==='simple');
   document.querySelectorAll('#density button').forEach(b=>b.classList.toggle('on', b.dataset.d===d));
   try{{ localStorage.setItem('wl_density', d); }}catch(_){{}}
 }}
 function setView(v){{
+  if(_uiReady) track('view_'+v);
   view=v; localStorage.setItem('wl_view', v);
   document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
   document.getElementById('view-'+v).classList.add('active');
-  document.querySelectorAll('.seg button').forEach(b=>b.classList.toggle('on', b.dataset.view===v));
+  document.querySelectorAll('.seg button[data-view]').forEach(b=>b.classList.toggle('on', b.dataset.view===v));
   applyFilter();
 }}
 function openCard(card){{
@@ -1690,13 +1695,14 @@ function openCard(card){{
   const top=document.createElement('div'); top.className='mx-chart';
   if(chart) top.appendChild(chart);
   const tkr=(card.dataset.ticker||'').toUpperCase(), q=encodeURIComponent(tkr);
+  track('quicklook', tkr);
   const jump=document.createElement('div'); jump.className='mx-jump';
   jump.innerHTML=[['/analysis/'+q,'Full analysis','cta-1'],['/analysis/'+q+'#financials','Financials',''],
     ['/analysis/'+q+'#earnings','Earnings',''],['/analysis/'+q+'#connections','Connections',''],['/compare?t='+q,'Compare','']]
     .map(b=>'<button type="button" class="'+b[2]+'" data-go="'+b[0]+'">'+b[1]+'</button>').join('');
   if(window.MYWL && window.MYWL.has(tkr))
     jump.insertAdjacentHTML('beforeend','<button type="button" class="ql-rm" data-rmq="'+tkr+'">Remove from watchlist</button>');
-  jump.addEventListener('click',e=>{{ const b=e.target.closest('[data-go]'); if(b) openTab(b.dataset.go);
+  jump.addEventListener('click',e=>{{ const b=e.target.closest('[data-go]'); if(b){{ track('ql_'+b.textContent.toLowerCase().replace(/\s+/g,'_'), tkr); openTab(b.dataset.go); }}
     const r=e.target.closest('[data-rmq]'); if(r && typeof window.wlRemove==='function'){{ window.wlRemove(r.dataset.rmq); closeModal(); }} }});
   const kg=document.createElement('div'); kg.className='mx-kg';
   kg.innerHTML='<div class="det-h">Supply chain and connections <a class="site-help" style="font-weight:400;margin-left:8px" '+
@@ -1944,6 +1950,7 @@ function _liveQuotes(){{
   setView(view);
   let dens=null; try{{ dens=localStorage.getItem('wl_density'); }}catch(_){{}}
   setDensity(dens || window.WL_DENSITY || 'detailed');
+  _uiReady=true;
   _watchBoard();
   fmtUpdated();
   wireTableScroll();

@@ -128,6 +128,7 @@ function toVal(x,kind){ if(x===''||x==null) return null; var n=parseFloat(x); if
 function fromVal(v,kind){ if(v==null) return ''; return kind==='pct'?+(v*100).toFixed(4):kind==='usd'?+(v/1e9).toFixed(4):v; }
 var CAP={mega:[200e9,null],large:[10e9,200e9],mid:[2e9,10e9],small:[3e8,2e9],micro:[null,3e8]};
 function apply(){
+  if(!COLS) return;                                  // still loading; the load handler applies
   var q=S.q.toLowerCase(), cap=CAP[S.cap];
   var fs=S.f.map(function(f){ var k=MK[f[0]][2]; return [COLS[f[0]], toVal(f[1],k), toVal(f[2],k)]; });
   VIEW=ROWS.filter(function(r){
@@ -192,12 +193,13 @@ document.getElementById('sc-watch').addEventListener('change',function(e){ S.wat
 function syncControls(){ document.getElementById('sc-q').value=S.q; document.getElementById('sc-sector').value=S.sector;
   document.getElementById('sc-cap').value=S.cap; document.getElementById('sc-watch').checked=S.watch; filtersUi(); }
 function clearPreset(){ document.querySelectorAll('.sc-chip').forEach(function(c){ c.classList.remove('on'); }); }
-function preset(i){ var p=PRESETS[i][1];
+function track(n,d){ try{ navigator.sendBeacon('/api/t', new Blob([JSON.stringify({name:n,detail:d||''})],{type:'application/json'})); }catch(_){} }
+function preset(i){ var p=PRESETS[i][1]; track('screen_preset', PRESETS[i][0]);
   S={q:'',sector:'',cap:p.cap||'',watch:!!p.watch,f:p.f.map(function(x){return x.slice();}),sort:p.sort||'mcap',asc:!!p.asc};
   syncControls(); apply(); document.querySelectorAll('.sc-chip').forEach(function(c,j){ c.classList.toggle('on',j===i); }); }
 function resetAll(){ S={q:'',sector:'',cap:'',watch:false,f:[],sort:'mcap',asc:false}; syncControls(); clearPreset(); apply(); }
 function save(){ try{ localStorage.setItem('sc-state',JSON.stringify(S)); }catch(_){} }
-function exportCsv(){ var cs=['ticker','name','sector','industry'].concat(shownCols());
+function exportCsv(){ track('screen_export'); var cs=['ticker','name','sector','industry'].concat(shownCols());
   var lines=[cs.map(function(k){return MK[k]?MK[k][1]:k.charAt(0).toUpperCase()+k.slice(1);}).join(',')].concat(VIEW.map(function(r){
     return cs.map(function(k){ var v=col(r,k); if(v==null) return ''; return typeof v==='string'?'"'+v.replace(/"/g,'""')+'"':v; }).join(','); }));
   var a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([lines.join('\n')],{type:'text/csv'}));

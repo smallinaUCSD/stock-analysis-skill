@@ -382,6 +382,7 @@ dvRender();
 # Tabs: the other research pages load inside this one (no new browser tabs).
 _TABS_JS = r"""
 var TABS={financials:'/financials?t=',earnings:'/earnings?t=',connections:'/graph?t='};
+function track(n,d){ try{ navigator.sendBeacon('/api/t', new Blob([JSON.stringify({name:n,detail:d||''})],{type:'application/json'})); }catch(_){} }
 function showTab(t){ if(!document.getElementById('tab-'+t)) t='overview';
   document.querySelectorAll('.a-tabs button').forEach(function(b){ b.classList.toggle('on',b.getAttribute('data-tab')===t); });
   document.querySelectorAll('.a-tab').forEach(function(el){ el.hidden=el.id!=='tab-'+t; });
@@ -389,7 +390,7 @@ function showTab(t){ if(!document.getElementById('tab-'+t)) t='overview';
   if(TABS[t] && !box.firstChild){ var f=document.createElement('iframe'); f.src=TABS[t]+encodeURIComponent(TK)+'&embed=1';
     f.title=t; box.appendChild(f); }
   try{ history.replaceState(null,'',t==='overview'?location.pathname:'#'+t); }catch(_){} }
-document.querySelectorAll('.a-tabs button').forEach(function(b){ b.addEventListener('click',function(){ showTab(b.getAttribute('data-tab')); }); });
+document.querySelectorAll('.a-tabs button').forEach(function(b){ b.addEventListener('click',function(){ track('tab_'+b.getAttribute('data-tab'), TK); showTab(b.getAttribute('data-tab')); }); });
 window.addEventListener('message',function(e){ if(e.origin!==location.origin||!e.data||!e.data.embedHeight) return;
   document.querySelectorAll('.a-tab iframe').forEach(function(f){ if(f.contentWindow===e.source) f.style.height=(e.data.embedHeight+20)+'px'; }); });
 if(location.hash) showTab(location.hash.slice(1));

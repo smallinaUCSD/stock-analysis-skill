@@ -251,7 +251,11 @@ def landing_html() -> str:
   <p class="muted small lp-disc">{BRAND} provides information for research and education only. It is not investment advice or a
   recommendation to buy or sell any security. Investing involves risk, including loss of principal. Data may be delayed or
   inaccurate. Past and simulated performance do not guarantee future results.</p></div></footer>"""
-    return _shell(f"{BRAND}: stock research built on official filings", body, _LANDING_CSS)
+    js = ("function track(n,d){ try{ navigator.sendBeacon('/api/t', new Blob([JSON.stringify({name:n,detail:d||''})],"
+          "{type:'application/json'})); }catch(_){} }\n"
+          "document.addEventListener('click',function(e){ var a=e.target.closest('a[href=\"/signup\"],a[href=\"/login\"]');"
+          " if(a) track(a.getAttribute('href')==='/signup'?'landing_signup':'landing_login', a.textContent.trim().slice(0,30)); });")
+    return _shell(f"{BRAND}: stock research built on official filings", body, _LANDING_CSS, js)
 
 
 _LANDING_CSS = """
@@ -736,7 +740,7 @@ _LG_CSS = """
 
 # --- the board, personalised --------------------------------------------------------
 
-def personalize_board(board_html: str, user: dict, tickers: list[str]) -> str:
+def personalize_board(board_html: str, user: dict, tickers: list[str], admin: bool = False) -> str:
     """Make the shared board this user's: only their watchlist (with a way to
     remove stocks), their name, their theme and a profile menu."""
     first = (user.get("first_name") or user.get("email") or "?").strip()
@@ -746,7 +750,7 @@ def personalize_board(board_html: str, user: dict, tickers: list[str]) -> str:
                               ("active", "options", "professional", "advisor")) else "simple")
     cfg = {"tickers": tickers, "initials": initials, "title": f"{first.split()[0]}'s watchlist",
            "name": " ".join(x for x in (user.get("first_name"), user.get("last_name")) if x) or user.get("email"),
-           "email": user.get("email"), "theme": theme, "density": density}
+           "email": user.get("email"), "theme": theme, "density": density, "admin": bool(admin)}
     inject = "<script>var ME_CFG=" + json.dumps(cfg) + ";</script>" + _MINE_INJECT + _TODAY_INJECT
     h = board_html.find("</head>")
     if h >= 0:
@@ -788,10 +792,11 @@ if(tr){ var links=__MENU__;
   tr.insertAdjacentHTML('beforeend','<span class="me-wrap"><button class="me-btn" id="me-btn" aria-haspopup="true" aria-expanded="false" title="Your profile">'+e(C.initials)+'</button>'+
     '<div class="me-menu" id="me-menu" role="menu"><div class="me-id"><b>'+e(C.name)+'</b><small>'+e(C.email)+'</small></div>'+
     links.map(function(l){ return '<a role="menuitem" href="'+l[0]+'"'+(l[0]==='/'?'':' onclick="openTab(this.href);closeMe();return false"')+'>'+e(l[1])+'</a>'; }).join('')+
-    '<div class="sep"></div><a role="menuitem" href="/account">Profile and settings</a><a role="menuitem" class="me-out" href="/logout">Sign out</a></div></span>');
+    '<div class="sep"></div>'+(C.admin?'<a role="menuitem" href="/admin" onclick="openTab(this.href);closeMe();return false">Admin dashboard</a>':'')+
+    '<a role="menuitem" href="/account">Profile and settings</a><a role="menuitem" class="me-out" href="/logout">Sign out</a></div></span>');
   var btn=document.getElementById('me-btn'), menu=document.getElementById('me-menu');
   window.closeMe=function(){ menu.classList.remove('show'); btn.setAttribute('aria-expanded','false'); };
-  btn.addEventListener('click',function(ev){ ev.stopPropagation(); var on=!menu.classList.contains('show'); menu.classList.toggle('show',on); btn.setAttribute('aria-expanded',on?'true':'false'); });
+  btn.addEventListener('click',function(ev){ ev.stopPropagation(); var on=!menu.classList.contains('show'); if(on&&typeof track==='function') track('menu_open'); menu.classList.toggle('show',on); btn.setAttribute('aria-expanded',on?'true':'false'); });
   document.addEventListener('click',function(ev){ if(!menu.contains(ev.target)) closeMe(); });
   document.addEventListener('keydown',function(ev){ if(ev.key==='Escape') closeMe(); }); }
 // remove a stock from this user's watchlist, with a few seconds to undo
@@ -799,7 +804,7 @@ var toastT=null;
 function toast(html){ var t=document.getElementById('wl-toast'); if(!t){ t=document.createElement('div'); t.id='wl-toast'; t.className='wl-toast'; document.body.appendChild(t); }
   t.innerHTML=html; t.style.display='flex'; clearTimeout(toastT); toastT=setTimeout(function(){ t.style.display='none'; },6000); return t; }
 function save(body){ return fetch('/api/me/watchlist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(function(r){return r.json();}); }
-window.wlRemove=function(t){ if(!t) return;
+window.wlRemove=function(t){ if(!t) return; if(typeof track==='function') track('watch_remove', t);
   save({remove:[t]}).then(function(d){ if(!d.ok) return; window.MYWL.delete(t); if(typeof applyFilter==='function') applyFilter();
     var el=toast('Removed '+e(t)+' from your watchlist <button type="button">Undo</button>');
     el.querySelector('button').onclick=function(){ save({add:[t]}).then(function(){ window.MYWL.add(t); applyFilter(); el.style.display='none'; }); }; }); };
@@ -848,7 +853,7 @@ function when(t){ var d=new Date(t*1000); return d.toLocaleString('en-US',{weekd
 function lines(b){ return (b||'').split('\n').filter(Boolean).map(function(l){ return '<p>'+e(l)+'</p>'; }).join(''); }
 var tr=document.querySelector('.top-r');
 if(tr) tr.insertAdjacentHTML('afterbegin','<button class="me-today" id="me-today" onclick="tdOpen()">Today<span class="dot"></span></button>');
-window.tdOpen=function(){ var l=document.getElementById('td-list');
+window.tdOpen=function(){ var l=document.getElementById('td-list'); if(typeof track==='function') track('today_open');
   l.innerHTML=ITEMS.length?ITEMS.map(function(i){ return '<div class="td-item'+(i.read_at?'':' new')+'"><b>'+e(i.title)+'</b><time>'+when(i.created_at)+'</time>'+lines(i.body)+
     (i.url&&i.url!=='/'?'<a href="'+e(i.url)+'">Open</a>':'')+'</div>'; }).join(''):
     '<div class="td-empty">Nothing yet. Your daily summaries and politician alerts will appear here. Set them up in <a href="/account">account settings</a>.</div>';

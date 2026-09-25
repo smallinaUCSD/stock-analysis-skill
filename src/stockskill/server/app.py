@@ -29,6 +29,82 @@ from .holdings_page import holdings_html
 _TICKER_RE = re.compile(r"^[A-Za-z0-9.\-\^]{1,12}$")
 
 
+def _observe(app, ACCT) -> None:
+    """Usage analytics + request timing/errors (see observability.py), and the
+    admin dashboard for the emails in STOCKSKILL_ADMINS."""
+    import os
+    import time as _t
+    from flask import g, session
+    from .. import observability as OBS
+    col = OBS.Collector(app.secret_key)
+    app.config["OBS"] = col
+
+    def _log(status: int):
+        t0 = g.pop("_obs_t0", None)
+        if t0 is None:
+            return
+        rule = request.url_rule.rule if request.url_rule else "(not found)"
+        ref = request.referrer or ""
+        if request.host and request.host in ref:
+            ref = ""                                  # only outside referrers are interesting
+        tk = (request.view_args or {}).get("ticker")
+        is_page = request.method == "GET" and not request.path.startswith("/api/")
+        try:
+            col.record(rule, request.path, request.method, status, (_t.perf_counter() - t0) * 1000,
+                       session.get("uid"), request.remote_addr or "", request.headers.get("User-Agent", ""),
+                       ref, tk.upper() if isinstance(tk, str) else None, is_page)
+        except Exception:  # noqa: BLE001
+            pass
+
+    @app.before_request
+    def _obs_start():
+        g._obs_t0 = _t.perf_counter()
+
+    @app.after_request
+    def _obs_done(resp):
+        _log(resp.status_code)
+        return resp
+
+    @app.teardown_request
+    def _obs_crash(exc):
+        if exc is not None:                           # after_request doesn't run on a crash
+            _log(500)
+
+    @app.post("/api/t")
+    def track_event():
+        b = request.get_json(silent=True) or {}
+        col.event(str(b.get("name") or ""), str(b.get("detail") or ""), session.get("uid"),
+                  request.remote_addr or "", request.headers.get("User-Agent", ""))
+        return ("", 204)
+
+    def _admin():
+        u = ACCT.current_user()
+        admins = {e.strip().lower() for e in (os.environ.get("STOCKSKILL_ADMINS") or "").split(",") if e.strip()}
+        return u if u and u["email"].lower() in admins else None
+    app.config["IS_ADMIN"] = _admin
+
+    @app.get("/admin")
+    def admin_page():
+        if not _admin():
+            return ("Not found", 404)
+        from .admin_page import admin_html
+        return admin_html()
+
+    @app.get("/api/admin/report")
+    def admin_report():
+        if not _admin():
+            return jsonify({"ok": False}), 404
+        col.flush()
+        days = min(max(request.args.get("days", type=int) or 30, 7), 90)
+        board = app.config["ACCT"].get("board")
+        from ..watchlist import build as B
+        fresh = [now - q[0] for now in [_t.time()] for q in B._QUOTES.values()]
+        health = {"board": board.meta() if board else None,
+                  "quotes": {"count": len(fresh), "median_age": sorted(fresh)[len(fresh) // 2] if fresh else None},
+                  "db_mb": round(os.path.getsize(OBS.db_path()) / 1e6, 1) if os.path.exists(OBS.db_path()) else 0}
+        return jsonify({"ok": True, **OBS.report(days), "retention": OBS.retention(), "health": health})
+
+
 def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = None,
                holdings_path: str = "holdings.csv", public: bool | None = None,
                bmc_url: str | None = None) -> Flask:
@@ -82,6 +158,7 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
     if auth:
         from ..accounts import auth as ACCT
         ACCT.init_app(app, board, tickers_path, cache_dir)
+        _observe(app, ACCT)
 
         @app.get("/login")
         def login_page():
@@ -162,7 +239,8 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
                 return landing_html()
             if not u.get("onboarded") or ACCT.needs_terms(u):
                 return redirect("/welcome")
-            return personalize_board(board.html(), u, ADB.watchlist(u["id"]))
+            is_admin = app.config.get("IS_ADMIN")
+            return personalize_board(board.html(), u, ADB.watchlist(u["id"]), admin=bool(is_admin and is_admin()))
         return board.html()
 
     @app.get("/analyze")

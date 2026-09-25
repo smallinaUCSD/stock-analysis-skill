@@ -28,6 +28,7 @@ data/smart_tickers.csv
 data/added.json
 # User accounts (personal data) and the session signing key
 data/users.db*
+data/analytics.db*
 data/.secret_key
 # Personal phone-alert rules and their log
 data/phone_alerts.json
