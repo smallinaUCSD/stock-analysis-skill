@@ -11,7 +11,7 @@ from ..dashboard.render import _CSS, _THEME_BOOT, icon
 
 
 def financials_html(initial: str = "") -> str:
-    t = html.escape((initial or "AAPL").upper()[:12])
+    t = html.escape((initial or "").upper()[:12])
     return ("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
             "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
             "<title>Financials</title>" + _THEME_BOOT + "<style>" + _CSS + _EXTRA_CSS +
@@ -67,6 +67,9 @@ _EXTRA_CSS = """
 .fa-t tr.key td{font-weight:500}
 .fa-t td.spark{width:92px;padding:4px 10px}
 .fa-note{font-size:13px;color:var(--muted);line-height:1.55;margin:12px 0 0}
+.fa-picks{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.fa-pick{height:32px;padding:0 12px;border-radius:16px;border:1px solid var(--border-strong);background:var(--bg);color:var(--ink);font:13px var(--font);cursor:pointer}
+.fa-pick:hover{border-color:var(--accent)}
 .fa-note a{color:var(--link)}
 @media (max-width:640px){.fa-bar .seg{margin-left:0;width:100%}.fa-bar .seg button{flex:1;padding:0 6px;font-size:12px}
   .fa-sum{grid-template-columns:1fr 1fr;gap:8px}.fa-kpi{padding:8px 10px}.fa-kpi .v{font-size:17px}.fa-kpi .l{font-size:10px;letter-spacing:.8px}
@@ -177,5 +180,16 @@ function load(t){
     summary(); chart(); table(); note();
   }).catch(function(){ box.textContent='Could not load financials.'; });
 }
-load(INIT);
+// no company chosen yet: a prompt plus one-tap picks from the user's watchlist
+function emptyState(){
+  var box=document.getElementById('fa-table'); box.className='fa-box muted';
+  box.innerHTML='Type a ticker above to see ten years of its income statement, balance sheet and cash flow.<div id="fa-picks" class="fa-picks"></div>';
+  function chips(list){ document.getElementById('fa-picks').innerHTML=list.slice(0,16).map(function(t){
+    return '<button type="button" class="fa-pick" onclick="load(\''+esc(t)+'\')">'+esc(t)+'</button>'; }).join(''); }
+  fetch('/api/me').then(function(r){ return r.ok?r.json():null; }).then(function(me){
+    chips(me&&me.ok&&me.watchlist&&me.watchlist.length?me.watchlist:['AAPL','MSFT','NVDA','AMZN','GOOGL','META','JPM','COST']);
+  }).catch(function(){ chips(['AAPL','MSFT','NVDA','AMZN','GOOGL','META','JPM','COST']); });
+  document.getElementById('ft').focus();
+}
+if(INIT) load(INIT); else emptyState();
 """

@@ -512,7 +512,7 @@ function stAbout(){
    '<div class="wz-h">Your details</div><div class="row2">'+
    '<div class="field"><label for="fn">First name</label><input class="inp" id="fn" autocomplete="given-name" value="'+esc(PROF.first_name)+'"></div>'+
    '<div class="field"><label for="ln">Last name</label><input class="inp" id="ln" autocomplete="family-name" value="'+esc(PROF.last_name)+'"></div>'+
-   '<div class="field"><label for="dob">Date of birth</label><input class="inp" id="dob" type="date" autocomplete="bday" max="'+max.toISOString().slice(0,10)+'" value="'+esc(PROF.dob)+'"></div>'+
+   '<div class="field"><label for="dob">Date of birth</label><input class="inp" id="dob" type="date" autocomplete="bday" min="1900-01-01" max="'+max.toISOString().slice(0,10)+'" value="'+esc(PROF.dob)+'"></div>'+
    '<div class="field"><label for="gd">Gender (optional)</label><select class="inp" id="gd">'+selOpts(o.genders,'gender','Choose…')+'</select></div>'+
    '<div class="field"><label for="rf">How did you hear about us? (optional)</label><select class="inp" id="rf">'+selOpts(o.referrals,'referral','Choose…')+'</select></div></div>'+
    '<p class="small muted">We ask for your date of birth to confirm you are 18 or older.</p><div class="err" id="err"></div>'+
@@ -584,7 +584,7 @@ function prof(){ var o=ME.options,u=ME.user;
   return '<div class="ac-sec"><h2>Profile</h2><div class="row2">'+
    '<div class="field"><label>First name</label><input class="inp" id="fn" value="'+esc(u.first_name)+'"></div>'+
    '<div class="field"><label>Last name</label><input class="inp" id="ln" value="'+esc(u.last_name)+'"></div>'+
-   '<div class="field"><label>Date of birth</label><input class="inp" id="dob" type="date" value="'+esc(u.dob)+'"></div>'+
+   '<div class="field"><label>Date of birth</label><input class="inp" id="dob" type="date" min="1900-01-01" value="'+esc(u.dob)+'"></div>'+
    '<div class="field"><label>Gender (optional)</label><select class="inp" id="gd">'+sel(o.genders,'gender','Not specified')+'</select></div>'+
    '<div class="field"><label>Kind of investor</label><select class="inp" id="it">'+sel(o.investor_types,'investor_type','Choose…')+'</select></div>'+
    '<div class="field"><label>Experience</label><select class="inp" id="ex">'+sel(o.experience,'experience','Choose…')+'</select></div></div>'+

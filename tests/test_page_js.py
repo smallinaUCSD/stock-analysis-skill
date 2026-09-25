@@ -13,11 +13,16 @@ pytestmark = pytest.mark.skipif(not shutil.which("node"), reason="node not insta
 def _pages():
     from stockskill.accounts import pages as P
     from stockskill.server import politician_page as PP
+    from stockskill.server import earnings_page as EP, economy_page as ECP, financials_page as FP
+    from stockskill.server import graph_page as GP, screener_page as SP
     return {"landing": P.landing_html(), "login": P.login_html("login", "cid"), "signup": P.login_html("signup"),
             "welcome": P.welcome_html(), "account": P.account_html(), "terms": P.legal_html("terms"),
             "board": P.personalize_board("<html><head></head><body><div class='bar'></div><div class='top-r'></div>"
                                          "</body></html>", {"first_name": "Ada"}, ["AAPL"]),
-            "politician": PP.politician_html("x"), "sw": "<script>" + P.SERVICE_WORKER + "</script>"}
+            "politician": PP.politician_html("x"), "sw": "<script>" + P.SERVICE_WORKER + "</script>",
+            "financials": FP.financials_html(""), "financials_t": FP.financials_html("NVDA"),
+            "earnings": EP.earnings_html(""), "screener": SP.screener_html(), "economy": ECP.economy_html(),
+            "graph": GP.graph_html("NVDA")}
 
 
 @pytest.mark.parametrize("name", list(_pages()))

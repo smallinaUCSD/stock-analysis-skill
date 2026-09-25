@@ -487,7 +487,7 @@ def validate_profile(b: dict) -> tuple[dict, str | None]:
     age = _age(dob)
     if age < 18:
         return {}, "You must be 18 or older to use this service."
-    if age > 120:
+    if dob.year < 1900 or age > 120:
         return {}, "Please check your date of birth."
     out["dob"] = dob.isoformat()
     for k, allowed, required in (("investor_type", INVESTOR_TYPES, True), ("experience", EXPERIENCE, True),
