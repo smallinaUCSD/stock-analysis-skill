@@ -17,6 +17,8 @@ for port in 8787 8788; do
 done
 TS="$(command -v tailscale || echo /opt/homebrew/bin/tailscale)"
 if [ -x "$TS" ]; then echo; "$TS" serve status 2>/dev/null || echo "  tailscale: not connected"; fi
-echo; echo "  Recent errors:"
-grep -hiE "error|traceback|exception" "$REPO"/logs/*.log 2>/dev/null | tail -5 | sed 's/^/    /' || true
+for s in public private refresh; do
+  f="$REPO/logs/$s.log"
+  [ -f "$f" ] && { echo; echo "  Last lines of $s.log:"; tail -4 "$f" | sed 's/^/    /'; }
+done
 echo "  Logs: $REPO/logs/"

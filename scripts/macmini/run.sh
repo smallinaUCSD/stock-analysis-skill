@@ -10,7 +10,8 @@ cd "$(dirname "$0")/../.."
 
 # launchd starts with a bare environment: find uv (Homebrew or the uv installer)
 export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-if [ -f .env ]; then set -a; . ./.env; set +a; fi
+. scripts/load_env.sh
+[ -f .env ] && load_env
 
 export STOCKSKILL_TICKERS="${STOCKSKILL_TICKERS:-data/tickers.csv}"
 export STOCKSKILL_CACHE_DIR="${STOCKSKILL_CACHE_DIR:-data/cache}"

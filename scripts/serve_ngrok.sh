@@ -18,7 +18,7 @@ PORT="${PORT:-8787}"
 
 # Load .env (API keys) if present.
 if [ -f .env ]; then
-  set -a; . ./.env; set +a
+  . scripts/load_env.sh; load_env
 else
   echo "!! No .env found. Copy .env.example to .env and add your keys first."
   echo "   (Without keys it still runs, using yfinance for data.)"
