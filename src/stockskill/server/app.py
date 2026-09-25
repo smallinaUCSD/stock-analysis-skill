@@ -960,6 +960,35 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
                 out["investments"].append({"ticker": h.get("ticker"), "name": h.get("name", "").title(),
                                            "what": f"${h['value']/1e6:,.0f}M stake ({h.get('change', '').lower()})",
                                            "basis": f"its 13F, quarter ended {rep.get('period')}", "source": "13F"})
+        # customers that are 10%+ of revenue, from its latest 10-K (XBRL tags)
+        out["customer_note"] = None
+        try:
+            from ..data.customers import major_customers
+            from ..data.politicians import name_index, ticker_for
+            mc = major_customers(tk, cache_dir)
+        except Exception:  # noqa: BLE001
+            mc = None
+        if mc and mc.get("customers"):
+            idx = None
+            fy = (mc.get("period_end") or "")[:7]
+            for c in mc["customers"][:8]:
+                ctk = None
+                if not c["anonymous"]:
+                    idx = idx if idx is not None else name_index(cache_dir)
+                    ctk = ticker_for(c["label"], idx)
+                seg = " " + c["segment"].replace(" Segment", "").replace(" And ", " & ") if c.get("segment") else ""
+                what = f"{c['pct']*100:.0f}% of{seg} revenue" + (" (not named in the filing)" if c["anonymous"] else "")
+                hit_ = next((x for x in out["customers"] if ctk and x.get("ticker") == ctk), None)
+                if hit_:
+                    hit_["what"] += f"; {c['pct']*100:.0f}% of revenue per its 10-K"
+                    continue
+                out["customers"].append({"ticker": ctk, "name": c["label"], "short": c["short"], "what": what,
+                                         "pct": round(c["pct"] * 100), "basis": f"its 10-K, year to {fy}",
+                                         "url": mc.get("url"), "source": "10-K"})
+            # filed figures first, so the graph's capped column always shows them
+            out["customers"].sort(key=lambda x: x.get("source") != "10-K")
+        elif mc is not None and not mc.get("none_filed"):
+            out["customer_note"] = "No single customer is 10% or more of revenue in its latest 10-K (a diversified customer base)."
         # competitors: watchlist peers in the same SEC industry
         try:
             wl = [t for t in parse_tickers(tickers_path)["all"] if registry.get(t) is None]
@@ -985,6 +1014,8 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
             out["mentions"] = []
         # fill in names for watchlist tickers
         for grp in out.values():
+            if not isinstance(grp, list):
+                continue
             for n in grp:
                 t2 = n.get("ticker")
                 if t2 and (n.get("name") in (None, "", t2)):

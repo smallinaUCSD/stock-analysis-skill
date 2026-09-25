@@ -32,8 +32,8 @@ function drawGraph(el, d, opts){
       nodes+='<g class="kg-node'+(it.ticker?' click':'')+'" data-t="'+gEsc(it.ticker||'')+'"><title>'+gEsc(tip)+'</title>'+
         '<circle cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="'+r+'" fill="var(--surface)" stroke="'+G.col+'" stroke-width="'+(it.on_watchlist?2.4:1.4)+'"/>'+
         (it.ticker&&ment[it.ticker]?'<circle cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="'+(r+4)+'" fill="none" stroke="'+G.col+'" stroke-width="0.8" opacity="0.7"/>':'')+
-        '<text x="'+x.toFixed(1)+'" y="'+(y+4).toFixed(1)+'" text-anchor="middle" class="kg-t">'+gEsc(it.ticker?label.slice(0,5):(label.split(' ')[0]||'').slice(0,5))+'</text>'+
-        (side?'<text x="'+tx.toFixed(1)+'" y="'+ty.toFixed(1)+'" text-anchor="'+anc+'" class="kg-s">'+gEsc((it.ticker?(sub||''):label).slice(0,sm?18:26))+'</text>'
+        '<text x="'+x.toFixed(1)+'" y="'+(y+4).toFixed(1)+'" text-anchor="middle" class="kg-t">'+gEsc(it.ticker?label.slice(0,5):(it.short||(label.split(' ')[0]||'').slice(0,5)))+'</text>'+
+        (side?'<text x="'+tx.toFixed(1)+'" y="'+ty.toFixed(1)+'" text-anchor="'+anc+'" class="kg-s">'+gEsc((it.ticker?(sub||''):(it.pct!=null?it.pct+'% of revenue'+(sm?'':' (10-K)'):label)).slice(0,sm?20:30))+'</text>'
              :(it.ticker?'':'<text x="'+tx.toFixed(1)+'" y="'+ty.toFixed(1)+'" text-anchor="middle" class="kg-s">'+gEsc(label.slice(0,12))+'</text>'))+'</g>';
     });
     var gl, gx, gy, ga;

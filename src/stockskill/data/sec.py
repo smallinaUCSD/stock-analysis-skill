@@ -291,3 +291,17 @@ def yahoo_revenue_history(ticker: str, cache_dir: str | None = None,
         except Exception:  # noqa: BLE001
             return None
     return _read(path) if offline else _cached(path, _TTL_FACTS, fetch)
+
+
+def _get_text_bytes(url: str) -> bytes | None:
+    """Raw bytes of an EDGAR document (rate-limited, identified)."""
+    ua = _ua()
+    if not ua:
+        return None
+    try:
+        import requests
+        _LIMIT.wait()
+        r = requests.get(url, headers={"User-Agent": ua}, timeout=60)
+        return r.content if r.status_code == 200 else None
+    except Exception:  # noqa: BLE001
+        return None

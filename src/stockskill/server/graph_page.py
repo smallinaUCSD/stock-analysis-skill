@@ -28,7 +28,7 @@ def graph_html(initial: str = "") -> str:
             "<div id=\"kg-lists\" class=\"kg-lists\"></div>"
             "<p class=\"kg-note\">Sources are labeled on every link. Suppliers and customers come from a curated list of "
             "well-documented relationships (the company's own 10-K, public announcements or wide reporting), not an exhaustive "
-            "supply chain. Investments are from the company's own SEC 13F filing (listed stakes it held last quarter). "
+            "supply chain. Customers also include every customer the company's latest 10-K reports at 10% or more of revenue (usually unnamed there). Investments are from the company's own SEC 13F filing (listed stakes it held last quarter). "
             "Competitors share its SEC industry code on this watchlist. A ring around a company means its latest 10-K also "
             "names this one. Click any company to recenter on it.</p>"
             "</div><script>var INIT=" + json.dumps(t) + ";\n" + GRAPH_JS + _JS + "</script></body></html>")
@@ -74,6 +74,7 @@ function load(t, back){
     if(!total){ box.className='kg-box muted'; box.textContent='No documented connections for '+t+' yet.'; }
     else drawGraph(box, d, {onNode:function(x){ load(x); }});
     renderLists(d);
+    if(d.customer_note){ document.getElementById('kg-lists').insertAdjacentHTML('afterbegin','<div class="kg-list"><h3>Customers</h3><div class="kg-item">'+gEsc(d.customer_note)+'</div></div>'); }
   }).catch(function(){ box.textContent='Could not load connections.'; });
 }
 function item(it){ var t=it.ticker?'<a onclick="load(\''+gEsc(it.ticker)+'\')"><b>'+gEsc(it.ticker)+'</b></a> ':'<b>'+gEsc(it.name)+'</b> ';
