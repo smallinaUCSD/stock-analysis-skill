@@ -420,8 +420,46 @@ class Scheduler:
             sent += 0 if r.get("duplicate") else 1
         return sent
 
+    def run_funds(self, followers: dict) -> int:
+        """A followed fund filed a new 13F: tell its followers once."""
+        from ..data import funds13f as F
+        users = {u["id"]: u for u in db.all_users()}
+        n = 0
+        for pid, fans in followers.items():
+            if not pid.startswith("fund:"):
+                continue
+            try:
+                cik = int(pid.split(":", 1)[1])
+                fl = F._filings(cik, 1)
+            except (ValueError, IndexError):
+                continue
+            if not fl or fl[0]["filed"] < (date.today() - timedelta(days=60)).isoformat():
+                continue
+            rep = F.fund_report(cik, self.app.config["ACCT"]["cache_dir"]) or {}
+            c = rep.get("counts") or {}
+            name = rep.get("fund") or fl[0]["name"]
+            title = f"{name} filed its {F.quarter_label(fl[0]['period'])} holdings"
+            lines = [f"<b>{html.escape(name)}</b> reported what it held on {fl[0]['period']}: "
+                     f"{c.get('New', 0)} new positions, {c.get('Added', 0)} added, {c.get('Trimmed', 0)} trimmed, "
+                     f"{c.get('Sold out', 0)} sold out.",
+                     "13F filings come up to 45 days after the quarter ends."]
+            for uid, since in fans:
+                u = users.get(uid)
+                if u and fl[0]["filed"] >= datetime.fromtimestamp(since).date().isoformat():
+                    r = deliver(u, "fund", title, lines, f"/fund/{cik}", f"fund:{cik}:{fl[0]['acc']}")
+                    n += 0 if r.get("duplicate") else 1
+        return n
+
     def run_trades(self) -> int:
         followers = db.followers_by_pid()
+        if not followers:
+            return 0
+        try:
+            self.run_funds(followers)
+        except Exception as e:  # noqa: BLE001
+            import sys
+            print(f"fund alerts: {e}", file=sys.stderr, flush=True)
+        followers = {k: v for k, v in followers.items() if not k.startswith("fund:")}
         if not followers:
             return 0
         from ..data.congress import recent_trades

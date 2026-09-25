@@ -389,6 +389,11 @@ def passkey_login_verify():
 
 # --- onboarding + account -------------------------------------------------------
 
+def _funds():
+    from ..data.funds13f import FUNDS
+    return FUNDS
+
+
 def _cfg() -> dict:
     return current_app.config["ACCT"]
 
@@ -422,6 +427,7 @@ def me():
                     "passkeys": db.passkeys(u["id"]), "follows": db.follows(u["id"]),
                     "push_key": notify.vapid_public_key(), "email_ready": notify.email_ready(),
                     "push_count": len(db.push_subs(u["id"])),
+                    "funds": [[f"fund:{cik}", name, mgr] for name, mgr, cik in _funds()],
                     # ordered [key, label] pairs (a JSON object would be re-sorted alphabetically)
                     "options": {k: [[a, b] for a, b in m.items()] for k, m in (
                         ("investor_types", INVESTOR_TYPES), ("experience", EXPERIENCE), ("genders", GENDERS),

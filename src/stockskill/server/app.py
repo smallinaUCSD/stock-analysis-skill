@@ -1376,6 +1376,20 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
         from ..data import funds13f as F
         return jsonify({"ok": True, "results": F.search_filers(request.args.get("q", ""))})
 
+    @app.get("/fund/<int:cik>")
+    def fund_page(cik: int):
+        from .fund_page import fund_html
+        return fund_html(cik)
+
+    @app.get("/api/fund/<int:cik>/history")
+    def fund_history_api(cik: int):
+        """Quarterly value, buy/sell timeline and copy-the-portfolio performance."""
+        from ..data import funds13f as F
+        h = F.fund_history(cik, cache_dir)
+        if not h:
+            return jsonify({"ok": False, "error": "No 13F history found for this filer."})
+        return jsonify({"ok": True, **h})
+
     @app.get("/api/funds/<int:cik>")
     def fund_detail(cik: int):
         from ..data import funds13f as F

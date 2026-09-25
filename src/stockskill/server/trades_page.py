@@ -42,7 +42,7 @@ def trades_html(q: str = "") -> str:
             "trades have not beaten the market on average since the 2012 STOCK Act (Belmont et al., 2022). Scanned paper "
             "filings are skipped. By law these reports can't be used for commercial purposes.</p></div>"
             "<div id=\"fund\" style=\"display:none\">"
-            "<div id=\"fund-search\"></div><div id=\"fund-grid\" class=\"fund-grid\"></div><div id=\"fund-detail\"></div>"
+            "<div id=\"fund-search\"></div><div id=\"fund-grid\" class=\"fund-grid\"></div>"
             "<p class=\"tr-note\">From SEC Form 13F: long US stock and option positions of managers with $100M+, filed up "
             "to 45 days after each quarter. It doesn't show short positions, cash, bonds or foreign stocks, so it's a "
             "partial and delayed picture of a fund.</p></div>"
@@ -208,15 +208,8 @@ function renderFunds(){ var g=document.getElementById('fund-grid');
     return '<button class="fund-card'+(CUR===f.cik?' on':'')+'" onclick="openFund('+f.cik+')"><b>'+esc(f.fund)+'</b><span class="m">'+esc(f.manager)+'</span>'+
       '<div class="n">'+(f.period?big(f.total_value)+' · '+f.positions+' positions · '+fdate(f.period):'<span class="m">Loading filings…</span>')+'</div>'+
       (f.period?'<div class="n m">'+(c.New||0)+' new, '+(c.Added||0)+' added, '+(c.Trimmed||0)+' trimmed, '+(c['Sold out']||0)+' sold</div>':'')+'</button>'; }).join(''); }
-function openFund(cik){ CUR=cik; if(FUNDS) renderFunds(); var box=document.getElementById('fund-detail');
-  box.innerHTML='<p class="muted">Loading the latest 13F…</p>';
-  fetch('/api/funds/'+cik).then(function(r){return r.json();}).then(function(d){
-    if(!d.ok){ box.innerHTML='<p class="muted">'+esc(d.error)+'</p>'; return; }
-    var hold=d.holdings.map(function(x){ return '<tr><td>'+tkLink(x.ticker)+(x.put_call?' <span class="mu">'+esc(x.put_call.toLowerCase())+'s</span>':'')+'</td><td class="wrap">'+esc(x.name)+'</td><td class="r">'+big(x.value)+'</td><td class="r">'+(x.weight*100).toFixed(1)+'%</td><td>'+changeCell(x)+'</td></tr>'; }).join('');
-    var sold=d.sold_out.map(function(x){ return '<tr><td>'+tkLink(x.ticker)+'</td><td class="wrap">'+esc(x.name)+'</td><td class="r">'+big(x.prev_value)+'</td><td class="r mu">-</td><td>'+changeCell(x)+'</td></tr>'; }).join('');
-    box.innerHTML='<div class="fd-h"><h2>'+esc(d.fund)+'</h2><span class="muted">'+esc(d.manager)+' · quarter ended '+fdate(d.period)+' · filed '+fdate(d.filed)+' · '+big(d.total_value)+' in '+d.positions+' positions</span></div>'+
-      '<div class="tr-tw"><table class="tr-t"><thead><tr><th>Ticker</th><th>Company</th><th class="r">Value</th><th class="r">% of fund</th><th>vs '+fdate(d.prev_period)+'</th></tr></thead><tbody>'+hold+sold+'</tbody></table></div>';
-    box.scrollIntoView({behavior:'smooth',block:'start'}); }).catch(function(){ box.innerHTML='<p class="muted">Could not load that fund.</p>'; }); }
+function openFund(cik){ CUR=cik; if(FUNDS) renderFunds();       // full profile, like politicians
+  var w=window.open('/fund/'+cik,'_blank'); if(!w) location.href='/fund/'+cik; }
 function fundSearch(q){ var box=document.getElementById('fund-search');
   fetch('/api/funds/search?q='+encodeURIComponent(q)).then(function(r){return r.json();}).then(function(d){
     var r=d.results||[]; if(!r.length){ box.innerHTML=''; return; }

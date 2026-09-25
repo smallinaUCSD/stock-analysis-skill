@@ -356,3 +356,170 @@ def summaries(cache_dir=None) -> list[dict]:
                     "positions": (rep or {}).get("positions"), "counts": (rep or {}).get("counts"),
                     "top": [h.get("ticker") or h.get("name") for h in (rep or {}).get("holdings", [])[:5]]})
     return out
+
+
+# ------------------------------------------------------------------ history + copy performance
+
+def quarter_label(period: str) -> str:
+    """'2026-06-30' -> 'Q2 2026'."""
+    try:
+        y, m = int(period[:4]), int(period[5:7])
+        return f"Q{(m - 1) // 3 + 1} {y}"
+    except (TypeError, ValueError):
+        return period or ""
+
+
+def _long_stock(h: dict) -> dict:
+    return {k: r for k, r in (h or {}).items() if not r.get("put_call") and r.get("value")}
+
+
+def history_events(quarters: list[dict], top: int = 25) -> list[dict]:
+    """Changes between consecutive quarters for positions that were ever in
+    the top ``top``: New, Added, Trimmed, Sold out (Held is skipped).
+    ``quarters``: oldest first, each {period, filed, holdings: {cusip: row}}."""
+    watch = set()
+    for q in quarters:
+        rows = sorted(_long_stock(q["holdings"]).items(), key=lambda kv: kv[1]["value"], reverse=True)[:top]
+        watch |= {k for k, _ in rows}
+    out = []
+    for prev, cur in zip(quarters, quarters[1:]):
+        for r in diff(_long_stock(cur["holdings"]), _long_stock(prev["holdings"])):
+            if r["key"] in watch and r["change"] != "Held":
+                out.append({"period": cur["period"], "filed": cur["filed"], "cusip": r["cusip"], "name": r["name"],
+                            "change": r["change"], "share_change": r.get("share_change"),
+                            "value": r["value"] or r.get("prev_value") or 0})
+    return out
+
+
+def copy_performance(plan: list[tuple[str, dict]], prices: dict, bench: tuple, start_value: float = 10_000.0) -> dict | None:
+    """Value of copying the reported portfolio: on each filing date (when the
+    13F became public) move into its weights, hold until the next filing.
+    ``plan``: [(filed iso date, {ticker: weight})] oldest first; ``prices``:
+    {ticker: (dates, closes)}; ``bench``: (dates, closes) for the S&P 500."""
+    bd, bc = bench
+    if not plan or not bd:
+        return None
+    from bisect import bisect_left, bisect_right
+    lookup = {t: dict(zip(d, c)) for t, (d, c) in prices.items()}
+    start = plan[0][0]
+    days = [d for d in bd if d >= start]
+    if len(days) < 2:
+        return None
+    value, bench_v, dates, vals, bvals = start_value, start_value, [], [], []
+    holdings: dict = {}
+    last_px: dict = {}
+    b0 = bc[bisect_left(bd, days[0])]
+    k = 0
+    for i, d in enumerate(days):
+        # mark to market with today's closes (carry the last price over gaps)
+        for t in holdings:
+            px = lookup.get(t, {}).get(d)
+            if px:
+                last_px[t] = px
+        if holdings:
+            value = sum(sh * last_px.get(t, 0) for t, sh in holdings.items()) or value
+        while k < len(plan) and plan[k][0] <= d:        # a new filing is public: rebalance at today's close
+            w = {t: x for t, x in plan[k][1].items() if lookup.get(t, {}).get(d)}
+            tot = sum(w.values())
+            if tot > 0:
+                holdings = {t: value * x / tot / lookup[t][d] for t, x in w.items()}
+                last_px.update({t: lookup[t][d] for t in w})
+            k += 1
+        bench_v = start_value * bc[bisect_right(bd, d) - 1] / b0
+        dates.append(d)
+        vals.append(round(value, 2))
+        bvals.append(round(bench_v, 2))
+    years = max((len(dates) - 1) / 252, 1e-9)
+    ret, bret = vals[-1] / start_value - 1, bvals[-1] / start_value - 1
+    return {"dates": dates, "value": vals, "bench": bvals,
+            "summary": {"return": ret, "bench_return": bret, "years": years,
+                        "cagr": (1 + ret) ** (1 / years) - 1 if years >= 1 else None,
+                        "bench_cagr": (1 + bret) ** (1 / years) - 1 if years >= 1 else None}}
+
+
+def _download_prices(tickers: list[str], start: str, cache_dir) -> dict:
+    """{ticker: ([iso dates], [closes])} from Yahoo, cached for the day."""
+    path = os.path.join(_dir(cache_dir), f"px_{abs(hash((tuple(sorted(tickers)), start))) % 10**12}.json")
+    try:
+        if time.time() - os.path.getmtime(path) < 12 * 3600:
+            return {t: tuple(v) for t, v in json.load(open(path)).items()}
+    except OSError:
+        pass
+    out = {}
+    try:
+        import yfinance as yf
+        df = yf.download(sorted(set(tickers)), start=start, interval="1d", group_by="ticker", auto_adjust=True,
+                         progress=False, threads=True)
+        for t in set(tickers):
+            try:
+                col = df[t]["Close"].dropna()
+            except Exception:  # noqa: BLE001
+                continue
+            if len(col):
+                out[t] = ([i.date().isoformat() for i in col.index], [float(v) for v in col.values])
+    except Exception:  # noqa: BLE001
+        return out
+    try:
+        json.dump(out, open(path, "w"))
+    except Exception:  # noqa: BLE001
+        pass
+    return out
+
+
+def fund_history(cik: int, cache_dir=None, quarters: int = 8, top: int = 20) -> dict | None:
+    """Reported value by quarter, the position-change timeline, and what
+    copying the top ``top`` holdings would have returned vs the S&P 500."""
+    path = os.path.join(_dir(cache_dir), f"history_{cik}.json")
+    try:
+        if time.time() - os.path.getmtime(path) < 12 * 3600:
+            return json.load(open(path))
+    except OSError:
+        pass
+    fl = _filings(cik, quarters)
+    qs = []
+    for f in reversed(fl):
+        h = _holdings(cik, f["acc"], cache_dir)
+        if h:
+            qs.append({"period": f["period"], "filed": f["filed"], "acc": f["acc"], "holdings": h})
+    if not qs:
+        return None
+    events = history_events(qs, top=25)
+    tops = []
+    for q in qs:
+        rows = sorted(_long_stock(q["holdings"]).values(), key=lambda r: r["value"], reverse=True)[:top]
+        tops.append(rows)
+    cusips = sorted({r["cusip"] for rows in tops for r in rows} | {e["cusip"] for e in events})
+    tk = map_cusips(cusips, cache_dir)
+    by_name = None
+    for c in cusips:
+        if not tk.get(c):
+            by_name = by_name if by_name is not None else _names_to_tickers(cache_dir)
+
+    def ticker(c, name):
+        return tk.get(c) or ((by_name or {}).get(_name_key(name or "")))
+    for e in events:
+        e["ticker"] = ticker(e["cusip"], e["name"])
+    plan = []
+    for q, rows in zip(qs, tops):
+        w = {}
+        for r in rows:
+            t = ticker(r["cusip"], r["name"])
+            if t:
+                w[t] = w.get(t, 0) + r["value"]
+        plan.append((q["filed"], w))
+    perf = None
+    tickers = sorted({t for _, w in plan for t in w})
+    if tickers:
+        px = _download_prices(tickers + ["SPY"], qs[0]["filed"], cache_dir)
+        spy = px.pop("SPY", None)
+        if spy:
+            perf = copy_performance(plan, px, spy)
+    out = {"cik": cik, "quarters": [{"period": q["period"], "label": quarter_label(q["period"]), "filed": q["filed"],
+                                     "value": sum(r["value"] for r in _long_stock(q["holdings"]).values()),
+                                     "positions": len(_long_stock(q["holdings"]))} for q in qs],
+           "events": events, "performance": perf, "copied_top": top}
+    try:
+        json.dump(out, open(path, "w"))
+    except Exception:  # noqa: BLE001
+        pass
+    return out

@@ -980,6 +980,10 @@ function nfHTML(me, groups){
    '<p class="small muted" style="margin:0 0 8px">Get notified when their stock trades are disclosed. Members of Congress report up to 45 days after trading.</p>'+
    '<input class="inp" id="nf-q" placeholder="Search by name, state or party" autocomplete="off" style="max-width:360px">'+
    '<div class="nf-people" id="nf-people"><p class="small muted">Loading…</p></div>'+
+   '<div class="wz-h">Follow hedge funds <span style="text-transform:none;letter-spacing:0">(optional)</span></div>'+
+   '<p class="small muted" style="margin:0 0 8px">Get notified when they file new quarterly holdings (13F).</p>'+
+   '<div class="nf-chipset" id="nf-funds">'+(me.funds||[]).map(function(f){ return '<button type="button" class="nf-chip'+(NF.follows[f[0]]?' on':'')+
+     '" data-fund="'+f[0]+'" data-name="'+esc(f[1])+'" title="'+esc(f[2])+'">'+esc(f[1])+'</button>'; }).join('')+'</div>'+
    '<div class="wz-h">How should we reach you?</div>'+
    '<label class="nf-ch'+(me.email_ready?'':' off')+'"><input type="checkbox" id="nf-email"'+(NF.email&&me.email_ready?' checked':'')+(me.email_ready?'':' disabled')+'><span><b>Email</b><small>'+emailNote+'</small></span></label>'+
    '<label class="nf-ch'+(pushOk?'':' off')+'"><input type="checkbox" id="nf-push"'+(NF.push&&pushOk?' checked':'')+(pushOk?'':' disabled')+'><span><b>Browser notifications</b><small id="nf-push-note">'+pushNote+'</small></span></label>'+
@@ -1012,6 +1016,8 @@ function nfBind(me){
     document.querySelectorAll('#nf-times [data-t]').forEach(function(x){ x.classList.toggle('on',x===b); }); gw(); }; }); gw();
   document.querySelectorAll('#nf-groups [data-g]').forEach(function(b){ b.onclick=function(){ var k=b.getAttribute('data-g'); NF.groups[k]=!NF.groups[k]; b.classList.toggle('on',!!NF.groups[k]); }; });
   document.getElementById('nf-q').oninput=nfPeople;
+  document.querySelectorAll('#nf-funds [data-fund]').forEach(function(b){ b.onclick=function(){ var id=b.getAttribute('data-fund');
+    if(NF.follows[id]) delete NF.follows[id]; else NF.follows[id]=b.getAttribute('data-name'); b.classList.toggle('on',!!NF.follows[id]); }; });
   document.getElementById('nf-people').onclick=function(e){ var b=e.target.closest('button[data-pid]'); if(!b) return;
     var id=b.getAttribute('data-pid'); if(NF.follows[id]) delete NF.follows[id]; else NF.follows[id]=b.getAttribute('data-name'); nfPeople(); };
   var pc=document.getElementById('nf-push');
