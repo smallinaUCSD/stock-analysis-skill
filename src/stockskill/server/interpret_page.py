@@ -457,8 +457,34 @@ def interpret_html() -> str:
              "NVDA's option ideas show a bull call spread costing $665 that can make $1,335 by expiry, with a 36% "
              "chance of profit at today's implied volatility: a defined-risk way to express the uptrend."))])
 
+    research = _section(
+        "research", "Research tools: financials, earnings, screener, economy, alerts",
+        "Terminal-style research pages, all built from free official data.",
+        [("Financials",
+          "<p>Ten fiscal years of the income statement, balance sheet and cash flow exactly as filed in 10-Ks, plus "
+          "ratios computed from them (margins, returns on equity and capital, dilution, payouts). EPS and share counts "
+          "are restated for stock splits. A dash means the company didn't report that line under a standard tag.</p>"),
+         ("Earnings",
+          "<p>Who on the watchlist reports in the next five weeks, and for any company how the stock moved in the "
+          "first session after each of its last twelve reports, next to the S&amp;P 500 that day. Report times come "
+          "from the company's own SEC filing, so after-close reports are measured on the next day. The typical move "
+          "is a size, not a direction.</p>"),
+         ("Screener",
+          "<p>Every US-listed common stock (about 5,900) filtered by size, sector, valuation, profitability and growth. "
+          "Fundamentals are the fiscal year closest to last calendar year, from SEC filings, so a company with a "
+          "strong recent quarter can look weaker here than it is now. Tiny companies produce extreme ratios; the presets "
+          "require at least $1B of market value.</p>"),
+         ("Economy",
+          "<p>The release calendar for the numbers that move rates (CPI, jobs, GDP, PCE, the Fed) with each one's latest "
+          "reading, and the Treasury yield curve. A negative 10-year minus 2-year spread (an inverted curve) has often "
+          "preceded recessions, but the lag has ranged from months to years.</p>"),
+         ("Alerts",
+          "<p>Notifications on your phone through the free ntfy app: price levels, big daily moves, watchlist "
+          "breakouts, insider purchases and next-day earnings. Only on your own copy of the app (never the public "
+          "site), and only while it is running.</p>")])
+
     sections = [reading, factors, dcf, montecarlo, ptarget, kelly, momentum,
-                volume, regime, stops, voc, consensus, risk, compare, options, filings, newer]
+                volume, regime, stops, voc, consensus, risk, compare, options, filings, newer, research]
     toc = "".join(
         f'<a href="#{sid}">{label}</a>' for sid, label in
         [("reading", "The board"), ("factors", "Factors"), ("dcf", "DCF"),
@@ -467,7 +493,8 @@ def interpret_html() -> str:
          ("regime", "Regime"), ("stops", "Stop study"), ("voc", "Virtue of Complexity"),
          ("consensus", "Analyst consensus"), ("risk", "Beta and alpha"),
          ("compare", "Compare"), ("options", "Options and hedging"),
-         ("filings", "Insiders and pairs"), ("newer", "Forecasts, trades, breakouts")])
+         ("filings", "Insiders and pairs"), ("newer", "Forecasts, trades, breakouts"),
+         ("research", "Research tools")])
     close = (f'<button class="page-x" onclick="return goBack(event)" title="Close" '
              f'aria-label="Close">{icon("x", 17)}</button>')
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
