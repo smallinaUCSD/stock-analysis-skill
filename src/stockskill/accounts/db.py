@@ -32,6 +32,23 @@ CREATE TABLE IF NOT EXISTS watchlist (
   ticker TEXT NOT NULL, added_at REAL NOT NULL,
   PRIMARY KEY (user_id, ticker)
 );
+CREATE TABLE IF NOT EXISTS follows (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  pid TEXT NOT NULL, name TEXT, added_at REAL NOT NULL,
+  PRIMARY KEY (user_id, pid)
+);
+CREATE TABLE IF NOT EXISTS push_subs (
+  endpoint TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  p256dh TEXT NOT NULL, auth TEXT NOT NULL, created_at REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS notifications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL, title TEXT NOT NULL, body TEXT, url TEXT, dedupe TEXT,
+  created_at REAL NOT NULL, read_at REAL,
+  UNIQUE (user_id, dedupe)
+);
 CREATE TABLE IF NOT EXISTS passkeys (
   credential_id TEXT PRIMARY KEY,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -41,6 +58,10 @@ CREATE TABLE IF NOT EXISTS passkeys (
 """
 
 PROFILE_FIELDS = ("first_name", "last_name", "dob", "gender", "investor_type", "experience", "referral")
+# notification settings, added after the first release (see _migrate)
+NOTIFY_COLUMNS = {"email_verified": "INTEGER NOT NULL DEFAULT 0", "notify_email": "INTEGER NOT NULL DEFAULT 0",
+                  "notify_push": "INTEGER NOT NULL DEFAULT 0", "notify_inapp": "INTEGER NOT NULL DEFAULT 1",
+                  "summary_times": "TEXT", "summary_groups": "TEXT", "notify_set": "INTEGER NOT NULL DEFAULT 0"}
 
 
 def path() -> str:
@@ -67,6 +88,15 @@ def conn():
 def init() -> None:
     with conn() as c:
         c.executescript(SCHEMA)
+        _migrate(c)
+
+
+def _migrate(c) -> None:
+    """Add columns introduced after a database was created."""
+    have = {r["name"] for r in c.execute("PRAGMA table_info(users)")}
+    for col, decl in NOTIFY_COLUMNS.items():
+        if col not in have:
+            c.execute(f"ALTER TABLE users ADD COLUMN {col} {decl}")
 
 
 def _row(r) -> dict | None:
@@ -104,8 +134,9 @@ def by_google(sub: str) -> dict | None:
 
 
 def update_user(uid: int, **fields) -> None:
-    allowed = set(PROFILE_FIELDS) | {"groups", "onboarded", "google_sub", "password_hash", "last_login",
-                                     "terms_version", "privacy_version", "accepted_at"}
+    allowed = set(PROFILE_FIELDS) | set(NOTIFY_COLUMNS) | {"groups", "onboarded", "google_sub", "password_hash",
+                                                           "last_login", "terms_version", "privacy_version",
+                                                           "accepted_at"}
     fields = {k: v for k, v in fields.items() if k in allowed}
     if not fields:
         return
@@ -174,3 +205,76 @@ def touch_passkey(credential_id: str, sign_count: int) -> None:
 def delete_passkey(uid: int, credential_id: str) -> None:
     with conn() as c:
         c.execute("DELETE FROM passkeys WHERE user_id=? AND credential_id=?", (uid, credential_id))
+
+
+# --- follows, push subscriptions, notifications ---------------------------------
+
+def follows(uid: int) -> list[dict]:
+    with conn() as c:
+        return [dict(r) for r in c.execute("SELECT pid, name, added_at FROM follows WHERE user_id=? ORDER BY added_at", (uid,))]
+
+
+def follow(uid: int, pid: str, name: str | None) -> None:
+    with conn() as c:
+        c.execute("INSERT OR IGNORE INTO follows (user_id, pid, name, added_at) VALUES (?,?,?,?)",
+                  (uid, pid, name, time.time()))
+
+
+def unfollow(uid: int, pid: str) -> None:
+    with conn() as c:
+        c.execute("DELETE FROM follows WHERE user_id=? AND pid=?", (uid, pid))
+
+
+def followers_by_pid() -> dict[str, list[tuple[int, float]]]:
+    """{pid: [(user_id, followed_at)]} for everyone who follows someone."""
+    out: dict = {}
+    with conn() as c:
+        for r in c.execute("SELECT user_id, pid, added_at FROM follows"):
+            out.setdefault(r["pid"], []).append((r["user_id"], r["added_at"]))
+    return out
+
+
+def add_push(uid: int, endpoint: str, p256dh: str, auth: str) -> None:
+    with conn() as c:
+        c.execute("INSERT OR REPLACE INTO push_subs (endpoint, user_id, p256dh, auth, created_at) VALUES (?,?,?,?,?)",
+                  (endpoint, uid, p256dh, auth, time.time()))
+
+
+def push_subs(uid: int) -> list[dict]:
+    with conn() as c:
+        return [dict(r) for r in c.execute("SELECT * FROM push_subs WHERE user_id=?", (uid,))]
+
+
+def drop_push(endpoint: str) -> None:
+    with conn() as c:
+        c.execute("DELETE FROM push_subs WHERE endpoint=?", (endpoint,))
+
+
+def add_notification(uid: int, kind: str, title: str, body: str, url: str | None, dedupe: str) -> bool:
+    """Store one notification; False if this user already has it (same dedupe key)."""
+    with conn() as c:
+        cur = c.execute("INSERT OR IGNORE INTO notifications (user_id, kind, title, body, url, dedupe, created_at) "
+                        "VALUES (?,?,?,?,?,?,?)", (uid, kind, title, body, url, dedupe, time.time()))
+        return cur.rowcount > 0
+
+
+def notifications(uid: int, limit: int = 30) -> list[dict]:
+    with conn() as c:
+        return [dict(r) for r in c.execute(
+            "SELECT id, kind, title, body, url, created_at, read_at FROM notifications WHERE user_id=? "
+            "ORDER BY created_at DESC LIMIT ?", (uid, limit))]
+
+
+def mark_read(uid: int) -> None:
+    with conn() as c:
+        c.execute("UPDATE notifications SET read_at=? WHERE user_id=? AND read_at IS NULL", (time.time(), uid))
+
+
+def all_users() -> list[dict]:
+    with conn() as c:
+        return [dict(r) for r in c.execute("SELECT * FROM users WHERE onboarded=1")]
+
+
+def prune_notifications(days: int = 90) -> None:
+    with conn() as c:
+        c.execute("DELETE FROM notifications WHERE created_at < ?", (time.time() - days * 86400,))

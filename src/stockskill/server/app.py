@@ -92,6 +92,30 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
             from ..accounts.pages import account_html
             return account_html()
 
+    @app.get("/sw.js")
+    def service_worker():
+        from ..accounts.pages import SERVICE_WORKER
+        r = app.response_class(SERVICE_WORKER, mimetype="application/javascript")
+        r.headers["Service-Worker-Allowed"] = "/"
+        r.headers["Cache-Control"] = "no-cache"
+        return r
+
+    @app.get("/manifest.webmanifest")
+    def web_manifest():
+        from ..accounts.pages import MANIFEST
+        import json as _json
+        return app.response_class(_json.dumps(MANIFEST), mimetype="application/manifest+json")
+
+    @app.get("/icon-192.png")
+    @app.get("/icon-512.png")
+    @app.get("/apple-touch-icon.png")
+    def app_icon():
+        from ..accounts.pages import icon_png
+        size = {"/icon-192.png": 192, "/icon-512.png": 512}.get(request.path, 180)
+        r = app.response_class(icon_png(size), mimetype="image/png")
+        r.headers["Cache-Control"] = "public, max-age=604800"
+        return r
+
     @app.get("/terms")
     def terms_page():
         from ..accounts.pages import legal_html
@@ -1529,6 +1553,11 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
         except Exception:  # noqa: BLE001
             out["fear_greed"] = None
         return jsonify(out)
+
+    # --- per-user notifications (daily summary, followed politicians) --------
+    if auth and os.environ.get("STOCKSKILL_NOTIFY") == "1":
+        from ..accounts.notify import Scheduler
+        Scheduler(app, _member_id).start()
 
     # --- phone alerts (ntfy) -------------------------------------------------
     from ..alerts import phone as AL

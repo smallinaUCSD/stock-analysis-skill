@@ -36,6 +36,9 @@ def politician_html(pid: str) -> str:
 
 _EXTRA_CSS = """
 .pp-head{display:flex;align-items:flex-start;gap:16px}
+.pp-follow{margin-top:10px;height:34px;padding:0 14px;border-radius:17px;border:1px solid var(--accent);background:var(--surface);
+  color:var(--accent);font:500 13px var(--font);cursor:pointer}
+.pp-follow.on{background:var(--accent);color:var(--accent-ink)}
 .pp-who{display:flex;gap:18px;align-items:center;flex:1;min-width:0}
 .pp-photo{width:96px;height:118px;border-radius:12px;object-fit:cover;background:var(--surface-2);flex:0 0 auto}
 .pp-mono{width:96px;height:118px;border-radius:12px;background:var(--surface-3);display:flex;align-items:center;
@@ -161,5 +164,19 @@ fetch('/api/politician/'+encodeURIComponent(PID)).then(function(r){return r.json
     'From the President\'s OGE Form 278-T reports (scanned filings read by OCR'+(d.coverage?': '+d.coverage.read+' of '+d.coverage.filings+' listed filings were legible enough to read':'')+
     '; within those, about 9 in 10 rows are read). The accounts are trustee-managed. Research on officials\' trades finds no reliable market-beating edge.':
     'From STOCK Act periodic transaction reports (House Clerk / Senate eFD), up to 45 days after each trade. Research finds members\' trades have not beaten the market on average since 2012 (Belmont et al., 2022).';
-  loadPerf(); }).catch(function(){ document.getElementById('who').textContent='Could not load this profile.'; });
+  loadPerf(); followBtn(d.person); }).catch(function(){ document.getElementById('who').textContent='Could not load this profile.'; });
+// signed-in users (public site) can follow this person to be notified of new trades
+function followBtn(p){
+  fetch('/api/me').then(function(r){ return r.ok?r.json():null; }).then(function(me){
+    if(!me||!me.ok) return;
+    var on=(me.follows||[]).some(function(f){ return f.pid===PID; });
+    var b=document.createElement('button'); b.className='pp-follow'+(on?' on':'');
+    function paint(){ b.textContent=on?'Following':'Follow for trade alerts'; b.classList.toggle('on',on); }
+    paint();
+    b.onclick=function(){ fetch('/api/me/follows',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(on?{remove:[PID]}:{add:[{pid:PID,name:p.name}]})}).then(function(r){return r.json();})
+      .then(function(d){ if(d.ok){ on=!on; paint(); } }); };
+    document.getElementById('who').appendChild(b);
+  }).catch(function(){});
+}
 """

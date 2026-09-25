@@ -15,7 +15,7 @@ import html
 import os
 
 TERMS_VERSION = "2026-09-25"
-PRIVACY_VERSION = "2026-09-25"
+PRIVACY_VERSION = "2026-09-25.2"
 EFFECTIVE = "September 25, 2026"
 
 
@@ -193,7 +193,8 @@ use and share it, and the choices and rights you have. It applies together with 
 <li><b>Profile:</b> first and last name, date of birth (used to confirm you are 18 or older), and optionally
 your gender.</li>
 <li><b>Preferences:</b> the kind of investor you are, your experience level, how you heard about us, the
-sectors and indices you chose, and your watchlist.</li>
+sectors and indices you chose, your watchlist, your notification choices (when to send a daily summary, which
+sectors it covers, and whether by email, browser notification or in the app) and the politicians you follow.</li>
 <li><b>Messages</b> you send us, such as support requests.</li>
 </ul>
 <p><b>Information from sign-in providers.</b> If you choose "Sign in with Google", Google shares your name,
@@ -201,6 +202,9 @@ email address, whether it is verified, and a Google account identifier. We do no
 password or access to your Gmail, contacts or files.</p>
 <p><b>Passkeys.</b> If you create a passkey, we store only its public key, an identifier and a usage counter.
 Your fingerprint, face or device PIN never leave your device and are never sent to us.</p>
+<p><b>Notifications.</b> If you turn on browser notifications, your browser gives us a push address and
+encryption keys issued by its push service (for example Google, Apple or Mozilla); messages we send pass through
+that service encrypted. We keep the summaries and alerts shown in your Today panel for 90 days.</p>
 <p><b>Information collected automatically.</b> Our servers record technical information needed to operate and
 secure the Service: IP address, browser type, the pages and features requested, and error logs. We use one
 essential cookie to keep you signed in. We do not use advertising cookies, cross-site trackers or third-party
@@ -213,8 +217,8 @@ analytics.</p>
 <li>To personalize the Service, such as building your watchlist from the sectors you pick.</li>
 <li>To operate, maintain, debug and improve the Service, including aggregated statistics that do not
 identify you.</li>
-<li>To send you service messages, such as security notices or changes to our terms. We will ask before
-sending marketing email, and you can unsubscribe at any time.</li>
+<li>To send the summaries and alerts you choose, and service messages such as security notices or changes
+to our terms. We will ask before sending marketing email, and every email has an unsubscribe link.</li>
 <li>To comply with law and enforce our Terms.</li>
 </ul>
 <p>We do not use your information to make automated decisions that have legal or similarly significant
@@ -227,6 +231,8 @@ advertising.</b> We share it only:</p>
 <li>with service providers that host or deliver the Service for us (for example our hosting and network
 providers), who may use it only to provide those services;</li>
 <li>with Google, only if you choose to sign in with Google;</li>
+<li>with our email provider, to deliver emails you asked for, and with your browser's push service, to deliver
+browser notifications you turned on;</li>
 <li>when required by law, subpoena or court order, or to protect the rights, property or safety of us, our
 users or others;</li>
 <li>in connection with a merger, acquisition or sale of assets, in which case this policy continues to apply

@@ -19,7 +19,7 @@ def _shell(title: str, body: str, css: str = "", js: str = "", head: str = "") -
             f"<title>{html.escape(title)}</title>"
             "<meta name=\"description\" content=\"Stock research built on official filings: valuations, "
             "financials, earnings, a market-wide screener, supply chains and insider trades.\">"
-            + _THEME_BOOT + head + "<style>" + _CSS + _BASE_CSS + css + "</style></head><body>" + body
+            + _THEME_BOOT + HEAD_PWA + head + "<style>" + _CSS + _BASE_CSS + css + "</style></head><body>" + body
             + "<script>" + _COMMON_JS + js + "</script></body></html>")
 
 
@@ -414,7 +414,7 @@ def welcome_html() -> str:
     body = f"""<div class="wz-wrap"><div class="wz-top">{_brand_link()}<a class="small muted" href="/logout">Sign out</a></div>
 <div class="wz-prog" id="wz-prog"></div>
 <div class="wz-card" id="wz"><p class="muted">Loading…</p></div></div>"""
-    return _shell(f"Set up your account · {BRAND}", body, _WZ_CSS, _WZ_JS)
+    return _shell(f"Set up your account · {BRAND}", body, _WZ_CSS + _NF_CSS, _NF_JS + _WZ_JS)
 
 
 _WZ_CSS = """
@@ -455,7 +455,20 @@ _WZ_CSS = """
 _WZ_JS = r"""
 var ME=null, GROUPS=[], STEPS=[], I=0, SEL={}, PROF={};
 function prog(){ document.getElementById('wz-prog').innerHTML=STEPS.map(function(s,k){ return '<span'+(k<=I?' class="on"':'')+'></span>'; }).join(''); }
-function show(){ prog(); window.scrollTo(0,0); ({terms:stTerms,sectors:stSectors,about:stAbout,passkey:stPasskey})[STEPS[I]](); }
+function show(){ prog(); window.scrollTo(0,0); ({terms:stTerms,sectors:stSectors,about:stAbout,notify:stNotify,passkey:stPasskey})[STEPS[I]](); }
+var NOTE='';
+function stNotify(){
+  if(!NF){ nfInit(ME); if(!ME.user.notify.groups.length){ NF.groups={}; Object.keys(SEL).forEach(function(k){ if(SEL[k]) NF.groups[k]=true; }); } }
+  el().innerHTML='<h1>Stay in the loop</h1><p class="lead">Pick a daily market summary, politicians to follow, and how you\'d like to '+
+    'hear from us. You can change any of this later in account settings.</p>'+nfHTML(ME, GROUPS)+
+    '<div class="err" id="err"></div><div class="wz-foot"><button class="btn ghost" id="back">Back</button><button class="btn primary" id="go">Continue</button></div>';
+  nfBind(ME);
+  document.getElementById('back').onclick=function(){ I--; show(); };
+  document.getElementById('go').onclick=function(){ var go=this; go.disabled=true;
+    nfSave().then(function(d){ NOTE=d.email_pending?(d.verification_sent?'We sent a link to '+ME.user.email+'. Click it to start getting emails.':
+      'Email will start once your address is confirmed.'):''; next(); })
+      .catch(function(e){ go.disabled=false; document.getElementById('err').textContent=(e&&e.message)||e; }); };
+}
 function next(){ I++; if(I>=STEPS.length) return finish(); show(); }
 function el(){ return document.getElementById('wz'); }
 function stTerms(){
@@ -517,6 +530,7 @@ function stPasskey(){
   el().innerHTML='<div class="pk-hero"><div class="pk-ico"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="9" r="4"/><path d="M11 12l9 0M17 12v3M20 12v2M2 20a6 6 0 0112 0"/></svg></div><div>'+
    '<h1>Sign in faster next time</h1><p class="lead">Create a passkey and sign in with Face ID, Touch ID, Windows Hello or your phone '+
    'instead of a password. Your fingerprint or face never leaves your device; we only store a public key.</p></div></div>'+
+   (NOTE?'<p class="ok-msg" style="margin:0 0 10px">'+esc(NOTE)+'</p>':'')+
    (ok?'':'<p class="muted">This browser doesn\'t support passkeys. You can add one later from account settings on another device.</p>')+
    '<div class="err" id="err"></div><div class="wz-foot"><button class="btn ghost" id="skip">Skip for now</button>'+
    (ok?'<button class="btn primary" id="go">Create a passkey</button>':'<button class="btn primary" id="skip2">Finish</button>')+'</div>';
@@ -531,8 +545,10 @@ Promise.all([fetch('/api/me').then(function(r){return r.json();}), fetch('/api/g
   (ME.user.groups||[]).forEach(function(k){ SEL[k]=true; }); if(!ME.user.groups.length) SEL.mag7=true;
   var only=new URLSearchParams(location.search).get('step');
   STEPS=[]; if(ME.user.needs_terms) STEPS.push('terms');
-  if(only==='sectors' && ME.user.onboarded){ STEPS.push('sectors'); }
-  else { STEPS.push('sectors','about'); if(!ME.passkeys.length) STEPS.push('passkey'); }
+  if(ME.user.onboarded){                      // returning user: only what was asked for or is missing
+    if(only==='sectors'||only==='notify') STEPS.push(only);
+    if(!STEPS.length) STEPS.push('sectors');
+  } else { STEPS.push('sectors','about','notify'); if(!ME.passkeys.length) STEPS.push('passkey'); }
   show();
 });
 """
@@ -543,7 +559,7 @@ Promise.all([fetch('/api/me').then(function(r){return r.json();}), fetch('/api/g
 def account_html() -> str:
     body = f"""<div class="ac-wrap"><div class="wz-top">{_brand_link()}<span><a class="btn ghost" href="/">Back to the board</a></span></div>
 <h1 class="ac-h">Account settings</h1><div id="ac" class="muted">Loading…</div></div>"""
-    return _shell(f"Account · {BRAND}", body, _WZ_CSS + _AC_CSS, _AC_JS)
+    return _shell(f"Account · {BRAND}", body, _WZ_CSS + _AC_CSS + _NF_CSS, _NF_JS + _AC_JS)
 
 
 _AC_CSS = """
@@ -606,8 +622,20 @@ function danger(){ return '<div class="ac-sec"><h2>Legal</h2><p class="small">Yo
    '<button class="btn danger" onclick="delAcct()">Delete my account</button></div><div class="err" id="del-err"></div></div>'+
    '<p><a class="btn ghost" href="/logout">Sign out</a></p>'; }
 function delAcct(){ post('/api/me/delete',{confirm:v('del')}).then(function(d){ if(d.ok) location.href='/'; else document.getElementById('del-err').textContent=d.error; }); }
-function render(){ var a=document.getElementById('ac'); a.className=''; a.innerHTML=prof()+wl()+signin()+danger(); }
-function load(){ fetch('/api/me').then(function(r){return r.json();}).then(function(d){ ME=d; render(); }); }
+var GROUPS=[];
+function notif(){ return '<div class="ac-sec"><h2>Notifications</h2>'+nfHTML(ME, GROUPS)+
+   '<div class="wz-foot"><span class="small" id="nf-msg"></span><span style="display:flex;gap:8px"><button class="btn ghost" onclick="testNf()">Send me a test</button>'+
+   '<button class="btn primary" onclick="saveNf()">Save notifications</button></span></div></div>'; }
+function saveNf(){ var m=document.getElementById('nf-msg'); nfSave().then(function(d){ m.className='small ok-msg';
+    m.textContent=d.email_pending?(d.verification_sent?'Saved. Check your inbox to confirm your email.':'Saved. Email starts once your address is confirmed.'):'Saved.'; })
+  .catch(function(e){ m.className='small err'; m.textContent=(e&&e.message)||e; }); }
+function testNf(){ var m=document.getElementById('nf-msg'); post('/api/me/notify/test').then(function(d){
+  m.className='small '+(d.ok?'ok-msg':'err');
+  m.textContent=d.ok?('Sent'+(d.email?' by email':'')+(d.push?' to '+d.push+' browser'+(d.push>1?'s':''):'')+(d.inapp?' to your Today panel':'')+'.'):d.error; }); }
+function render(){ var a=document.getElementById('ac'); a.className=''; if(!NF) nfInit(ME);
+  a.innerHTML=prof()+wl()+notif()+signin()+danger(); nfBind(ME); }
+function load(){ Promise.all([fetch('/api/me').then(function(r){return r.json();}), fetch('/api/groups').then(function(r){return r.json();})])
+  .then(function(a){ ME=a[0]; GROUPS=a[1].groups||[]; render(); }); }
 load();
 """
 
@@ -659,5 +687,226 @@ def personalize_board(board_html: str, user: dict, tickers: list[str]) -> str:
               "<a class=\"me-btn\" href=\"/account\" title=\"Account settings\">" + html.escape(initials) + "</a>');}"
               "var h=document.querySelector('.top-l h1');if(h)h.textContent=" + json.dumps(f"{first.split()[0]}'s watchlist") + ";"
               "if(typeof applyFilter==='function')applyFilter();})();</script>")
+    inject += _TODAY_INJECT
+    h = board_html.find("</head>")
+    if h >= 0:
+        board_html = board_html[:h] + HEAD_PWA + board_html[h:]
     i = board_html.rfind("</body>")
     return board_html[:i] + inject + board_html[i:] if i >= 0 else board_html + inject
+
+
+_TODAY_INJECT = r"""<style>
+.me-today{position:relative;height:34px;padding:0 12px;border-radius:17px;border:1px solid var(--border-strong);background:var(--surface);
+  color:var(--ink);font:500 13px var(--font);cursor:pointer;margin-right:10px}
+.me-today .dot{position:absolute;top:-2px;right:-2px;width:9px;height:9px;border-radius:50%;background:var(--accent);display:none}
+.me-today.unread .dot{display:block}
+.td-drawer{position:fixed;top:0;right:0;bottom:0;width:min(420px,100vw);background:var(--bg);border-left:1px solid var(--border);
+  box-shadow:-20px 0 50px -20px rgba(0,0,0,.25);z-index:60;transform:translateX(100%);transition:transform .25s var(--ease-out);
+  display:flex;flex-direction:column}
+.td-drawer.show{transform:none}
+.td-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--border)}
+.td-head h3{font-family:var(--font-display);font-weight:500;font-size:24px;margin:0}
+.td-head button{border:none;background:none;font-size:22px;color:var(--muted);cursor:pointer}
+.td-list{overflow-y:auto;padding:8px 18px 24px;flex:1}
+.td-item{border-bottom:1px solid var(--border);padding:12px 0}
+.td-item b{font-weight:500;font-size:15px} .td-item time{display:block;color:var(--muted);font-size:12px;margin:2px 0 6px}
+.td-item p{margin:0 0 6px;font-size:14px;line-height:1.5}
+.td-item.new b:after{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent);margin-left:6px;vertical-align:2px}
+.td-card{border:1px solid var(--accent);background:color-mix(in srgb,var(--accent) 6%,var(--surface));border-radius:var(--r-lg,14px);
+  padding:14px 18px;margin:0 0 14px}
+.td-card h4{margin:0 0 6px;font-family:var(--font-display);font-weight:500;font-size:22px}
+.td-card p{margin:0 0 5px;font-size:14px;line-height:1.5}
+.td-card .td-act{display:flex;gap:14px;margin-top:8px;font-size:13px} .td-card .td-act a{cursor:pointer;color:var(--link)}
+.td-empty{color:var(--muted);font-size:14px;padding:20px 0}
+</style>
+<div class="td-drawer" id="td-drawer" aria-hidden="true"><div class="td-head"><h3>Today</h3><button onclick="tdClose()" aria-label="Close">&times;</button></div>
+<div class="td-list" id="td-list"></div></div>
+<script>(function(){
+var ITEMS=[];
+function e(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+function when(t){ var d=new Date(t*1000); return d.toLocaleString('en-US',{weekday:'short',hour:'numeric',minute:'2-digit'}); }
+function lines(b){ return (b||'').split('\n').filter(Boolean).map(function(l){ return '<p>'+e(l)+'</p>'; }).join(''); }
+var tr=document.querySelector('.top-r');
+if(tr) tr.insertAdjacentHTML('afterbegin','<button class="me-today" id="me-today" onclick="tdOpen()">Today<span class="dot"></span></button>');
+window.tdOpen=function(){ var l=document.getElementById('td-list');
+  l.innerHTML=ITEMS.length?ITEMS.map(function(i){ return '<div class="td-item'+(i.read_at?'':' new')+'"><b>'+e(i.title)+'</b><time>'+when(i.created_at)+'</time>'+lines(i.body)+
+    (i.url&&i.url!=='/'?'<a href="'+e(i.url)+'">Open</a>':'')+'</div>'; }).join(''):
+    '<div class="td-empty">Nothing yet. Your daily summaries and politician alerts will appear here. Set them up in <a href="/account">account settings</a>.</div>';
+  document.getElementById('td-drawer').classList.add('show');
+  if(ITEMS.some(function(i){return !i.read_at;})) fetch('/api/me/notifications/read',{method:'POST'}).then(function(){
+    ITEMS.forEach(function(i){ i.read_at=i.read_at||1; }); document.getElementById('me-today').classList.remove('unread'); }); };
+window.tdClose=function(){ document.getElementById('td-drawer').classList.remove('show'); };
+document.addEventListener('keydown',function(ev){ if(ev.key==='Escape') tdClose(); });
+fetch('/api/me/notifications').then(function(r){return r.json();}).then(function(d){
+  ITEMS=d.items||[]; if(d.unread) document.getElementById('me-today').classList.add('unread');
+  var s=ITEMS.find(function(i){ return i.kind==='summary' && !i.read_at && (Date.now()/1000-i.created_at)<18*3600; });
+  var host=document.querySelector('.panels');
+  if(s && host){ host.insertAdjacentHTML('beforebegin','<div class="td-card" id="td-card"><h4>'+e(s.title)+'</h4>'+lines(s.body)+
+    '<div class="td-act"><a onclick="tdOpen()">See all notifications</a><a onclick="document.getElementById(\'td-card\').remove();fetch(\'/api/me/notifications/read\',{method:\'POST\'})">Dismiss</a></div></div>'); }
+}).catch(function(){});
+})();</script>"""
+
+
+# --- simple message page, service worker, manifest, icons ---------------------------
+
+def message_html(title: str, text: str) -> str:
+    body = (f'<div class="lg-wrap"><div class="wz-top">{_brand_link()}<a class="small" href="/">Home</a></div>'
+            f'<div class="wz-card"><h1>{html.escape(title)}</h1><p class="lead" style="color:var(--muted)">{html.escape(text)}</p>'
+            f'<a class="btn primary" href="/">Go to your watchlist</a></div></div>')
+    return _shell(f"{title} · {BRAND}", body, _WZ_CSS + _LG_CSS)
+
+
+SERVICE_WORKER = r"""
+self.addEventListener('push', function(e){
+  var d={}; try{ d=e.data.json(); }catch(_){ d={title:'SMI Research', body:e.data?e.data.text():''}; }
+  e.waitUntil(self.registration.showNotification(d.title||'SMI Research',
+    {body:d.body||'', icon:'/icon-192.png', badge:'/icon-192.png', data:{url:d.url||'/'}}));
+});
+self.addEventListener('notificationclick', function(e){
+  e.notification.close();
+  var url=(e.notification.data||{}).url||'/';
+  e.waitUntil(clients.matchAll({type:'window', includeUncontrolled:true}).then(function(ws){
+    for(var i=0;i<ws.length;i++){ if('focus' in ws[i]){ ws[i].navigate(url); return ws[i].focus(); } }
+    return clients.openWindow(url);
+  }));
+});
+"""
+
+MANIFEST = {"name": BRAND, "short_name": "SMI", "start_url": "/", "display": "standalone",
+            "background_color": "#faf9f5", "theme_color": "#cc785c",
+            "icons": [{"src": "/icon-192.png", "sizes": "192x192", "type": "image/png"},
+                      {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}]}
+
+HEAD_PWA = ('<link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/apple-touch-icon.png">'
+            '<meta name="apple-mobile-web-app-capable" content="yes"><meta name="theme-color" content="#cc785c">')
+
+_ICON_CACHE: dict = {}
+
+
+def icon_png(size: int) -> bytes:
+    """The app icon (coral tile with a rising line) as a PNG, drawn in code."""
+    if size in _ICON_CACHE:
+        return _ICON_CACHE[size]
+    import struct
+    import zlib
+    bg, fg = (0xCC, 0x78, 0x5C), (0xFF, 0xFF, 0xFF)
+    pts = [(6, 17), (10.5, 12), (14, 15), (20, 8)]              # the logo path on a 26-unit grid
+    pts = [((x - 1) / 24 * size, (y - 1) / 24 * size) for x, y in pts]
+    half = size * 0.045
+
+    def near(px, py):
+        for (x1, y1), (x2, y2) in zip(pts, pts[1:]):
+            dx, dy = x2 - x1, y2 - y1
+            t = max(0.0, min(1.0, ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy)))
+            if (px - x1 - t * dx) ** 2 + (py - y1 - t * dy) ** 2 <= half * half:
+                return True
+        return False
+    rows = []
+    for y in range(size):
+        row = bytearray(b"\x00")
+        for x in range(size):
+            row += bytes(fg if near(x + 0.5, y + 0.5) else bg)
+        rows.append(bytes(row))
+    raw = zlib.compress(b"".join(rows), 9)
+
+    def chunk(t, d):
+        return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xFFFFFFFF)
+    png = (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", size, size, 8, 2, 0, 0, 0))
+           + chunk(b"IDAT", raw) + chunk(b"IEND", b""))
+    _ICON_CACHE[size] = png
+    return png
+
+
+# --- notification settings form (sign-up step + account page) ------------------------
+
+_NF_CSS = """
+.nf-seg{display:flex;flex-wrap:wrap;gap:8px}
+.nf-chipset{display:flex;flex-wrap:wrap;gap:6px}
+.nf-chip{height:32px;padding:0 12px;border-radius:16px;border:1px solid var(--border-strong);background:var(--bg);color:var(--ink);font:13px var(--font);cursor:pointer}
+.nf-chip.on{background:color-mix(in srgb,var(--accent) 12%,var(--bg));border-color:var(--accent)}
+.nf-people{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px;margin-top:10px}
+.nf-p{display:flex;align-items:center;gap:10px;border:1px solid var(--border);border-radius:12px;background:var(--bg);padding:8px 10px}
+.nf-p img,.nf-p .ph{width:38px;height:38px;border-radius:50%;object-fit:cover;flex:none;background:var(--surface-2);display:grid;place-items:center;font-size:13px}
+.nf-p .who{flex:1;min-width:0;font-size:14px;line-height:1.3} .nf-p .who small{display:block;color:var(--muted);font-size:12px}
+.nf-p button{height:30px;padding:0 10px;border-radius:15px;border:1px solid var(--border-strong);background:var(--bg);color:var(--ink);font:12px var(--font);cursor:pointer;flex:none}
+.nf-p button.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.nf-ch{display:flex;gap:12px;align-items:flex-start;border:1px solid var(--border);border-radius:12px;background:var(--bg);padding:12px 14px;margin-bottom:8px;cursor:pointer}
+.nf-ch input{margin-top:3px;width:17px;height:17px;accent-color:var(--accent);flex:none}
+.nf-ch b{font-weight:500} .nf-ch small{display:block;color:var(--muted);font-size:13px;line-height:1.45;margin-top:2px}
+.nf-ch.off{opacity:.55;cursor:not-allowed}
+"""
+
+_NF_JS = r"""
+var NF=null, NF0={}, PEOPLE=[];
+var TIMES=[['pre','Before the open','8:30am ET'],['post','After the close','4:30pm ET'],['both','Both',''],['none','No daily summary','']];
+function nfInit(me){ var n=me.user.notify;
+  NF={times:n.set?n.times:'pre', groups:{}, email:n.set?n.email:false, push:n.set?n.push:false, inapp:n.set?n.inapp:true, follows:{}};
+  (n.groups.length?n.groups:me.user.groups).forEach(function(k){ NF.groups[k]=true; });
+  (me.follows||[]).forEach(function(f){ NF.follows[f.pid]=f.name||f.pid; }); NF0=Object.assign({},NF.follows); }
+function nfHTML(me, groups){
+  var n=me.user.notify, isIOS=/iPhone|iPad/.test(navigator.userAgent), standalone=window.navigator.standalone===true;
+  var pushOk=('serviceWorker' in navigator)&&('PushManager' in window)&&!!me.push_key;
+  var emailNote=!me.email_ready?'Email isn\'t set up on this server yet.':
+    (n.email_verified?'To '+esc(me.user.email):'To '+esc(me.user.email)+'. We\'ll send a link to confirm the address first.');
+  var pushNote=pushOk?'Pop-up notifications from this browser, even when the site is closed.'+(me.push_count?' On for '+me.push_count+' browser'+(me.push_count>1?'s':'')+'.':''):
+    (isIOS&&!standalone?'On iPhone and iPad: tap Share, then "Add to Home Screen", and open the site from there to turn this on.':'This browser can\'t show notifications.');
+  return '<div class="wz-h">Daily market summary</div><div class="nf-seg" id="nf-times">'+TIMES.map(function(t){
+      return '<button type="button" class="opt'+(NF.times===t[0]?' on':'')+'" data-t="'+t[0]+'"><b style="font-weight:500">'+t[1]+'</b>'+(t[2]?'<br><span class="small muted">'+t[2]+'</span>':'')+'</button>'; }).join('')+'</div>'+
+   '<div id="nf-gwrap"><div class="wz-h">Sectors to cover</div><div class="nf-chipset" id="nf-groups">'+groups.map(function(g){
+      return '<button type="button" class="nf-chip'+(NF.groups[g.key]?' on':'')+'" data-g="'+g.key+'">'+esc(g.label)+'</button>'; }).join('')+'</div>'+
+   '<p class="small muted" style="margin:8px 0 0">Plus your watchlist\'s biggest movers, their earnings dates and the day\'s economic releases.</p></div>'+
+   '<div class="wz-h">Follow politicians <span style="text-transform:none;letter-spacing:0">(optional)</span></div>'+
+   '<p class="small muted" style="margin:0 0 8px">Get notified when their stock trades are disclosed. Members of Congress report up to 45 days after trading.</p>'+
+   '<input class="inp" id="nf-q" placeholder="Search by name, state or party" autocomplete="off" style="max-width:360px">'+
+   '<div class="nf-people" id="nf-people"><p class="small muted">Loading…</p></div>'+
+   '<div class="wz-h">How should we reach you?</div>'+
+   '<label class="nf-ch'+(me.email_ready?'':' off')+'"><input type="checkbox" id="nf-email"'+(NF.email&&me.email_ready?' checked':'')+(me.email_ready?'':' disabled')+'><span><b>Email</b><small>'+emailNote+'</small></span></label>'+
+   '<label class="nf-ch'+(pushOk?'':' off')+'"><input type="checkbox" id="nf-push"'+(NF.push&&pushOk?' checked':'')+(pushOk?'':' disabled')+'><span><b>Browser notifications</b><small id="nf-push-note">'+pushNote+'</small></span></label>'+
+   '<label class="nf-ch"><input type="checkbox" id="nf-inapp"'+(NF.inapp?' checked':'')+'><span><b>Today panel in the app</b><small>Your summary and alerts waiting on your watchlist when you sign in.</small></span></label>';
+}
+function nfPeople(){ var q=(document.getElementById('nf-q').value||'').trim().toLowerCase(), el=document.getElementById('nf-people');
+  var list=PEOPLE.filter(function(p){ return !q || (p.name+' '+(p.state||'')+' '+(p.party||'')+' '+(p.chamber||'')).toLowerCase().indexOf(q)>=0; });
+  var followed=PEOPLE.filter(function(p){ return NF.follows[p.id]; });
+  if(!q){ list=followed.concat(list.filter(function(p){ return !NF.follows[p.id]; })).slice(0, Math.max(12, followed.length)); } else list=list.slice(0,24);
+  if(!list.length){ el.innerHTML='<p class="small muted">'+(PEOPLE.length?'No one matches.':'Trade data is still loading. You can follow people later from the Trades page or your account.')+'</p>'; return; }
+  el.innerHTML=list.map(function(p){ var on=!!NF.follows[p.id];
+    var ini=(p.name||'?').split(' ').map(function(w){return w[0];}).slice(0,2).join('');
+    return '<div class="nf-p">'+(p.photo?'<img src="'+esc(p.photo)+'" alt="" loading="lazy" onerror="this.outerHTML=\'<span class=&quot;ph&quot;>'+esc(ini)+'</span>\'">':'<span class="ph">'+esc(ini)+'</span>')+
+      '<span class="who">'+esc(p.name)+'<small>'+esc([p.party?p.party[0]:'',p.chamber==='President'?'President':(p.chamber||''),p.state||''].filter(Boolean).join(' · '))+' · '+p.trades+' trades</small></span>'+
+      '<button type="button" class="'+(on?'on':'')+'" data-pid="'+esc(p.id)+'" data-name="'+esc(p.name)+'">'+(on?'Following':'Follow')+'</button></div>'; }).join('');
+}
+function enablePush(key){
+  return Notification.requestPermission().then(function(perm){
+    if(perm!=='granted') throw new Error('Notifications are blocked in this browser\'s settings.');
+    return navigator.serviceWorker.register('/sw.js');
+  }).then(function(reg){ return navigator.serviceWorker.ready.then(function(){ return reg; }); })
+  .then(function(reg){ return reg.pushManager.getSubscription().then(function(s){
+    return s||reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:unb64u(key)}); }); })
+  .then(function(sub){ return post('/api/me/push',{subscription:sub.toJSON()}); })
+  .then(function(d){ if(!d.ok) throw new Error(d.error); return d; });
+}
+function nfBind(me){
+  function gw(){ document.getElementById('nf-gwrap').style.display=NF.times==='none'?'none':''; }
+  document.querySelectorAll('#nf-times [data-t]').forEach(function(b){ b.onclick=function(){ NF.times=b.getAttribute('data-t');
+    document.querySelectorAll('#nf-times [data-t]').forEach(function(x){ x.classList.toggle('on',x===b); }); gw(); }; }); gw();
+  document.querySelectorAll('#nf-groups [data-g]').forEach(function(b){ b.onclick=function(){ var k=b.getAttribute('data-g'); NF.groups[k]=!NF.groups[k]; b.classList.toggle('on',!!NF.groups[k]); }; });
+  document.getElementById('nf-q').oninput=nfPeople;
+  document.getElementById('nf-people').onclick=function(e){ var b=e.target.closest('button[data-pid]'); if(!b) return;
+    var id=b.getAttribute('data-pid'); if(NF.follows[id]) delete NF.follows[id]; else NF.follows[id]=b.getAttribute('data-name'); nfPeople(); };
+  var pc=document.getElementById('nf-push');
+  pc.onchange=function(){ if(!pc.checked) return; var note=document.getElementById('nf-push-note'); note.textContent='Asking your browser…';
+    enablePush(me.push_key).then(function(){ note.textContent='On in this browser.'; })
+      .catch(function(err){ pc.checked=false; note.textContent=(err&&err.message)||'Couldn\'t turn on notifications.'; }); };
+  fetch('/api/politicians').then(function(r){return r.json();}).then(function(d){ PEOPLE=d.people||[]; nfPeople(); })
+    .catch(function(){ PEOPLE=[]; nfPeople(); });
+}
+function nfSave(){
+  NF.email=document.getElementById('nf-email').checked; NF.push=document.getElementById('nf-push').checked; NF.inapp=document.getElementById('nf-inapp').checked;
+  var add=Object.keys(NF.follows).filter(function(k){ return !NF0[k]; }).map(function(k){ return {pid:k,name:NF.follows[k]}; });
+  var rem=Object.keys(NF0).filter(function(k){ return !NF.follows[k]; });
+  return post('/api/me/notify',{times:NF.times, groups:Object.keys(NF.groups).filter(function(k){return NF.groups[k];}),
+    email:NF.email, push:NF.push, inapp:NF.inapp}).then(function(d){
+      if(!d.ok) throw new Error(d.error);
+      return post('/api/me/follows',{add:add, remove:rem}).then(function(){ NF0=Object.assign({},NF.follows); return d; }); });
+}
+"""

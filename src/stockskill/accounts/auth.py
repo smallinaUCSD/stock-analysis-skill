@@ -43,7 +43,9 @@ GENDERS = {"female": "Female", "male": "Male", "nonbinary": "Non-binary", "self"
            "na": "Prefer not to say"}
 REFERRALS = {"friend": "A friend or colleague", "search": "Search engine", "social": "Social media",
              "reddit": "Reddit or a forum", "news": "News or a blog", "other": "Other"}
-_PUBLIC_PATHS = {"/", "/login", "/signup", "/terms", "/privacy", "/healthz", "/favicon.ico", "/logout"}
+_PUBLIC_PATHS = {"/", "/login", "/signup", "/terms", "/privacy", "/healthz", "/favicon.ico", "/logout",
+                 "/sw.js", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/apple-touch-icon.png",
+                 "/notifications/verify", "/notifications/unsubscribe"}
 _ONBOARD_OK = {"/welcome", "/account", "/logout", "/terms", "/privacy"}
 
 
@@ -138,7 +140,7 @@ def _gate():
             return jsonify({"ok": False, "error": "Please sign in."}), 401
         return redirect("/login?next=" + quote(request.full_path.rstrip("?"), safe="/?=&"))
     if not u.get("onboarded") or needs_terms(u):
-        if p in _ONBOARD_OK or p.startswith("/api/me") or p == "/api/groups":
+        if p in _ONBOARD_OK or p.startswith("/api/me") or p in ("/api/groups", "/api/politicians"):
             return None
         if p.startswith("/api/"):
             return jsonify({"ok": False, "error": "Finish setting up your account first."}), 403
@@ -277,9 +279,12 @@ def google_login():
     if u:
         if not u.get("google_sub"):
             db.update_user(u["id"], google_sub=sub)        # link Google to the existing account
+        if not u.get("email_verified"):
+            db.update_user(u["id"], email_verified=1)      # Google confirmed the address
     else:
         # new account: they accept the Terms on the first onboarding screen
         uid = db.create_user(email, google_sub=sub, first_name=c.get("given_name"), last_name=c.get("family_name"))
+        db.update_user(uid, email_verified=1)
         u = db.get_user(uid)
     _login(u["id"])
     return jsonify({"ok": True, "next": _next_for(u, _body().get("next"))})
@@ -387,6 +392,11 @@ def _public_user(u: dict) -> dict:
     out["has_password"] = bool(u.get("password_hash"))
     out["google_linked"] = bool(u.get("google_sub"))
     out["needs_terms"] = needs_terms(u)
+    out["notify"] = {"times": u.get("summary_times") or "none",
+                     "groups": [x for x in (u.get("summary_groups") or u.get("groups") or "").split(",") if x],
+                     "email": bool(u.get("notify_email")), "push": bool(u.get("notify_push")),
+                     "inapp": bool(u.get("notify_inapp")), "email_verified": bool(u.get("email_verified")),
+                     "set": bool(u.get("notify_set"))}
     return out
 
 
@@ -394,8 +404,11 @@ def _public_user(u: dict) -> dict:
 @login_required
 def me():
     u = current_user()
+    from . import notify
     return jsonify({"ok": True, "user": _public_user(u), "watchlist": db.watchlist(u["id"]),
-                    "passkeys": db.passkeys(u["id"]),
+                    "passkeys": db.passkeys(u["id"]), "follows": db.follows(u["id"]),
+                    "push_key": notify.vapid_public_key(), "email_ready": notify.email_ready(),
+                    "push_count": len(db.push_subs(u["id"])),
                     # ordered [key, label] pairs (a JSON object would be re-sorted alphabetically)
                     "options": {k: [[a, b] for a, b in m.items()] for k, m in (
                         ("investor_types", INVESTOR_TYPES), ("experience", EXPERIENCE), ("genders", GENDERS),
@@ -555,3 +568,112 @@ def set_password():
         return jsonify({"ok": False, "error": "Use a password of at least 10 characters."}), 400
     db.update_user(u["id"], password_hash=generate_password_hash(pw))
     return jsonify({"ok": True})
+
+
+# --- notifications ------------------------------------------------------------------
+
+SUMMARY_TIMES = {"pre": "Before the open (8:30am ET)", "post": "After the close (4:30pm ET)",
+                 "both": "Both", "none": "No daily summary"}
+
+
+@bp.post("/api/me/notify")
+@login_required
+def save_notify():
+    from . import notify
+    b = _body()
+    u = current_user()
+    c = _cfg()
+    times = b.get("times") or "none"
+    if times not in SUMMARY_TIMES:
+        return jsonify({"ok": False, "error": "Choose when to get your summary."}), 400
+    valid = {g_["key"] for g_ in all_groups(c["tickers_path"], c["cache_dir"])}
+    groups = [k for k in (b.get("groups") or []) if k in valid]
+    want_email, want_push, want_inapp = bool(b.get("email")), bool(b.get("push")), bool(b.get("inapp"))
+    if times != "none" and not (want_email or want_push or want_inapp):
+        return jsonify({"ok": False, "error": "Pick at least one way to get your summary."}), 400
+    db.update_user(u["id"], summary_times=times, summary_groups=",".join(groups), notify_email=int(want_email),
+                   notify_push=int(want_push), notify_inapp=int(want_inapp), notify_set=1)
+    sent = False
+    if want_email and not u.get("email_verified") and notify.email_ready() and not _limited("verify:" + str(u["id"]), 5, 3600):
+        sent = notify.send_verification(db.get_user(u["id"]))
+    return jsonify({"ok": True, "verification_sent": sent,
+                    "email_pending": want_email and not u.get("email_verified")})
+
+
+@bp.post("/api/me/push")
+@login_required
+def add_push():
+    sub = (_body().get("subscription") or {})
+    keys = sub.get("keys") or {}
+    ep = str(sub.get("endpoint") or "")
+    if not ep.startswith("https://") or not keys.get("p256dh") or not keys.get("auth"):
+        return jsonify({"ok": False, "error": "That browser subscription looks invalid."}), 400
+    db.add_push(current_user()["id"], ep, keys["p256dh"], keys["auth"])
+    return jsonify({"ok": True})
+
+
+@bp.post("/api/me/follows")
+@login_required
+def edit_follows():
+    b = _body()
+    uid = current_user()["id"]
+    for f in (b.get("add") or [])[:50]:
+        pid = str((f or {}).get("pid") or "")[:80]
+        if re.fullmatch(r"[A-Za-z0-9_.:-]{1,80}", pid):
+            db.follow(uid, pid, str(f.get("name") or "")[:80] or None)
+    for pid in (b.get("remove") or [])[:50]:
+        db.unfollow(uid, str(pid))
+    return jsonify({"ok": True, "follows": db.follows(uid)})
+
+
+@bp.get("/api/me/notifications")
+@login_required
+def list_notifications():
+    rows = db.notifications(current_user()["id"])
+    return jsonify({"ok": True, "items": rows, "unread": sum(1 for r in rows if not r["read_at"])})
+
+
+@bp.post("/api/me/notifications/read")
+@login_required
+def read_notifications():
+    db.mark_read(current_user()["id"])
+    return jsonify({"ok": True})
+
+
+@bp.post("/api/me/notify/test")
+@login_required
+def test_notify():
+    from . import notify
+    if _limited("test:" + str(current_user()["id"]), 5, 3600):
+        return jsonify({"ok": False, "error": "Try again later."}), 429
+    u = db.get_user(current_user()["id"])
+    r = notify.deliver(u, "test", "Test notification", ["Notifications are working. Your summaries and alerts will "
+                                                          "arrive the same way."], "/account", f"test:{time.time()}",
+                       "Notifications are working.")
+    return jsonify({"ok": True, **r})
+
+
+@bp.route("/notifications/verify")
+def verify_email():
+    from . import notify
+    from .pages import message_html
+    d = notify.read_token(request.args.get("t", ""), "verify", 7 * 86400)
+    u = db.get_user(d["u"]) if d else None
+    if not u or u["email"] != d.get("e"):
+        return message_html("Link expired", "That confirmation link is invalid or has expired. Request a new one from "
+                            "your account settings."), 400
+    db.update_user(u["id"], email_verified=1)
+    return message_html("Email confirmed", "Thanks. Your summaries and alerts will now arrive by email.")
+
+
+@bp.route("/notifications/unsubscribe", methods=["GET", "POST"])
+def unsubscribe():
+    from . import notify
+    from .pages import message_html
+    d = notify.read_token(request.args.get("t", ""), "unsub", 365 * 86400)
+    u = db.get_user(d["u"]) if d else None
+    if not u or u["email"] != d.get("e"):
+        return message_html("Link expired", "That link is invalid. You can turn off emails in your account settings."), 400
+    db.update_user(u["id"], notify_email=0)
+    return message_html("Unsubscribed", "You won't get any more emails from us. You can turn them back on in "
+                        "account settings at any time.")
