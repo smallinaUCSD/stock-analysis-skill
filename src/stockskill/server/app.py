@@ -943,6 +943,50 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
                         "layout": {k: [list(x) for x in v] for k, v in FIN.LAYOUT.items()},
                         "source": f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={d.get('cik')}&type=10-K"})
 
+    @app.get("/screener")
+    def screener_page():
+        from .screener_page import screener_html
+        return screener_html()
+
+    def _watch_extras() -> dict:
+        """Trailing returns for watchlist names, from their cached prices."""
+        from ..watchlist.pipeline import _load_cached
+        from ..watchlist.tickers import parse_tickers
+        try:
+            wl = parse_tickers(tickers_path)["all"]
+        except Exception:  # noqa: BLE001
+            wl = []
+        out = {}
+        for t in wl:
+            td = _load_cached(cache_dir, t) if cache_dir else None
+            cl = [c for c in ((td.ohlcv or {}).get("close") or []) if c] if td else []
+            ret = {}
+            for key, n in (("r1m", 21), ("r3m", 63), ("r1y", 252)):
+                ret[key] = cl[-1] / cl[-1 - n] - 1 if len(cl) > n else None
+            out[t] = ret
+        return out
+
+    @app.get("/api/screener")
+    def screener_api():
+        """Every US-listed common stock with valuation, profitability and
+        growth from SEC filings (filtered in the browser)."""
+        import gzip
+        from ..data import market_screen as M
+        from ..data import sec as SEC
+        if not SEC.has_sec():
+            return jsonify({"ok": False, "error": "The screener needs SEC access configured on this server."})
+        u = M.universe(cache_dir, _watch_extras)
+        if u.get("warming"):
+            return jsonify({"ok": True, "warming": True, "error": u.get("error")})
+        body = M.dumps({"ok": True, "year": u["year"], "built": u["built"], "refreshing": u.get("refreshing", False),
+                        "table": M.compact(u["rows"])}).encode()
+        resp = app.response_class(body, mimetype="application/json")
+        if "gzip" in (request.headers.get("Accept-Encoding") or ""):
+            resp.set_data(gzip.compress(body, 5))
+            resp.headers["Content-Encoding"] = "gzip"
+        resp.headers["Vary"] = "Accept-Encoding"
+        return resp
+
     _EARN: dict = {}
 
     def _earn_company(tk: str, with_finnhub: bool = True) -> dict:

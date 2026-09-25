@@ -1393,6 +1393,7 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
         '<button class="tool-b" onclick="openTool(\'lookthrough\')">Look-through</button>'
         '<button class="tool-b" onclick="openTool(\'montecarlo\')">Monte Carlo</button>'
         '<button class="tool-b" onclick="openTab(\'/compare\')">Compare</button>'
+        '<button class="tool-b" onclick="openTab(\'/screener\')">Screener</button>'
         '<button class="tool-b" onclick="openTab(\'/trades\')">Trades</button>'
         '<button class="tool-b" onclick="openTab(\'/breakouts\')">Breakouts</button>'
         '<button class="tool-b" onclick="openTab(\'/earnings\')">Earnings</button>'
