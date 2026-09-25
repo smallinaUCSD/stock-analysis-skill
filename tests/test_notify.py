@@ -202,4 +202,4 @@ def test_confirmation_email_failure_is_explained(app, monkeypatch):
             raise smtplib.SMTPAuthenticationError(535, b"bad credentials")
     monkeypatch.setattr(smtplib, "SMTP", Boom)
     r = c.post("/api/me/verify/resend").get_json()
-    assert not r["ok"] and "app password" in r["error"]
+    assert not r["ok"] and "rejected u@test" in r["error"] and "535" in r["error"]

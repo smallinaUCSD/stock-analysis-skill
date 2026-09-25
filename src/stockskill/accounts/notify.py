@@ -64,8 +64,14 @@ LAST_ERROR = {"msg": None}
 def _explain(e: Exception) -> str:
     """A plain-English reason an email didn't send."""
     if isinstance(e, smtplib.SMTPAuthenticationError):
-        return ("Gmail didn't accept the sign-in. Check SMTP_USER and that SMTP_PASSWORD is an app password "
-                "(16 letters, no spaces) created with 2-Step Verification on.")
+        detail = (e.smtp_error.decode(errors="replace") if isinstance(e.smtp_error, bytes) else str(e.smtp_error))
+        if e.smtp_code == 534 or "Application-specific password required" in detail:
+            return ("Gmail wants an app password, not the account's normal password. Create one at "
+                    "myaccount.google.com/apppasswords while signed in as " + (os.environ.get("SMTP_USER") or "the sender")
+                    + " and put it in SMTP_PASSWORD.")
+        return ("Gmail rejected " + (os.environ.get("SMTP_USER") or "the username") + " with that password (code "
+                + str(e.smtp_code) + "). The app password must be created while signed in to that same Gmail account, "
+                "and SMTP_USER must be its full address.")
     if isinstance(e, smtplib.SMTPRecipientsRefused):
         return "The mail server refused that recipient address."
     if isinstance(e, (OSError, smtplib.SMTPConnectError, smtplib.SMTPServerDisconnected)):
