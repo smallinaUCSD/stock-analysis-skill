@@ -450,6 +450,7 @@ def analysis_html(row, closes=None, refresh_seconds: int = 900) -> str:
     <h1>{name}</h1></div>
   <div class="a-pricebox"><div class="a-price">{price}<span class="chg {dcls}">{dtxt}</span></div>{ext}
     <span style="display:flex;gap:14px"><a class="a-help" style="font-size:14px" href="/financials?t={tk}" target="_blank" rel="noopener">Financials</a>
+    <a class="a-help" style="font-size:14px" href="/earnings?t={tk}" target="_blank" rel="noopener">Earnings</a>
     <a class="a-help" style="font-size:14px" href="/graph?t={tk}" target="_blank" rel="noopener">Connections</a></span></div>
   <button class="page-x" onclick="return goBack(event)" title="Close" aria-label="Close">{icon("x", 17)}</button>
 </header>

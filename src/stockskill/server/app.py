@@ -943,6 +943,83 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
                         "layout": {k: [list(x) for x in v] for k, v in FIN.LAYOUT.items()},
                         "source": f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={d.get('cik')}&type=10-K"})
 
+    _EARN: dict = {}
+
+    def _earn_company(tk: str, with_finnhub: bool = True) -> dict:
+        """Releases with reactions (+ surprises/next/ratings when asked)."""
+        from ..data import earnings as E
+        from ..watchlist.pipeline import _load_cached
+        td = _load_cached(cache_dir, tk) if cache_dir else None
+        spy = _load_cached(cache_dir, "SPY") if cache_dir else None
+        rel = E.releases(tk, cache_dir) or []
+        surp = E.surprises(tk) if with_finnhub else []
+        hist = E.history(rel, td.ohlcv if td else None, spy.ohlcv if spy else None, surp)
+        timings = [r["timing"] for r in rel[:8]]
+        usual = max(set(timings), key=timings.count) if timings else None
+        out = {"ticker": tk, "name": (td.snapshot.name if td and td.snapshot and td.snapshot.name else tk),
+               "history": hist, "stats": E.stats(hist, surp), "usual_timing": usual}
+        if with_finnhub:
+            out["next"] = E.upcoming(tk)
+            out["ratings"] = E.recommendations(tk)
+            if not out["next"] and td and td.snapshot and td.snapshot.next_earnings:
+                out["next"] = {"date": td.snapshot.next_earnings, "timing": None}
+        return out
+
+    @app.get("/earnings")
+    def earnings_page():
+        from .earnings_page import earnings_html
+        return earnings_html(request.args.get("t", ""))
+
+    @app.get("/api/earnings/calendar")
+    def earnings_calendar_api():
+        """Watchlist companies reporting in the next five weeks, with how the
+        stock has typically moved on its past reports."""
+        import time as _t
+        from concurrent.futures import ThreadPoolExecutor
+        from ..data import earnings as E
+        from ..data import finnhub
+        from ..watchlist.tickers import parse_tickers
+        hit = _EARN.get("_cal")
+        if hit and _t.time() - hit[0] < 6 * 3600:
+            return jsonify(hit[1])
+        if not finnhub.has_finnhub():
+            return jsonify({"ok": False, "error": "The earnings calendar needs a Finnhub key on this server."})
+        try:
+            wl = parse_tickers(tickers_path)["all"]
+        except Exception:  # noqa: BLE001
+            wl = []
+        rows = E.calendar(wl, 35)
+
+        def enrich(r):
+            try:
+                c = _earn_company(r["ticker"], with_finnhub=False)
+            except Exception:  # noqa: BLE001
+                c = {}
+            st = c.get("stats") or {}
+            return {**r, "name": c.get("name") or r["ticker"], "usual_timing": c.get("usual_timing"),
+                    "avg_move": st.get("avg_abs_move"), "n": st.get("n"), "up": st.get("up")}
+
+        with ThreadPoolExecutor(max_workers=4) as ex:
+            rows = list(ex.map(enrich, rows))
+        res = {"ok": True, "rows": rows}
+        _EARN["_cal"] = (_t.time(), res)
+        return jsonify(res)
+
+    @app.get("/api/earnings/<ticker>")
+    def earnings_api(ticker: str):
+        if not _TICKER_RE.match(ticker):
+            return jsonify({"error": "invalid ticker"}), 400
+        import time as _t
+        tk = ticker.upper()
+        hit = _EARN.get(tk)
+        if hit and _t.time() - hit[0] < 6 * 3600:
+            return jsonify(hit[1])
+        res = {"ok": True, **_earn_company(tk)}
+        if not res["history"] and not res.get("next"):
+            return jsonify({"ok": False, "error": f"No earnings reports found for {tk} (ETFs and funds don't report)."})
+        _EARN[tk] = (_t.time(), res)
+        return jsonify(res)
+
     _GRAPH: dict = {}
 
     @app.get("/graph")
