@@ -1041,7 +1041,7 @@ def _sector_html(sectors):
             '<div class="panel-body">' + "".join(rows) + '</div></section>')
 
 
-_MKT_GROUP_LABEL = {"index": "Indices", "commodity": "Commodities", "crypto": "Crypto"}
+_MKT_GROUP_LABEL = {"index": "Indices", "bond": "Treasury yields", "commodity": "Commodities", "crypto": "Crypto"}
 
 
 def _points(last, chg):
@@ -1066,6 +1066,14 @@ def _markets_html(markets):
             last_group = q.group
         chg = q.change
         ccls = "up" if (chg or 0) >= 0 else "down"
+        if q.group == "bond":                          # a rate: show the level and the change in basis points
+            bp = (q.last - q.last / (1 + chg)) * 100 if chg is not None and chg > -1 else None
+            rows.append(
+                f'<div class="mkrow"><span class="mkname">{html.escape(q.name)}</span>'
+                f'<span class="mkpx">{q.last:.2f}%</span>'
+                f'<span class="mkpts">{"" if bp is None else f"{bp:+.0f} bp"}</span>'
+                f'<span class="mkchg"></span></div>')
+            continue
         chg_txt = f"{chg*100:+.2f}%" if chg is not None else "-"
         px = f"${q.last:,.2f}" if q.last < 100 else f"${q.last:,.0f}"
         rows.append(
@@ -1073,7 +1081,9 @@ def _markets_html(markets):
             f'<span class="mkpx">{px}</span>'
             f'<span class="mkpts {ccls}">{_points(q.last, chg)}</span>'
             f'<span class="mkchg {ccls}">{chg_txt}</span></div>')
-    return ('<section class="panel"><div class="panel-h">Markets</div>'
+    return ('<section class="panel"><div class="panel-h">Markets'
+            '<a class="site-help" style="font-size:12px;margin-left:auto" href="/markets" '
+            'onclick="openTab(this.href);return false">All markets</a></div>'
             '<div class="panel-body">' + "".join(rows) + '</div></section>')
 
 
@@ -1403,6 +1413,7 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
         '<button class="tool-b" onclick="openTab(\'/breakouts\')">Breakouts</button>'
         '<button class="tool-b" onclick="openTab(\'/earnings\')">Earnings</button>'
         '<button class="tool-b" onclick="openTab(\'/financials\')">Financials</button>'
+        '<button class="tool-b" onclick="openTab(\'/markets\')">Markets</button>'
         '<button class="tool-b" onclick="openTab(\'/economy\')">Economy</button>'
         '<button class="tool-b" onclick="openTab(\'/indicators\')">Indicators</button>'
         '<button class="tool-b" onclick="openTab(\'/interpret\')">Interpret</button>'

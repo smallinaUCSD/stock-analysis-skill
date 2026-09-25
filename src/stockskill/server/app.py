@@ -1091,6 +1091,18 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
                         "layout": {k: [list(x) for x in v] for k, v in FIN.LAYOUT.items()},
                         "source": f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={d.get('cik')}&type=10-K"})
 
+    @app.get("/markets")
+    def markets_page():
+        from .markets_page import markets_html
+        return markets_html()
+
+    @app.get("/api/markets")
+    def markets_api():
+        """Stock indexes, Treasury yields, bond funds, commodities, currencies, crypto."""
+        from ..data.markets import overview
+        d = overview()
+        return jsonify({"ok": bool(d["sections"]), **d})
+
     _ECON: dict = {}
 
     @app.get("/economy")

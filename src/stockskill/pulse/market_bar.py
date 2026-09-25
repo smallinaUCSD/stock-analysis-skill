@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from ..technicals.changes import pct_change
 
 INDICES = {"^DJI": "Dow", "^GSPC": "S&P 500", "^IXIC": "Nasdaq"}
+# Treasury yields (Yahoo quotes them in percent, e.g. 4.25 = 4.25%)
+BONDS = {"^IRX": "3-month", "^FVX": "5-year", "^TNX": "10-year", "^TYX": "30-year"}
 COMMODITIES = {"GC=F": "Gold", "SI=F": "Silver", "HG=F": "Copper",
                "CL=F": "Crude Oil", "NG=F": "Nat Gas", "PL=F": "Platinum",
                "ZS=F": "Soybeans", "ZC=F": "Corn", "ZW=F": "Wheat"}
@@ -20,7 +22,7 @@ CRYPTO = {"BTC-USD": "Bitcoin", "ETH-USD": "Ethereum"}
 ROTATION = {"SPY": "S&P 500", "QQQ": "Nasdaq 100", "IWM": "Small caps",
             "MDY": "Mid caps", "RSP": "Equal weight"}
 
-_BAR = {**INDICES, **COMMODITIES, **CRYPTO}
+_BAR = {**INDICES, **BONDS, **COMMODITIES, **CRYPTO}
 
 
 def all_market_tickers() -> list[str]:
@@ -34,12 +36,12 @@ class Quote:
     name: str
     last: float | None
     change: float | None    # day % change (decimal)
-    group: str              # index | commodity | crypto
+    group: str              # index | bond | commodity | crypto
 
 
 def market_quotes(price_map: dict[str, list[float]]) -> list[Quote]:
     """Last price + day change for each market-bar instrument."""
-    groups = [(INDICES, "index"), (COMMODITIES, "commodity"), (CRYPTO, "crypto")]
+    groups = [(INDICES, "index"), (BONDS, "bond"), (COMMODITIES, "commodity"), (CRYPTO, "crypto")]
     out: list[Quote] = []
     for mapping, group in groups:
         for tk, name in mapping.items():

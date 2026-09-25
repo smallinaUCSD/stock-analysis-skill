@@ -94,3 +94,21 @@ def test_economy_route(tmp_path, monkeypatch):
     assert c.get("/economy").status_code == 200
     d = c.get("/api/economy").get_json()
     assert d["ok"] and d["calendar"][0]["name"] == "CPI inflation"
+
+
+def test_market_performance_windows():
+    from datetime import date, timedelta
+    from stockskill.data.markets import performance
+    d0 = date(2025, 9, 1)
+    dates = [d0 + timedelta(days=i) for i in range(400)]
+    closes = [100 + i * 0.1 for i in range(400)]
+    p = performance(dates, closes)
+    last = closes[-1]
+    assert p["last"] == last and abs(p["d1"] - (last / closes[-2] - 1)) < 1e-12
+    assert abs(p["w1"] - (last / closes[-8] - 1)) < 1e-12
+    ytd_base = closes[dates.index(date(2025, 12, 31))]
+    assert abs(p["ytd"] - (last / ytd_base - 1)) < 1e-12
+    y = performance(dates, [4.0 + i * 0.001 for i in range(400)], kind="yield")
+    assert abs(y["d1"] - 0.001) < 1e-9                    # yields move in points, not percent
+    assert len(p["spark"]) in (91, 92) and 70 <= len(p["line"]) <= 76     # calendar-day test data
+    assert performance([], []) == {}
