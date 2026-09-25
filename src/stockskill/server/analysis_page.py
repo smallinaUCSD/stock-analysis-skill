@@ -13,7 +13,7 @@ import html as _html
 import os
 
 from ..dashboard.render import _CSS, _THEME_BOOT, icon
-from ..watchlist.render import _CSS_EXTRA, _pct, _SIG_CLASS
+from ..watchlist.render import _CSS_EXTRA, _pct, _SIG_CLASS, glance_html
 from ..trade.setup import atr_trade_setup, position_size
 from ..trade.sizing import (win_prob_barrier, kelly_risk_fraction,
                             vol_target_fraction, sizing_plan)
@@ -379,6 +379,34 @@ function dvRender(){ var el=document.querySelector('[data-dv] .dv-body'); if(!el
 dvRender();
 """
 
+# Tabs: the other research pages load inside this one (no new browser tabs).
+_TABS_JS = r"""
+var TABS={financials:'/financials?t=',earnings:'/earnings?t=',connections:'/graph?t='};
+function showTab(t){ if(!document.getElementById('tab-'+t)) t='overview';
+  document.querySelectorAll('.a-tabs button').forEach(function(b){ b.classList.toggle('on',b.getAttribute('data-tab')===t); });
+  document.querySelectorAll('.a-tab').forEach(function(el){ el.hidden=el.id!=='tab-'+t; });
+  var box=document.getElementById('tab-'+t);
+  if(TABS[t] && !box.firstChild){ var f=document.createElement('iframe'); f.src=TABS[t]+encodeURIComponent(TK)+'&embed=1';
+    f.title=t; box.appendChild(f); }
+  try{ history.replaceState(null,'',t==='overview'?location.pathname:'#'+t); }catch(_){} }
+document.querySelectorAll('.a-tabs button').forEach(function(b){ b.addEventListener('click',function(){ showTab(b.getAttribute('data-tab')); }); });
+window.addEventListener('message',function(e){ if(e.origin!==location.origin||!e.data||!e.data.embedHeight) return;
+  document.querySelectorAll('.a-tab iframe').forEach(function(f){ if(f.contentWindow===e.source) f.style.height=(e.data.embedHeight+20)+'px'; }); });
+if(location.hash) showTab(location.hash.slice(1));
+function glance(key, value, sub){ var c=document.querySelector('.g-c[data-g="'+key+'"]'); if(!c) return;
+  c.querySelector('.g-v').textContent=value; c.querySelector('.g-s').textContent=sub||''; }
+fetch('/api/analysts/'+encodeURIComponent(TK)).then(function(r){return r.json();}).then(function(d){
+  if(!d.ok){ glance('an','n/a','no coverage'); return; }
+  glance('an', d.label||'n/a', d.upside!=null?'target '+(d.upside>=0?'+':'')+(d.upside*100).toFixed(0)+'% vs price':(d.analysts?d.analysts+' analysts':'')); })
+  .catch(function(){ glance('an','n/a'); });
+fetch('/api/dividends/'+encodeURIComponent(TK)).then(function(r){return r.json();}).then(function(d){
+  if(!d.ok){ glance('dv','n/a'); return; }
+  if(!d.pays){ glance('dv','None','doesn\'t pay one'); return; }
+  glance('dv', d.yield!=null?(d.yield*100).toFixed(2)+'%':'n/a', '$'+d.ttm.toFixed(2)+' a year'+(d.streak?' · raised '+d.streak+' yrs':'')); })
+  .catch(function(){ glance('dv','n/a'); });
+"""
+
+
 _ANALYST_BOX = ('<div class="asec" data-an="1"><div class="a-h">Analyst ratings</div>'
                 '<div class="an-body muted">Loading…</div></div>')
 _DIV_BOX = ('<div class="asec" data-dv="1"><div class="a-h">Dividends</div>'
@@ -473,11 +501,13 @@ def analysis_html(row, closes=None, refresh_seconds: int = 900) -> str:
     <span class="badge {sig_cls}">{_html.escape(row.signal)}</span></div>
     <h1>{name}</h1></div>
   <div class="a-pricebox"><div class="a-price">{price}<span class="chg {dcls}">{dtxt}</span></div>{ext}
-    <span style="display:flex;gap:14px"><a class="a-help" style="font-size:14px" href="/financials?t={tk}" target="_blank" rel="noopener">Financials</a>
-    <a class="a-help" style="font-size:14px" href="/earnings?t={tk}" target="_blank" rel="noopener">Earnings</a>
-    <a class="a-help" style="font-size:14px" href="/graph?t={tk}" target="_blank" rel="noopener">Connections</a></span></div>
+    </div>
   <button class="page-x" onclick="return goBack(event)" title="Close" aria-label="Close">{icon("x", 17)}</button>
 </header>
+{glance_html(row)}
+<nav class="a-tabs" role="tablist"><button data-tab="overview" class="on">Overview</button><button data-tab="financials">Financials</button>
+<button data-tab="earnings">Earnings</button><button data-tab="connections">Connections</button></nav>
+<div id="tab-overview" class="a-tab">
 <section class="agroup"><h2>Price<small>candles and volume</small></h2>
 <div class="asec">
   <div class="apx-bar">
@@ -489,6 +519,9 @@ def analysis_html(row, closes=None, refresh_seconds: int = 900) -> str:
   <div id="apx-ro" class="apx-ro muted">Loading price history…</div>
 </div></section>
 <div class="asections">{sections}</div>
+</div>
+<div id="tab-financials" class="a-tab" hidden></div><div id="tab-earnings" class="a-tab" hidden></div>
+<div id="tab-connections" class="a-tab" hidden></div>
 <p class="a-note">Analysis, not advice. Every figure is a model estimate on free,
 possibly delayed data; the decision is yours.
 <a class="a-help" href="/interpret" onclick="return openHelp(event)">Read the full guide</a></p>
@@ -521,7 +554,7 @@ function refresh(){{ if(_busy) return; _busy=true;
 if(REFRESH>0 && REFRESH<=3600000) setInterval(refresh, Math.max(60000,REFRESH));
 </script>
 <script>var TK="{tk}", RVOL={rvol};
-""" + _PRICE_JS + _OPT_JS + _SIG_JS + _CALC_JS + _FC_JS + ANALYST_JS + _AN_JS + """</script>
+""" + _PRICE_JS + _OPT_JS + _SIG_JS + _CALC_JS + _FC_JS + ANALYST_JS + _AN_JS + _TABS_JS + """</script>
 </body></html>"""
 
 

@@ -395,6 +395,41 @@ a.nw:hover .nw-t{color:var(--link)}
 .banner .dot.a-warn{background:var(--warn)} .banner .dot.a-info{background:var(--accent)}
 .banner .x{flex:0 0 auto}
 @media (prefers-reduced-motion:reduce){.banner-track{animation:none}}
+
+.g-strip{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:0;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r-lg);overflow:hidden;margin:4px 0 14px}
+.g-c{background:var(--surface);padding:10px 14px;min-width:0;box-shadow:1px 0 0 var(--border),0 1px 0 var(--border)}
+.g-l{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
+.g-v{font-size:18px;margin-top:2px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.g-s{font-size:12px;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.g-rng{position:relative;display:block;height:6px;border-radius:3px;background:var(--surface-3);margin:10px 0 6px}
+.g-rng i{position:absolute;top:-4px;width:4px;height:14px;border-radius:2px;background:var(--accent);transform:translateX(-50%)}
+.a-tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin:0 0 16px;overflow-x:auto}
+.a-tabs button{height:40px;padding:0 16px;border:none;background:none;color:var(--muted);font:500 15px var(--font);cursor:pointer;
+  border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.a-tabs button:hover{color:var(--ink)} .a-tabs button.on{color:var(--ink);border-bottom-color:var(--accent)}
+.a-tab iframe{width:100%;border:none;display:block;min-height:600px}
+
+.mx-jump{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 4px}
+.mx-jump button{height:36px;padding:0 14px;border-radius:var(--r);border:1px solid var(--border-strong);background:var(--surface);
+  color:var(--ink);font:500 13px var(--font);cursor:pointer}
+.mx-jump button:hover{border-color:var(--accent)} .mx-jump .cta-1{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.mx-details{border-top:1px solid var(--border);margin-top:12px;padding-top:4px}
+.mx-details>summary{cursor:pointer;list-style:none;padding:10px 0;font-weight:500;font-size:15px}
+.mx-details>summary::-webkit-details-marker{display:none}
+.mx-details>summary:before{content:"+";display:inline-block;width:18px;color:var(--accent)}
+.mx-details[open]>summary:before{content:"–"}
+.mx-details>summary span{font-weight:400;color:var(--muted);font-size:13px;margin-left:6px}
+#modal-body .g-strip{margin:10px 0 12px}
+body.simple #wl th:nth-child(4),body.simple #wl td:nth-child(4),body.simple #wl th:nth-child(7),body.simple #wl td:nth-child(7),body.simple #wl th:nth-child(8),body.simple #wl td:nth-child(8),body.simple #wl th:nth-child(9),body.simple #wl td:nth-child(9),body.simple #wl th:nth-child(13),body.simple #wl td:nth-child(13),body.simple #wl th:nth-child(14),body.simple #wl td:nth-child(14),body.simple #wl th:nth-child(15),body.simple #wl td:nth-child(15),body.simple #wl th:nth-child(16),body.simple #wl td:nth-child(16),body.simple #wl th:nth-child(18),body.simple #wl td:nth-child(18),body.simple #wl th:nth-child(19),body.simple #wl td:nth-child(19){display:none}
+
+.tool-more{position:relative;display:inline-block}
+.tool-more>summary{list-style:none;cursor:pointer} .tool-more>summary::-webkit-details-marker{display:none}
+.tool-more>summary:after{content:" ▾";color:var(--muted)}
+.tool-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:40;min-width:230px;background:var(--bg);border:1px solid var(--border);
+  border-radius:var(--r-lg);box-shadow:var(--shadow-pop,0 12px 30px -12px rgba(0,0,0,.3));padding:6px;display:flex;flex-direction:column}
+.tool-menu button{text-align:left;border:none;background:none;color:var(--ink);font:14px var(--font);padding:9px 12px;border-radius:var(--r);cursor:pointer}
+.tool-menu button:hover{background:var(--surface)}
 """
 
 
@@ -542,6 +577,45 @@ def _row_html(r):
         f'<td data-sort="{r.beta if r.beta is not None else -99}">{_num(r.beta, 2)}</td>'
         + _factor_cell(r) + '</tr>'
     )
+
+
+def glance_html(r) -> str:
+    """The numbers people scan first, in one row. Analyst view and dividend
+    yield fill in from the browser."""
+    def cell(label, value, sub="", key=""):
+        k = f' data-g="{key}"' if key else ""
+        return (f'<div class="g-c"{k}><div class="g-l">{label}</div><div class="g-v">{value}</div>'
+                f'<div class="g-s">{sub}</div></div>')
+    cells = [cell("Market value", html.escape(_mktcap(r.market_cap)) if r.market_cap else "n/a")]
+    cells.append(cell("P/E", f"{r.pe:.1f}" if r.pe else "n/a", "price / earnings"))
+    if r.week52_low and r.week52_high and r.price and r.week52_high > r.week52_low:
+        pos = max(0.0, min(1.0, (r.price - r.week52_low) / (r.week52_high - r.week52_low)))
+        cells.append(cell("52-week range", f'<span class="g-rng"><i style="left:{pos*100:.0f}%"></i></span>',
+                          f"${r.week52_low:,.2f} – ${r.week52_high:,.2f}"))
+    d = (r.valuation or {}).get("valuation") or {}
+    if d.get("reliable"):
+        if d.get("priced_on_growth"):
+            val, sub = "Priced on growth", "price needs faster growth than shown"
+        else:
+            m = d.get("margin_of_safety") or 0.0
+            val = "Undervalued" if m >= 0.10 else ("Overvalued" if m <= -0.10 else "Fairly valued")
+            gap = d.get("gap_vs_price")
+            sub = f"fair value {gap*100:+.0f}% vs price" if gap is not None else ""
+        cells.append(cell("Our valuation", val, sub))
+    cells.append(cell("Analysts", "…", "", "an"))
+    cells.append(cell("Dividend yield", "…", "", "dv"))
+    if r.next_earnings:
+        from ..watchlist.row import earnings_days
+        n = earnings_days(r.next_earnings)
+        from datetime import date as _d
+        try:
+            when = _d.fromisoformat(r.next_earnings).strftime("%b %-d")
+        except ValueError:
+            when = r.next_earnings
+        cells.append(cell("Next earnings", when, f"in {n} days" if n is not None and n >= 0 else ""))
+    if r.beta is not None:
+        cells.append(cell("Risk vs market", f"{r.beta:.1f}x", "beta: moves vs the S&amp;P 500"))
+    return f'<div class="g-strip">{"".join(cells)}</div>'
 
 
 def _trade_setup_html(r):
@@ -840,7 +914,7 @@ def _card_detail(r):
            f'<button type="button" class="cta-1" onclick="event.stopPropagation();'
            f"openTab('/analysis/{tk}')\">Analysis</button></div>")
     return (f'<div class="card-detail" onclick="event.stopPropagation()">'
-            f'{_chart_html(r)}{_valuation_summary(r)}{_risk_summary(r)}{_regime_summary(r)}'
+            f'{glance_html(r)}{_chart_html(r)}{_valuation_summary(r)}{_risk_summary(r)}{_regime_summary(r)}'
             f'{_volume_summary(r)}{btn}'
             f'<div class="cardnews" data-ticker="{html.escape(r.ticker)}"></div></div>')
 
@@ -1404,20 +1478,21 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
                                        '<button class="tool-b" onclick="openTab(\'/alerts\')">Alerts</button>')
     tools_html = (
         '<span class="toolsbar">'
-        '<button class="tool-b" onclick="openTool(\'evaluate\')">Evaluate</button>'
-        '<button class="tool-b" onclick="openTool(\'lookthrough\')">Look-through</button>'
-        '<button class="tool-b" onclick="openTool(\'montecarlo\')">Monte Carlo</button>'
-        '<button class="tool-b" onclick="openTab(\'/compare\')">Compare</button>'
         '<button class="tool-b" onclick="openTab(\'/screener\')">Screener</button>'
-        '<button class="tool-b" onclick="openTab(\'/trades\')">Trades</button>'
-        '<button class="tool-b" onclick="openTab(\'/breakouts\')">Breakouts</button>'
-        '<button class="tool-b" onclick="openTab(\'/earnings\')">Earnings</button>'
-        '<button class="tool-b" onclick="openTab(\'/financials\')">Financials</button>'
         '<button class="tool-b" onclick="openTab(\'/markets\')">Markets</button>'
-        '<button class="tool-b" onclick="openTab(\'/economy\')">Economy</button>'
-        '<button class="tool-b" onclick="openTab(\'/indicators\')">Indicators</button>'
-        '<button class="tool-b" onclick="openTab(\'/interpret\')">Interpret</button>'
-        + _holdings_btn + '</span>'
+        '<button class="tool-b" onclick="openTab(\'/earnings\')">Earnings</button>'
+        '<button class="tool-b" onclick="openTab(\'/trades\')">Trades</button>'
+        '<button class="tool-b" onclick="openTab(\'/compare\')">Compare</button>'
+        '<details class="tool-more"><summary class="tool-b">More tools</summary><div class="tool-menu">'
+        '<button onclick="openTab(\'/financials\')">Financials</button>'
+        '<button onclick="openTab(\'/economy\')">Economy and rates</button>'
+        '<button onclick="openTab(\'/breakouts\')">Breakouts</button>'
+        '<button onclick="openTool(\'evaluate\')">Evaluate a trade</button>'
+        '<button onclick="openTool(\'lookthrough\')">Look-through (fund holdings)</button>'
+        '<button onclick="openTool(\'montecarlo\')">Monte Carlo</button>'
+        '<button onclick="openTab(\'/indicators\')">Indicators</button>'
+        '<button onclick="openTab(\'/interpret\')">How to read this</button>'
+        + _holdings_btn.replace('class="tool-b" ', '') + '</div></details></span>'
     ) if served else ""
     add_html = (
         '<div class="addbar">' + _add_box + '<span id="addmsg" class="muted"></span></div>'
@@ -1465,6 +1540,10 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
     <button data-view="table" class="on" onclick="setView('table')">Table</button>
     <button data-view="card" onclick="setView('card')">Cards</button>
     <button data-view="heatmap" onclick="setView('heatmap')">Heatmap</button>
+  </div>
+  <div class="seg" id="density" role="group" aria-label="Detail level" title="Simple hides the technical columns">
+    <button data-d="simple" onclick="setDensity('simple')">Simple</button>
+    <button data-d="detailed" onclick="setDensity('detailed')">Detailed</button>
   </div>
   <label class="search">{icon("search", 15)}<input id="q" placeholder="Filter tickers" aria-label="Filter tickers" oninput="applyFilter()"></label>
   <span class="count" id="count">{ok} of {len(rows)} tickers</span>
@@ -1546,6 +1625,13 @@ function clearChips(){{
   document.getElementById('q').value='';
   applyFilter();
 }}
+document.addEventListener('click',e=>{{ document.querySelectorAll('.tool-more[open]').forEach(m=>{{
+  if(!m.contains(e.target) || e.target.closest('.tool-menu button')) m.removeAttribute('open'); }}); }});
+function setDensity(d){{
+  document.body.classList.toggle('simple', d==='simple');
+  document.querySelectorAll('#density button').forEach(b=>b.classList.toggle('on', b.dataset.d===d));
+  try{{ localStorage.setItem('wl_density', d); }}catch(_){{}}
+}}
 function setView(v){{
   view=v; localStorage.setItem('wl_view', v);
   document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
@@ -1554,14 +1640,15 @@ function setView(v){{
   applyFilter();
 }}
 function openCard(card){{
-  // Quick-look, top to bottom: ticker and price, the chart across the full width,
-  // every metric in a grid below it, recent news, then Compare / Analysis.
+  // Quick-look, top to bottom: name and price, the key numbers, the chart, one
+  // row of buttons into the stock page's tabs, then everything else folded
+  // under "More details" (so a quick scan stays a quick scan), then news.
   const body=document.getElementById('modal-body');
   const src=document.createElement('div'); src.innerHTML=card.innerHTML;
   const detail=src.querySelector('.card-detail');
   const pick=sel=>detail?detail.querySelector(sel):null;
   const chart=pick('.chart-sec'), news=pick('.cardnews'), cta=pick('.analysis-btn'), risk=pick('.risk-sec'),
-        vol=pick('.vol-sec');
+        vol=pick('.vol-sec'), glance=pick('.g-strip');
   if(detail) detail.remove();
   const head=document.createElement('div'); head.className='mx-head';
   ['.card-top','.nm','.exthrs'].forEach(sel=>{{ const n=src.querySelector(sel); if(n) head.appendChild(n); }});
@@ -1571,7 +1658,7 @@ function openCard(card){{
   while(src.firstChild) sum.appendChild(src.firstChild);
   const more=document.createElement('div'); more.className='mx-more';  // valuation, regime
   if(detail) Array.from(detail.children).forEach(c=>{{
-    if(c!==chart && c!==news && c!==cta && c!==risk && c!==vol) more.appendChild(c); }});
+    if(c!==chart && c!==news && c!==cta && c!==risk && c!==vol && c!==glance) more.appendChild(c); }});
   const grid=document.createElement('div'); grid.className='mx-grid';
   grid.appendChild(sum);
   if(risk||vol){{ const r=document.createElement('div');               // risk, then volume
@@ -1579,26 +1666,53 @@ function openCard(card){{
   if(more.children.length) grid.appendChild(more);
   const top=document.createElement('div'); top.className='mx-chart';
   if(chart) top.appendChild(chart);
-  const wrap=document.createElement('div'); wrap.className='card-item mx';
-  wrap.append(head, top, grid);
-  const tkr=(card.dataset.ticker||'').toUpperCase();
+  const tkr=(card.dataset.ticker||'').toUpperCase(), q=encodeURIComponent(tkr);
+  const jump=document.createElement('div'); jump.className='mx-jump';
+  jump.innerHTML=[['/analysis/'+q,'Full analysis','cta-1'],['/analysis/'+q+'#financials','Financials',''],
+    ['/analysis/'+q+'#earnings','Earnings',''],['/analysis/'+q+'#connections','Connections',''],['/compare?t='+q,'Compare','']]
+    .map(b=>'<button type="button" class="'+b[2]+'" data-go="'+b[0]+'">'+b[1]+'</button>').join('');
+  jump.addEventListener('click',e=>{{ const b=e.target.closest('[data-go]'); if(b) openTab(b.dataset.go); }});
   const kg=document.createElement('div'); kg.className='mx-kg';
   kg.innerHTML='<div class="det-h">Supply chain and connections <a class="site-help" style="font-weight:400;margin-left:8px" '+
-    'href="/graph?t='+encodeURIComponent(tkr)+'" onclick="openTab(this.href);return false">Open the full map</a></div>'+
+    'href="/graph?t='+q+'" onclick="openTab(this.href);return false">Open the full map</a></div>'+
     '<div class="kg-mini muted" style="font-size:13px">Loading connections…</div>';
-  wrap.appendChild(kg);
   const an=document.createElement('div'); an.className='mx-an';
   an.innerHTML='<div class="det-h">Analyst ratings</div><div class="an-body muted" style="font-size:13px">Loading…</div>';
-  wrap.appendChild(an);
+  const det=document.createElement('details'); det.className='mx-details';
+  det.innerHTML='<summary>More details <span>metrics, risk, valuation, connections and analyst ratings</span></summary>';
+  det.append(grid, kg, an);
+  let open=false; try{{ open=localStorage.getItem('ql_more')==='1'; }}catch(_){{}}
+  det.open=open;
+  const wrap=document.createElement('div'); wrap.className='card-item mx';
+  wrap.append(head);
+  if(glance) wrap.append(glance);
+  wrap.append(top, jump, det);
   if(news){{ news.classList.add('mx-news'); wrap.appendChild(news); }}
-  if(cta) wrap.appendChild(cta);
   body.innerHTML=''; body.appendChild(wrap);
   document.getElementById('modal').classList.add('show');
   fitChart(body);
   drawCharts(body);
   if(typeof loadNews==='function') loadNews(body);
-  loadMiniGraph(body, tkr);
-  if(typeof loadAnalysts==='function') loadAnalysts(body.querySelector('.an-body'), tkr);
+  let mapped=false;
+  const openMore=()=>{{ if(!mapped){{ mapped=true; drawCharts(det); loadMiniGraph(body, tkr); }} }};
+  if(det.open) openMore();
+  det.addEventListener('toggle',()=>{{ try{{ localStorage.setItem('ql_more',det.open?'1':'0'); }}catch(_){{}} if(det.open) openMore(); }});
+  qlFill(body, tkr);
+}}
+// Fill the analyst and dividend cells of the key numbers (and the analyst detail).
+function qlFill(body, tkr){{
+  const cell=(k,v,s)=>{{ const c=body.querySelector('.g-c[data-g="'+k+'"]'); if(!c) return;
+    c.querySelector('.g-v').textContent=v; c.querySelector('.g-s').textContent=s||''; }};
+  fetch('/api/analysts/'+encodeURIComponent(tkr)).then(r=>r.json()).then(d=>{{
+    const el=body.querySelector('.an-body'); if(el && typeof anHTML==='function'){{ el.classList.remove('muted'); el.innerHTML=anHTML(d); }}
+    if(!d.ok){{ cell('an','n/a','no coverage'); return; }}
+    cell('an', d.label||'n/a', d.upside!=null?'target '+(d.upside>=0?'+':'')+(d.upside*100).toFixed(0)+'% vs price':(d.analysts?d.analysts+' analysts':''));
+  }}).catch(()=>cell('an','n/a'));
+  fetch('/api/dividends/'+encodeURIComponent(tkr)).then(r=>r.json()).then(d=>{{
+    if(!d.ok){{ cell('dv','n/a'); return; }}
+    if(!d.pays){{ cell('dv','None',"doesn't pay one"); return; }}
+    cell('dv', d.yield!=null?(d.yield*100).toFixed(2)+'%':'n/a', '$'+d.ttm.toFixed(2)+' a year'+(d.streak?' · raised '+d.streak+' yrs':''));
+  }}).catch(()=>cell('dv','n/a'));
 }}
 function loadMiniGraph(body, tkr){{
   const el=body.querySelector('.kg-mini'); if(!el||!tkr||typeof drawGraph!=='function') return;
@@ -1802,6 +1916,8 @@ function _liveQuotes(){{
   const b=document.getElementById('banner');
   if(b && localStorage.getItem('wl_banner')===b.dataset.sig) b.style.display='none';
   setView(view);
+  let dens=null; try{{ dens=localStorage.getItem('wl_density'); }}catch(_){{}}
+  setDensity(dens || window.WL_DENSITY || 'detailed');
   _watchBoard();
   fmtUpdated();
   wireTableScroll();

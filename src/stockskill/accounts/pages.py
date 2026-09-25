@@ -748,6 +748,10 @@ def personalize_board(board_html: str, user: dict, tickers: list[str]) -> str:
               "var tr=document.querySelector('.top-r');if(tr){tr.insertAdjacentHTML('afterbegin','<a class=\"me-out\" href=\"/logout\">Sign out</a>"
               "<a class=\"me-btn\" href=\"/account\" title=\"Account settings\">" + html.escape(initials) + "</a>');}"
               "var h=document.querySelector('.top-l h1');if(h)h.textContent=" + json.dumps(f"{first.split()[0]}'s watchlist") + ";"
+              # newer investors start in the Simple view; they can switch any time
+              "try{if(!localStorage.getItem('wl_density')&&typeof setDensity==='function')setDensity(" + json.dumps(
+                  "detailed" if (user.get("experience") == "advanced" or user.get("investor_type") in
+                                 ("active", "options", "professional", "advisor")) else "simple") + ");}catch(_){}"
               "if(typeof applyFilter==='function')applyFilter();})();</script>")
     inject += _TODAY_INJECT
     h = board_html.find("</head>")
