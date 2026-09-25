@@ -117,3 +117,11 @@ def test_alert_routes_private_only(tmp_path, monkeypatch):
     assert len(c.get("/api/alerts").get_json()["rules"]) == 1
     assert c.post("/api/alerts/test").status_code == 400                              # no topic
     assert c.get("/alerts").status_code == 200
+
+
+def test_checker_can_be_turned_off_per_process(monkeypatch):
+    monkeypatch.setenv("NTFY_TOPIC", "t-123")
+    monkeypatch.setenv("STOCKSKILL_ALERTS", "0")
+    c = AL.Checker(lambda: [], lambda: ("", []))
+    c.start()
+    assert c._started is False

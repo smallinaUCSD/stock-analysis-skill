@@ -115,8 +115,10 @@ def _cached(path: str, ttl: float, fetch):
     data = fetch()
     if data is not None:
         try:
-            with open(path, "w") as f:
+            tmp = f"{path}.{os.getpid()}.tmp"
+            with open(tmp, "w") as f:
                 json.dump(data, f)
+            os.replace(tmp, path)
         except Exception:  # noqa: BLE001
             pass
         return data

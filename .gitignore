@@ -13,6 +13,7 @@ dashboard.html
 watchlist.html
 .cache/
 *.log
+logs/
 
 # holdings.csv holds real balances -- keep it out of git.
 holdings.csv

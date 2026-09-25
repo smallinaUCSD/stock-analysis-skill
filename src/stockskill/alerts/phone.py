@@ -275,7 +275,9 @@ class Checker:
         self._started = False
 
     def start(self) -> None:
-        if self._started or not topic():
+        # STOCKSKILL_ALERTS=0 turns the checker off in this process (when two
+        # copies of the app run, only one should send, or alerts arrive twice)
+        if self._started or not topic() or os.environ.get("STOCKSKILL_ALERTS", "1") == "0":
             return
         self._started = True
         threading.Thread(target=self._loop, daemon=True).start()
@@ -329,7 +331,7 @@ class Checker:
             return True
 
         for r in rules:
-            if r["type"] == "breakout" and once_a_day("breakout", 16.25):
+            if r["type"] == "breakout" and once_a_day("breakout", 16.5):
                 as_of, cands = self.breakouts_fn()
                 if as_of == today or force:
                     events += breakout_events(r, cands, state, as_of)

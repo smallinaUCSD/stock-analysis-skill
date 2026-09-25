@@ -48,7 +48,9 @@ class _RateLimiter:
             time.sleep(min(max(wait, 0.0), 1.0) + 0.01)
 
 
-_LIMITER = _RateLimiter(55, 60.0)      # headroom under the 60/min free-tier cap
+# headroom under the 60/min free-tier cap. FINNHUB_PER_MIN splits the budget
+# when more than one copy of the app shares a key (they must sum to <= 60).
+_LIMITER = _RateLimiter(int(os.environ.get("FINNHUB_PER_MIN") or 55), 60.0)
 
 
 def _get(path: str, **params):

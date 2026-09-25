@@ -101,8 +101,13 @@ def fetch_one(ticker: str, period: str = "1y",
     if cache_dir and _is_good(td):
         os.makedirs(cache_dir, exist_ok=True)
         try:
-            with open(_cache_path(cache_dir, ticker), "wb") as f:
+            # write-then-rename: another process (a second server, the daily
+            # refresh) may be reading this file at the same moment
+            path = _cache_path(cache_dir, ticker)
+            tmp = f"{path}.{os.getpid()}.tmp"
+            with open(tmp, "wb") as f:
                 pickle.dump(td, f)
+            os.replace(tmp, path)
         except Exception:
             pass
     return td
