@@ -36,6 +36,10 @@ def politician_html(pid: str) -> str:
 
 _EXTRA_CSS = """
 .pp-head{display:flex;align-items:flex-start;gap:16px}
+.tl-dot{cursor:pointer;transition:opacity .15s} .tl-dot:hover,.tl-dot.on{opacity:1;stroke:var(--ink);stroke-width:1.5}
+.tl-tip{position:absolute;z-index:5;pointer-events:none;background:var(--bg);border:1px solid var(--border-strong);border-radius:var(--r);
+  padding:8px 10px;font-size:13px;line-height:1.45;box-shadow:0 10px 24px -10px rgba(0,0,0,.35);white-space:nowrap}
+.tl-tip .up{color:var(--up)} .tl-tip .dn{color:var(--down)} .tl-tip .m{color:var(--muted);font-size:12px}
 .pp-follow{margin-top:10px;height:34px;padding:0 14px;border-radius:17px;border:1px solid var(--accent);background:var(--surface);
   color:var(--accent);font:500 13px var(--font);cursor:pointer}
 .pp-follow.on{background:var(--accent);color:var(--accent-ink)}
@@ -129,11 +133,24 @@ function renderTimeline(tr){ var box=document.getElementById('tl');
   lanes.forEach(function(l,i){ var y=T+i*LH+LH/2; s+='<line x1="'+L+'" y1="'+y+'" x2="'+(W-R)+'" y2="'+y+'" stroke="var(--border)" stroke-width="0.8"/><text x="'+(L-8)+'" y="'+(y+4)+'" text-anchor="end">'+esc(l)+'</text>'; });
   rows.forEach(function(t){ var i=lanes.indexOf(t.ticker), y=T+i*LH+LH/2, amt=((t.amount_low||0)+(t.amount_high||t.amount_low||0))/2;
     var r=Math.max(3,Math.min(10,2+Math.log10(Math.max(amt,1000))*1.4-3)); var buy=(t.type||'').indexOf('Buy')===0;
-    s+='<circle cx="'+X(+new Date(t.traded)).toFixed(1)+'" cy="'+y+'" r="'+r.toFixed(1)+'" fill="'+(buy?'var(--up)':'var(--down)')+'" opacity="0.7"><title>'+
-      esc(t.traded+' '+t.type+' '+t.ticker+' '+t.amount)+'</title></circle>'; });
+    var tip='<b>'+esc(t.ticker)+'</b> '+(buy?'<span class=up>bought</span>':'<span class=dn>sold</span>')+'<br>'+esc(t.amount||'amount not given')+
+      '<br><span class=m>Traded '+fdate(t.traded)+(t.filed?' · disclosed '+fdate(t.filed):'')+'</span>'+(t.asset&&t.asset!==t.ticker?'<br><span class=m>'+esc(t.asset)+'</span>':'');
+    s+='<circle class="tl-dot" cx="'+X(+new Date(t.traded)).toFixed(1)+'" cy="'+y+'" r="'+Math.max(r,4.5).toFixed(1)+'" fill="'+(buy?'var(--up)':'var(--down)')+'" opacity="0.75" data-tip="'+esc(tip)+'"></circle>'; });
   [lo,(lo+hi)/2,hi].forEach(function(ms,k){ s+='<text x="'+X(ms)+'" y="'+(H-6)+'" text-anchor="'+['start','middle','end'][k]+'">'+fdate(new Date(ms).toISOString().slice(0,10))+'</text>'; });
   s+='</svg>';
-  box.className='pp-box'; box.innerHTML='<div class="pp-leg"><span><i style="background:var(--up)"></i>Buy</span><span><i style="background:var(--down)"></i>Sell</span><span class="muted">Bigger dot, bigger trade. Hover a dot for details.</span></div>'+s; }
+  box.className='pp-box'; box.style.position='relative';
+  box.innerHTML='<div class="pp-leg"><span><i style="background:var(--up)"></i>Buy</span><span><i style="background:var(--down)"></i>Sell</span><span class="muted">Bigger dot, bigger trade. Hover or tap a dot for details.</span></div>'+s+'<div class="tl-tip" hidden></div>';
+  var tipEl=box.querySelector('.tl-tip');
+  function show(dot, ev){ tipEl.innerHTML=dot.getAttribute('data-tip'); tipEl.hidden=false;
+    var b=box.getBoundingClientRect(), d=dot.getBoundingClientRect();
+    var x=d.left-b.left+d.width/2, y=d.top-b.top;
+    tipEl.style.left=Math.max(4,Math.min(b.width-tipEl.offsetWidth-4,x-tipEl.offsetWidth/2))+'px';
+    tipEl.style.top=(y-tipEl.offsetHeight-8<0?y+d.height+8:y-tipEl.offsetHeight-8)+'px';
+    box.querySelectorAll('.tl-dot.on').forEach(function(o){ o.classList.remove('on'); }); dot.classList.add('on'); }
+  function hide(){ tipEl.hidden=true; box.querySelectorAll('.tl-dot.on').forEach(function(o){ o.classList.remove('on'); }); }
+  box.addEventListener('mouseover',function(e){ var d=e.target.closest('.tl-dot'); if(d) show(d,e); });
+  box.addEventListener('mouseout',function(e){ if(e.target.closest('.tl-dot')) hide(); });
+  box.addEventListener('click',function(e){ var d=e.target.closest('.tl-dot'); if(d){ show(d,e); e.stopPropagation(); } else hide(); }); }
 
 function renderPerf(r){ var box=document.getElementById('perf');
   if(r.working){ setTimeout(loadPerf,4000); return; }
