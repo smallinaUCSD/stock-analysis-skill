@@ -62,7 +62,7 @@ PROFILE_FIELDS = ("first_name", "last_name", "dob", "gender", "investor_type", "
 NOTIFY_COLUMNS = {"email_verified": "INTEGER NOT NULL DEFAULT 0", "notify_email": "INTEGER NOT NULL DEFAULT 0",
                   "notify_push": "INTEGER NOT NULL DEFAULT 0", "notify_inapp": "INTEGER NOT NULL DEFAULT 1",
                   "summary_times": "TEXT", "summary_groups": "TEXT", "notify_set": "INTEGER NOT NULL DEFAULT 0",
-                  "mfa_method": "TEXT", "mfa_secret": "TEXT", "mfa_recovery": "TEXT"}
+                  "mfa_method": "TEXT", "mfa_secret": "TEXT", "mfa_recovery": "TEXT", "theme": "TEXT"}
 
 
 def path() -> str:

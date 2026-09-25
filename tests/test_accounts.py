@@ -117,7 +117,8 @@ def test_board_is_personalised(app, monkeypatch):
     c.post("/api/me/profile", json=PROFILE)
     c.post("/api/me/onboarded")
     page = c.get("/").get_data(as_text=True)
-    assert 'new Set(["AMD", "MU"])' in page and "Ada's watchlist" in page and "/logout" in page
+    assert '"tickers": ["AMD", "MU"]' in page and "Ada's watchlist" in page
+    assert "/logout" in page and "Profile and settings" in page and "wlRemove" in page
 
 
 def test_watchlist_edit_and_account_deletion(app):

@@ -400,6 +400,7 @@ def _public_user(u: dict) -> dict:
     out["groups"] = [x for x in (u.get("groups") or "").split(",") if x]
     out["has_password"] = bool(u.get("password_hash"))
     out["mfa"] = u.get("mfa_method")
+    out["theme"] = u.get("theme") or "system"
     import json as _json
     out["recovery_left"] = len(_json.loads(u.get("mfa_recovery") or "[]"))
     out["google_linked"] = bool(u.get("google_sub"))
@@ -711,3 +712,13 @@ def unsubscribe():
     db.update_user(u["id"], notify_email=0)
     return message_html("Unsubscribed", "You won't get any more emails from us. You can turn them back on in "
                         "account settings at any time.")
+
+
+@bp.post("/api/me/theme")
+@login_required
+def set_theme():
+    t = _body().get("theme")
+    if t not in ("light", "dark", "system"):
+        return jsonify({"ok": False, "error": "Choose light, dark or system."}), 400
+    db.update_user(current_user()["id"], theme=None if t == "system" else t)
+    return jsonify({"ok": True})

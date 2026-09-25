@@ -78,8 +78,8 @@ _CSS_EXTRA = """
 .icon-btn:hover{border-color:var(--border-strong)}
 /* ---- header + toolbar ---------------------------------------------------- */
 .wrap{max-width:min(2400px,100%);padding:18px clamp(14px,2.6vw,40px)}
-.top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px}
-.top-l{display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;min-width:0;flex:1}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+.top-l{display:flex;align-items:baseline;gap:6px 12px;flex-wrap:wrap;min-width:0;flex:1}
 .top-l h1{font-size:36px}
 .top-l .sub{margin:0;font-size:13px;color:var(--muted)}
 .top-r{display:flex;align-items:center;gap:8px}
@@ -99,7 +99,7 @@ _CSS_EXTRA = """
   background:transparent;color:var(--muted);cursor:pointer}
 .seg button:hover{color:var(--ink)}
 .seg button.on{background:var(--surface-2);color:var(--ink)}
-.toolsbar{display:flex;flex-wrap:wrap;gap:6px;margin-left:auto}
+.toolsbar{display:flex;flex-wrap:wrap;gap:6px;flex:1 1 320px;justify-content:flex-start;margin-left:8px}
 @media (max-width:640px){
   .search{flex:1 1 100%}
   .toolsbar{margin-left:0;width:100%;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;
@@ -121,9 +121,11 @@ _CSS_EXTRA = """
 /* ---- filter chips: labeled groups ----------------------------------------- */
 .chips{display:grid;gap:7px;margin:4px 0 16px;padding:12px 14px;border:1px solid var(--border);
   border-radius:var(--r-lg);background:var(--surface)}
-.cgroup{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-.cglab{flex:0 0 96px;font-size:13px;font-weight:500;color:var(--muted)}
-@media (max-width:640px){.cglab{flex-basis:100%}}
+.cgroup{display:grid;grid-template-columns:96px 1fr;gap:6px;align-items:start}
+.cglab{font-size:13px;font-weight:500;color:var(--muted);padding-top:7px}
+.cchips{display:flex;flex-wrap:wrap;gap:6px}
+.cgroup.cclear{display:flex;justify-content:flex-end}
+@media (max-width:640px){.cgroup{grid-template-columns:1fr}.cglab{padding-top:0}}
 .chip-f{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 12px;font-size:14px;
   font-weight:500;border-radius:999px;cursor:pointer;background:transparent;
   border:1px solid var(--border);color:var(--ink-2)}
@@ -430,6 +432,17 @@ body.simple #wl th:nth-child(4),body.simple #wl td:nth-child(4),body.simple #wl 
   border-radius:var(--r-lg);box-shadow:var(--shadow-pop,0 12px 30px -12px rgba(0,0,0,.3));padding:6px;display:flex;flex-direction:column}
 .tool-menu button{text-align:left;border:none;background:none;color:var(--ink);font:14px var(--font);padding:9px 12px;border-radius:var(--r);cursor:pointer}
 .tool-menu button:hover{background:var(--surface)}
+
+.wl-rm{display:none;align-items:center;justify-content:center;width:22px;height:22px;margin-left:6px;border-radius:50%;
+  border:1px solid var(--border-strong);background:var(--surface);color:var(--muted);font:16px/1 var(--font);cursor:pointer;vertical-align:1px}
+.wl-rm:hover{color:var(--down);border-color:var(--down)}
+body.mine .item:hover .wl-rm{display:inline-flex}
+@media (hover:none){body.mine .wl-rm{display:inline-flex}}
+#modal-body .wl-rm{display:none!important}
+.wl-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:80;background:var(--ink);color:var(--bg);
+  border-radius:var(--r-lg);padding:10px 14px;font-size:14px;display:flex;gap:14px;align-items:center;box-shadow:0 12px 30px -10px rgba(0,0,0,.4)}
+.wl-toast button{border:none;background:none;color:var(--accent);font:500 14px var(--font);cursor:pointer}
+.mx-jump .ql-rm{margin-left:auto;color:var(--muted)} .mx-jump .ql-rm:hover{color:var(--down);border-color:var(--down)}
 """
 
 
@@ -538,6 +551,13 @@ def _factor_chip(r):
             f'<span class="fscore {_factor_cls(comp)}">{comp}</span>{read}</span></div>')
 
 
+def _rm_btn(t: str) -> str:
+    """'Remove from my watchlist' control; only shown to signed-in users (body.mine)."""
+    t = html.escape(t)
+    return (f'<button type="button" class="wl-rm" data-rm="{t}" title="Remove {t} from my watchlist" '
+            f'aria-label="Remove {t} from my watchlist">&times;</button>')
+
+
 def _row_html(r):
     if r.error or r.price is None:
         return (f'<tr class="item" {_data_attrs(r)}><td class="tk">{html.escape(r.ticker)}</td>'
@@ -559,7 +579,7 @@ def _row_html(r):
     sector = html.escape((_abbr_sector(r.sector) or "-")[:16])
     return (
         f'<tr class="item" {_data_attrs(r)}>'
-        f'<td><span class="tk">{html.escape(r.ticker)}</span></td>'
+        f'<td><span class="tk">{html.escape(r.ticker)}</span>{_rm_btn(r.ticker)}</td>'
         f'<td data-sort="{r.price}" data-live="p">${r.price:,.2f}</td>'
         + cell(r.changes.get("1d")).replace("<td ", '<td data-live="c" ', 1)
         + cell(r.changes.get("5d")) + cell(r.changes.get("1m"))
@@ -969,7 +989,7 @@ def _card_html(r):
         c, t = _pct(x)
         return f'<div class="card-row"><span>{label}</span><b class="{c}">{t}</b></div>'
     summary = (
-        f'<div class="card-top"><div><span class="tk">{html.escape(r.ticker)}</span> '
+        f'<div class="card-top"><div><span class="tk">{html.escape(r.ticker)}</span>{_rm_btn(r.ticker)} '
         f'<span class="badge {sig_cls}">{r.signal}</span></div>'
         f'<span class="card-price"><span data-live="p">${r.price:,.2f}</span> <span class="chg {dcls}" data-live="c">{dtxt}</span></span></div>'
         f'<div class="nm">{html.escape((r.name or "")[:34])}</div>'
@@ -1050,7 +1070,7 @@ def _chip_bar(rows):
                 f'onclick="toggleChip(this)">{d}{label}</button>')
 
     def grp(label, chips):
-        return (f'<div class="cgroup"><span class="cglab">{label}</span>{"".join(chips)}</div>'
+        return (f'<div class="cgroup"><span class="cglab">{label}</span><div class="cchips">{"".join(chips)}</div></div>'
                 if chips else "")
 
     sig = [chip("signal", s, s.capitalize(), _SIG_CLASS.get(s, "hold"))
@@ -1551,7 +1571,7 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
 </div>
 {add_html}
 <div class="panels">{sector_html}{markets_html}{macro_html}</div>
-<div class="chips">{chips}<div class="cgroup"><button class="chip-f clear" onclick="clearChips()">Clear filters</button></div></div>
+<div class="chips">{chips}<div class="cgroup cclear"><button class="chip-f clear" onclick="clearChips()">Clear filters</button></div></div>
 <div id="view-table" class="view active"><div class="tablewrap"><table class="wl" id="wl">
 <thead><tr>{heads}</tr></thead><tbody>{table}</tbody></table></div></div>
 <div id="view-card" class="view"><div class="cards">{cards}</div></div>
@@ -1599,8 +1619,9 @@ function matches(el){{
 function applyFilter(){{
   const q=(document.getElementById('q').value||'').trim().toUpperCase();
   let n=0, tot=0;
+  const mine=window.MYWL && window.MYWL_ON;
   document.querySelectorAll('#view-'+view+' .item').forEach(el=>{{
-    tot++;
+    if(!mine || window.MYWL.has((el.dataset.ticker||'').toUpperCase())) tot++;   // count only your stocks
     const show = matches(el) && (!q || (el.dataset.ticker||'').includes(q));
     el.style.display = show?'':'none';
     if(show) n++;
@@ -1627,6 +1648,8 @@ function clearChips(){{
 }}
 document.addEventListener('click',e=>{{ document.querySelectorAll('.tool-more[open]').forEach(m=>{{
   if(!m.contains(e.target) || e.target.closest('.tool-menu button')) m.removeAttribute('open'); }}); }});
+document.addEventListener('click',e=>{{ const b=e.target.closest('.wl-rm'); if(!b) return;
+  e.preventDefault(); e.stopPropagation(); if(typeof window.wlRemove==='function') window.wlRemove(b.dataset.rm); }}, true);
 function setDensity(d){{
   document.body.classList.toggle('simple', d==='simple');
   document.querySelectorAll('#density button').forEach(b=>b.classList.toggle('on', b.dataset.d===d));
@@ -1671,7 +1694,10 @@ function openCard(card){{
   jump.innerHTML=[['/analysis/'+q,'Full analysis','cta-1'],['/analysis/'+q+'#financials','Financials',''],
     ['/analysis/'+q+'#earnings','Earnings',''],['/analysis/'+q+'#connections','Connections',''],['/compare?t='+q,'Compare','']]
     .map(b=>'<button type="button" class="'+b[2]+'" data-go="'+b[0]+'">'+b[1]+'</button>').join('');
-  jump.addEventListener('click',e=>{{ const b=e.target.closest('[data-go]'); if(b) openTab(b.dataset.go); }});
+  if(window.MYWL && window.MYWL.has(tkr))
+    jump.insertAdjacentHTML('beforeend','<button type="button" class="ql-rm" data-rmq="'+tkr+'">Remove from watchlist</button>');
+  jump.addEventListener('click',e=>{{ const b=e.target.closest('[data-go]'); if(b) openTab(b.dataset.go);
+    const r=e.target.closest('[data-rmq]'); if(r && typeof window.wlRemove==='function'){{ window.wlRemove(r.dataset.rmq); closeModal(); }} }});
   const kg=document.createElement('div'); kg.className='mx-kg';
   kg.innerHTML='<div class="det-h">Supply chain and connections <a class="site-help" style="font-weight:400;margin-left:8px" '+
     'href="/graph?t='+q+'" onclick="openTab(this.href);return false">Open the full map</a></div>'+

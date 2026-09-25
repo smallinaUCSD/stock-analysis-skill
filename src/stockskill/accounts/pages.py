@@ -694,8 +694,18 @@ function mfaOff(){ var p=document.getElementById('mfp'); if(!confirm('Turn off 2
   post('/api/me/mfa/disable',{password:p?p.value:''}).then(function(d){ if(d.ok) load(); else say('mf-msg', false, d.error); }); }
 function newCodes(){ var p=document.getElementById('mfp'); post('/api/me/mfa/recovery',{password:p?p.value:''}).then(function(d){
   if(d.ok) showCodes(d.recovery_codes); else say('mf-msg', false, d.error); }); }
+function look(){ var t=ME.user.theme||'system';
+  return '<div class="ac-sec"><h2>Appearance</h2><div class="seg3" id="theme-seg">'+
+    [['light','Light'],['dark','Dark'],['system','Match my device']].map(function(o){
+      return '<button type="button" data-t="'+o[0]+'"'+(t===o[0]?' class="on"':'')+'>'+o[1]+'</button>'; }).join('')+'</div></div>'; }
+function setLook(t){ ME.user.theme=t;
+  try{ if(t==='system') localStorage.removeItem('wl_theme'); else localStorage.setItem('wl_theme',t); }catch(_){}
+  if(t==='system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme',t);
+  document.querySelectorAll('#theme-seg button').forEach(function(b){ b.classList.toggle('on',b.getAttribute('data-t')===t); });
+  post('/api/me/theme',{theme:t}); }
 function render(){ var a=document.getElementById('ac'); a.className=''; if(!NF) nfInit(ME);
-  a.innerHTML=prof()+wl()+notif()+signin()+secu()+danger(); nfBind(ME); }
+  a.innerHTML=prof()+look()+wl()+notif()+signin()+secu()+danger(); nfBind(ME);
+  document.querySelectorAll('#theme-seg button').forEach(function(b){ b.onclick=function(){ setLook(b.getAttribute('data-t')); }; }); }
 function load(){ Promise.all([fetch('/api/me').then(function(r){return r.json();}), fetch('/api/groups').then(function(r){return r.json();})])
   .then(function(a){ ME=a[0]; GROUPS=a[1].groups||[]; render(); }); }
 load();
@@ -727,38 +737,82 @@ _LG_CSS = """
 # --- the board, personalised --------------------------------------------------------
 
 def personalize_board(board_html: str, user: dict, tickers: list[str]) -> str:
-    """Inject the user's watchlist filter, a My watchlist / All stocks switch
-    and an account menu into the shared board."""
+    """Make the shared board this user's: only their watchlist (with a way to
+    remove stocks), their name, their theme and a profile menu."""
     first = (user.get("first_name") or user.get("email") or "?").strip()
     initials = "".join(p[0] for p in first.split()[:2]).upper() or "?"
-    inject = ("<style>.me-seg{display:inline-flex;border:1px solid var(--border);border-radius:var(--r);overflow:hidden}"
-              ".me-seg button{height:34px;padding:0 12px;border:none;background:var(--surface);color:var(--muted);font:500 13px var(--font);cursor:pointer}"
-              ".me-seg button.on{background:var(--surface-3);color:var(--ink)}"
-              ".me-btn{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;"
-              "background:var(--accent);color:var(--accent-ink);font:500 13px var(--font);text-decoration:none;margin-right:6px}"
-              ".me-out{font-size:13px;color:var(--muted);margin-right:10px;text-decoration:none}.me-out:hover{color:var(--ink)}</style>"
-              "<script>(function(){window.MYWL=new Set(" + json.dumps(tickers) + ");"
-              "try{window.MYWL_ON=localStorage.getItem('wl_mine')!=='0';}catch(_){window.MYWL_ON=true;}"
-              "var bar=document.querySelector('.bar');if(bar){var s=document.createElement('span');s.className='me-seg';"
-              "s.innerHTML='<button data-m=\"1\">My watchlist</button><button data-m=\"0\">All stocks</button>';"
-              "bar.insertBefore(s,bar.children[1]||null);"
-              "function paint(){s.querySelectorAll('button').forEach(function(b){b.classList.toggle('on',(b.getAttribute('data-m')==='1')===window.MYWL_ON);});}"
-              "s.addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;window.MYWL_ON=b.getAttribute('data-m')==='1';"
-              "try{localStorage.setItem('wl_mine',window.MYWL_ON?'1':'0');}catch(_){}paint();applyFilter();});paint();}"
-              "var tr=document.querySelector('.top-r');if(tr){tr.insertAdjacentHTML('afterbegin','<a class=\"me-out\" href=\"/logout\">Sign out</a>"
-              "<a class=\"me-btn\" href=\"/account\" title=\"Account settings\">" + html.escape(initials) + "</a>');}"
-              "var h=document.querySelector('.top-l h1');if(h)h.textContent=" + json.dumps(f"{first.split()[0]}'s watchlist") + ";"
-              # newer investors start in the Simple view; they can switch any time
-              "try{if(!localStorage.getItem('wl_density')&&typeof setDensity==='function')setDensity(" + json.dumps(
-                  "detailed" if (user.get("experience") == "advanced" or user.get("investor_type") in
-                                 ("active", "options", "professional", "advisor")) else "simple") + ");}catch(_){}"
-              "if(typeof applyFilter==='function')applyFilter();})();</script>")
-    inject += _TODAY_INJECT
+    theme = user.get("theme") if user.get("theme") in ("light", "dark") else ""
+    density = ("detailed" if (user.get("experience") == "advanced" or user.get("investor_type") in
+                              ("active", "options", "professional", "advisor")) else "simple")
+    cfg = {"tickers": tickers, "initials": initials, "title": f"{first.split()[0]}'s watchlist",
+           "name": " ".join(x for x in (user.get("first_name"), user.get("last_name")) if x) or user.get("email"),
+           "email": user.get("email"), "theme": theme, "density": density}
+    inject = "<script>var ME_CFG=" + json.dumps(cfg) + ";</script>" + _MINE_INJECT + _TODAY_INJECT
     h = board_html.find("</head>")
     if h >= 0:
         board_html = board_html[:h] + HEAD_PWA + board_html[h:]
     i = board_html.rfind("</body>")
     return board_html[:i] + inject + board_html[i:] if i >= 0 else board_html + inject
+
+
+_MENU = [("/", "Your watchlist"), ("/screener", "Screener"), ("/markets", "Markets"), ("/earnings", "Earnings"),
+         ("/trades", "Politicians and hedge funds"), ("/compare", "Compare"), ("/financials", "Financials"),
+         ("/economy", "Economy and rates"), ("/breakouts", "Breakouts"), ("/indicators", "Indicators"),
+         ("/interpret", "How to read this")]
+
+_MINE_INJECT = r"""<style>
+.top-r>.icon-btn{display:none}
+.me-btn{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;border:none;
+  background:var(--accent);color:var(--accent-ink);font:500 14px var(--font);cursor:pointer}
+.me-menu{position:absolute;right:0;top:calc(100% + 8px);z-index:70;width:270px;background:var(--bg);border:1px solid var(--border);
+  border-radius:var(--r-lg);box-shadow:0 18px 40px -14px rgba(0,0,0,.35);padding:8px;display:none}
+.me-menu.show{display:block}
+.me-wrap{position:relative}
+.me-id{padding:8px 10px 10px;border-bottom:1px solid var(--border);margin-bottom:6px}
+.me-id b{display:block;font-weight:500} .me-id small{color:var(--muted);font-size:12px}
+.me-menu a{display:block;padding:8px 10px;border-radius:var(--r);color:var(--ink);text-decoration:none;font-size:14px}
+.me-menu a:hover{background:var(--surface)}
+.me-menu .sep{height:1px;background:var(--border);margin:6px 0}
+.me-menu .me-out{color:var(--muted)}
+</style>
+<script>(function(){
+var C=window.ME_CFG||{};
+window.MYWL=new Set(C.tickers||[]); window.MYWL_ON=true;
+document.body.classList.add('mine');
+if(C.theme){ try{ localStorage.setItem('wl_theme',C.theme); }catch(_){} document.documentElement.setAttribute('data-theme',C.theme); }
+try{ if(!localStorage.getItem('wl_density')&&typeof setDensity==='function') setDensity(C.density); }catch(_){}
+var h=document.querySelector('.top-l h1'); if(h) h.textContent=C.title;
+function e(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+var tr=document.querySelector('.top-r');
+if(tr){ var links=__MENU__;
+  tr.insertAdjacentHTML('beforeend','<span class="me-wrap"><button class="me-btn" id="me-btn" aria-haspopup="true" aria-expanded="false" title="Your profile">'+e(C.initials)+'</button>'+
+    '<div class="me-menu" id="me-menu" role="menu"><div class="me-id"><b>'+e(C.name)+'</b><small>'+e(C.email)+'</small></div>'+
+    links.map(function(l){ return '<a role="menuitem" href="'+l[0]+'"'+(l[0]==='/'?'':' onclick="openTab(this.href);closeMe();return false"')+'>'+e(l[1])+'</a>'; }).join('')+
+    '<div class="sep"></div><a role="menuitem" href="/account">Profile and settings</a><a role="menuitem" class="me-out" href="/logout">Sign out</a></div></span>');
+  var btn=document.getElementById('me-btn'), menu=document.getElementById('me-menu');
+  window.closeMe=function(){ menu.classList.remove('show'); btn.setAttribute('aria-expanded','false'); };
+  btn.addEventListener('click',function(ev){ ev.stopPropagation(); var on=!menu.classList.contains('show'); menu.classList.toggle('show',on); btn.setAttribute('aria-expanded',on?'true':'false'); });
+  document.addEventListener('click',function(ev){ if(!menu.contains(ev.target)) closeMe(); });
+  document.addEventListener('keydown',function(ev){ if(ev.key==='Escape') closeMe(); }); }
+// remove a stock from this user's watchlist, with a few seconds to undo
+var toastT=null;
+function toast(html){ var t=document.getElementById('wl-toast'); if(!t){ t=document.createElement('div'); t.id='wl-toast'; t.className='wl-toast'; document.body.appendChild(t); }
+  t.innerHTML=html; t.style.display='flex'; clearTimeout(toastT); toastT=setTimeout(function(){ t.style.display='none'; },6000); return t; }
+function save(body){ return fetch('/api/me/watchlist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(function(r){return r.json();}); }
+window.wlRemove=function(t){ if(!t) return;
+  save({remove:[t]}).then(function(d){ if(!d.ok) return; window.MYWL.delete(t); if(typeof applyFilter==='function') applyFilter();
+    var el=toast('Removed '+e(t)+' from your watchlist <button type="button">Undo</button>');
+    el.querySelector('button').onclick=function(){ save({add:[t]}).then(function(){ window.MYWL.add(t); applyFilter(); el.style.display='none'; }); }; }); };
+// hide filter chips that match none of your stocks (and empty groups)
+window.pruneChips=function(){
+  var items=[].slice.call(document.querySelectorAll('#view-table .item')).filter(function(el){ return window.MYWL.has((el.dataset.ticker||'').toUpperCase()); });
+  document.querySelectorAll('.chips .chip-f[data-group]').forEach(function(b){ var g=b.dataset.group, m=b.dataset.match;
+    var any=items.some(function(el){ return (typeof vals==='function'?vals(el,g):[]).indexOf(m)>=0; });
+    b.style.display=any||b.classList.contains('on')?'':'none'; });
+  document.querySelectorAll('.chips .cgroup').forEach(function(g){ var bs=g.querySelectorAll('.chip-f[data-group]');
+    if(bs.length) g.style.display=[].some.call(bs,function(b){ return b.style.display!=='none'; })?'':'none'; }); };
+if(typeof applyFilter==='function'){ var _af=applyFilter; window.applyFilter=applyFilter=function(){ _af(); pruneChips(); }; applyFilter(); }
+})();</script>""".replace("__MENU__", json.dumps([list(x) for x in _MENU]))
 
 
 _TODAY_INJECT = r"""<style>
