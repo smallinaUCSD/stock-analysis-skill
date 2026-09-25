@@ -950,6 +950,37 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
                         "layout": {k: [list(x) for x in v] for k, v in FIN.LAYOUT.items()},
                         "source": f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={d.get('cik')}&type=10-K"})
 
+    _ECON: dict = {}
+
+    @app.get("/economy")
+    def economy_page():
+        from .economy_page import economy_html
+        return economy_html()
+
+    @app.get("/api/economy")
+    def economy_api():
+        """Economic release calendar (BLS, BEA, Fed, DOL) with the latest
+        reading of each indicator, and the Treasury yield curve."""
+        import datetime as _dt
+        import time as _t
+        from ..data import economy as EC
+        hit = _ECON.get("v")
+        if hit and _t.time() - hit[0] < 3600:
+            return jsonify(hit[1])
+        try:
+            cal = EC.calendar(cache_dir)
+        except Exception:  # noqa: BLE001
+            cal = []
+        try:
+            curve = EC.yield_curve(cache_dir)
+        except Exception:  # noqa: BLE001
+            curve = {}
+        res = {"ok": bool(cal or curve), "calendar": cal, "curve": curve, "today": _dt.date.today().isoformat(),
+               "contact": bool(EC._ua())}
+        if res["ok"]:
+            _ECON["v"] = (_t.time(), res)
+        return jsonify(res)
+
     @app.get("/screener")
     def screener_page():
         from .screener_page import screener_html
