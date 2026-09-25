@@ -916,6 +916,33 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
         threading.Thread(target=run, daemon=True).start()
         return jsonify({"ok": True, "working": True})
 
+    @app.get("/financials")
+    def financials_page():
+        from .financials_page import financials_html
+        return financials_html(request.args.get("t", ""))
+
+    @app.get("/api/financials/<ticker>")
+    def financials_api(ticker: str):
+        """Ten fiscal years of statements and ratios from SEC 10-K XBRL."""
+        if not _TICKER_RE.match(ticker):
+            return jsonify({"error": "invalid ticker"}), 400
+        from ..data import financials as FIN
+        from ..data import sec as SEC
+        tk = ticker.upper()
+        if not SEC.has_sec():
+            return jsonify({"ok": False, "error": "SEC data is not configured on this server."})
+        try:
+            d = FIN.statements(tk, cache_dir)
+        except Exception:  # noqa: BLE001
+            d = None
+        if not d:
+            return jsonify({"ok": False, "error": f"No US-GAAP annual filings found for {tk} "
+                                                  "(ETFs, funds and foreign filers don't file them)."})
+        return jsonify({"ok": True, "ticker": tk, "name": d.get("name"), "years": d["years"],
+                        "cagr": d.get("cagr"), "splits": d.get("splits"),
+                        "layout": {k: [list(x) for x in v] for k, v in FIN.LAYOUT.items()},
+                        "source": f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={d.get('cik')}&type=10-K"})
+
     _GRAPH: dict = {}
 
     @app.get("/graph")

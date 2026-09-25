@@ -168,9 +168,19 @@ def _duration_days(f) -> int | None:
         return None
 
 
-def extract_annual(facts: dict) -> list[dict]:
+def extract_annual(facts: dict, flow: dict | None = None, instant: dict | None = None,
+                   units: dict | None = None, fallback: bool = False,
+                   keep_filed: bool = False) -> list[dict]:
     """Annual rows [{end, filed, fy, <keys>...}] oldest -> newest from a
-    company-facts JSON. Pure (unit-tested with fixtures)."""
+    company-facts JSON. Pure (unit-tested with fixtures).
+
+    ``flow``/``instant`` override the concept maps; ``units`` gives a non-USD
+    unit per key (e.g. EPS in "USD/shares"). With ``fallback`` a balance-sheet
+    key takes a later concept for years the first one leaves empty.
+    ``keep_filed`` keeps ``_f_<key>``: the filing date each value came from."""
+    flow = _FLOW if flow is None else flow
+    instant = _INSTANT if instant is None else instant
+    units = {"shares": "shares", **(units or {})}
     gaap = ((facts or {}).get("facts") or {}).get("us-gaap") or {}
     if not gaap:
         return []
@@ -190,8 +200,8 @@ def extract_annual(facts: dict) -> list[dict]:
             row["_f_" + key] = latest_filed
 
     # flows: a ~1-year duration reported in an annual report
-    for key, concepts in _FLOW.items():
-        unit = "shares" if key == "shares" else "USD"
+    for key, concepts in flow.items():
+        unit = units.get(key, "USD")
         taken: set[str] = set()
         for concept in concepts:
             for f in facts_for(concept, unit):
@@ -207,10 +217,10 @@ def extract_annual(facts: dict) -> list[dict]:
             taken |= {e for e, r in years.items() if key in r}
     ends = set(years)
     # balance sheet: the value at each fiscal year end
-    for key, concepts in _INSTANT.items():
+    for key, concepts in instant.items():
         for concept in concepts:
             hit = False
-            for f in facts_for(concept, "USD"):
+            for f in facts_for(concept, units.get(key, "USD")):
                 if f.get("form") not in _ANNUAL_FORMS or "start" in f or f.get("end") not in ends:
                     continue
                 if key in years[f["end"]] and years[f["end"]].get("_c_" + key) != concept:
@@ -218,12 +228,14 @@ def extract_annual(facts: dict) -> list[dict]:
                 years[f["end"]]["_c_" + key] = concept
                 put(f["end"], key, float(f["val"]), f.get("filed", ""), f.get("fy"), f.get("filed", ""))
                 hit = True
-            if hit:
+            if hit and not fallback:
                 break
     out = []
     for end in sorted(years):
-        r = {k: v for k, v in years[end].items() if not k.startswith("_")}
-        if r.get("revenue") is not None or r.get("ocf") is not None:
+        r = {k: v for k, v in years[end].items()
+             if not k.startswith("_") or (keep_filed and k.startswith("_f_"))}
+        anchors = [k for k in ("revenue", "ocf") if k in flow] or list(flow)
+        if any(r.get(k) is not None for k in anchors):
             out.append(r)
     return out
 
