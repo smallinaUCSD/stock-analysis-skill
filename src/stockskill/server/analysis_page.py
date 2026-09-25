@@ -371,10 +371,18 @@ function anRender(){ var el=document.querySelector('[data-an] .an-body'); if(!el
   fetch('/api/analysts/'+encodeURIComponent(TK)).then(function(r){return r.json();}).then(function(d){ _AN=d; anRender(); })
     .catch(function(){ el.textContent='Analyst ratings unavailable.'; }); }
 anRender();
+var _DV=null;
+function dvRender(){ var el=document.querySelector('[data-dv] .dv-body'); if(!el) return;
+  if(_DV){ el.classList.remove('muted'); el.innerHTML=dvHTML(_DV); return; }
+  fetch('/api/dividends/'+encodeURIComponent(TK)).then(function(r){return r.json();}).then(function(d){ _DV=d; dvRender(); })
+    .catch(function(){ el.textContent='Dividend data unavailable.'; }); }
+dvRender();
 """
 
 _ANALYST_BOX = ('<div class="asec" data-an="1"><div class="a-h">Analyst ratings</div>'
                 '<div class="an-body muted">Loading…</div></div>')
+_DIV_BOX = ('<div class="asec" data-dv="1"><div class="a-h">Dividends</div>'
+            '<div class="dv-body muted">Loading…</div></div>')
 
 
 _FORECAST_BOX = ('<div class="asec" data-fc="1"><div class="a-h">Price range forecast</div>'
@@ -446,7 +454,7 @@ def analysis_html(row, closes=None, refresh_seconds: int = 900) -> str:
     # Grouped by the question each answers, most decision-relevant first, so the
     # experimental model no longer carries the same weight as the valuation.
     sections = (
-        group("Valuation", "what the business is worth", _valuation_box(row), _mc_box(row), _ANALYST_BOX)
+        group("Valuation", "what the business is worth", _valuation_box(row), _mc_box(row), _ANALYST_BOX, _DIV_BOX)
         + group("Forecast and option ideas", "a range, not a target", _FORECAST_BOX, _IDEAS_BOX)
         + group("Risk", "how it moves with the market", _risk_box(row))
         + group("Filings and positioning", "insiders, short sellers, the accounts", *_SIGNAL_BOXES)
@@ -505,6 +513,7 @@ function refresh(){{ if(_busy) return; _busy=true;
     if(window.calcInit) calcInit();
     if(window.fcRender) {{ fcRender(); oiRender(); }}
     if(window.anRender) anRender();
+    if(window.dvRender) dvRender();
     const nb=d.querySelector('.a-head .badge'), ob=document.querySelector('.a-head .badge');
     if(nb&&ob){{ ob.className=nb.className; ob.textContent=nb.textContent; }}
   }}).catch(function(){{}}).finally(function(){{ _busy=false; }});

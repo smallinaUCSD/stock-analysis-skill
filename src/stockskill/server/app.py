@@ -414,6 +414,22 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
             return jsonify({"ok": False, "error": f"No analyst coverage found for {tk}."})
         return jsonify({"ok": True, "ticker": tk, **s})
 
+    @app.get("/api/dividends/<ticker>")
+    def dividends_api(ticker: str):
+        """Dividend yield, payout, growth, raise streak and yearly totals."""
+        if not _TICKER_RE.match(ticker):
+            return jsonify({"error": "invalid ticker"}), 400
+        from ..data.dividends import history, summarize
+        from ..watchlist.pipeline import _load_cached
+        tk = ticker.upper()
+        td = _load_cached(cache_dir, tk) if cache_dir else None
+        price = (td.ohlcv.get("close") or [None])[-1] if td and td.ohlcv else None
+        eps = td.snapshot.eps if td and td.snapshot else None
+        h = history(tk, cache_dir)
+        if not h:
+            return jsonify({"ok": False, "error": "Dividend data is unavailable right now."})
+        return jsonify({"ok": True, "ticker": tk, **summarize(h["history"], price, eps, h.get("next_ex"))})
+
     @app.get("/api/news/<ticker>")
     def news(ticker: str):
         if not _TICKER_RE.match(ticker):

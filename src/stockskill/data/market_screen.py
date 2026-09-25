@@ -29,13 +29,14 @@ FLOW = {
     "ocf": ["NetCashProvidedByUsedInOperatingActivities"],
     "capex": ["PaymentsToAcquirePropertyPlantAndEquipment", "PaymentsToAcquireProductiveAssets"],
     "eps": ["EarningsPerShareDiluted", "EarningsPerShareBasicAndDiluted"],
+    "dps": ["CommonStockDividendsPerShareDeclared", "CommonStockDividendsPerShareCashPaid"],
 }
 INSTANT = {
     "equity": ["StockholdersEquity"],
     "cash": ["CashAndCashEquivalentsAtCarryingValue"],
     "long_term_debt": ["LongTermDebtNoncurrent", "LongTermDebt"],
 }
-_UNIT = {"eps": "USD-per-shares"}
+_UNIT = {"eps": "USD-per-shares", "dps": "USD-per-shares"}
 _BAD_NAME = re.compile(r"\b(warrants?|rights?|units?|preferred|depositary shares? representing|notes? due)\b", re.I)
 
 
@@ -125,6 +126,7 @@ def build_rows(listings: list[dict], cur: dict[int, dict], prev: dict[int, dict]
             "ni_growth": _growth(ni, p.get("net_income")),
             "roe": _div(ni, eq) if eq and eq > 0 else None,
             "debt_equity": _div(f.get("long_term_debt") or 0, eq) if eq and eq > 0 else None,
+            "div_yield": _div(f.get("dps"), px) if f.get("dps") and f["dps"] > 0 and px else None,
         })
     return rows
 
@@ -224,7 +226,7 @@ def compact(rows: list[dict]) -> dict:
     """Column-oriented JSON (much smaller than a list of dicts)."""
     cols = ["ticker", "name", "sector", "industry", "country", "price", "mcap", "chg", "volume",
             "pe", "ps", "pb", "pfcf", "fcf_yield", "ev_sales", "gross_margin", "op_margin", "net_margin",
-            "rev_growth", "ni_growth", "roe", "debt_equity", "revenue", "net_income", "fcf", "fy_end",
+            "rev_growth", "ni_growth", "roe", "debt_equity", "div_yield", "revenue", "net_income", "fcf", "fy_end",
             "watch", "r1m", "r3m", "r1y"]
 
     def rnd(v):

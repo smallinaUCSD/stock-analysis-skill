@@ -33,7 +33,7 @@ def test_merge_frames_prefers_first_concept():
 def test_build_rows_metrics():
     ls = parse_listings(_nasdaq())
     cur = {1: {"revenue": 1e9, "net_income": 2e8, "ocf": 3e8, "capex": 1e8, "equity": 1e9,
-               "long_term_debt": 5e8, "cash": 2e8, "eps": 2.5, "gross_profit": 6e8, "_end": "2025-12-31"}}
+               "long_term_debt": 5e8, "cash": 2e8, "eps": 2.5, "gross_profit": 6e8, "dps": 1.5, "_end": "2025-12-31"}}
     prev = {1: {"revenue": 8e8, "net_income": 1e8}}
     r = build_rows(ls, cur, prev, {"AAA": 1})
     a, b = r[0], r[1]
@@ -43,6 +43,7 @@ def test_build_rows_metrics():
     assert abs(a["ev_sales"] - 5.3) < 1e-9             # (5B + 0.5B - 0.2B) / 1B
     assert abs(a["rev_growth"] - 0.25) < 1e-9 and abs(a["ni_growth"] - 1.0) < 1e-9
     assert abs(a["gross_margin"] - 0.6) < 1e-9 and abs(a["roe"] - 0.2) < 1e-9
+    assert abs(a["div_yield"] - 0.03) < 1e-9 and b["div_yield"] is None
     assert b["pe"] is None and b["revenue"] is None     # no SEC match -> blanks, still listed
 
 

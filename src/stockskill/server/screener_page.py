@@ -93,18 +93,20 @@ var M=[['mcap','Market cap','usd'],['price','Price','px'],['chg','Day change','p
   ['pb','Price / book','x'],['pfcf','Price / free cash flow','x'],['fcf_yield','Free cash flow yield','pct'],['ev_sales','EV / sales','x'],
   ['rev_growth','Revenue growth','pct'],['ni_growth','Net income growth','pct'],['gross_margin','Gross margin','pct'],
   ['op_margin','Operating margin','pct'],['net_margin','Net margin','pct'],['roe','Return on equity','pct'],['debt_equity','Debt / equity','x'],
+  ['div_yield','Dividend yield','pct'],
   ['revenue','Revenue','usd'],['net_income','Net income','usd'],['fcf','Free cash flow','usd'],['volume','Volume','n'],
   ['r1m','1-month return','pct'],['r3m','3-month return','pct'],['r1y','1-year return','pct']];
 var MK={}; M.forEach(function(m){ MK[m[0]]=m; });
 var SHORT={mcap:'Mkt cap',price:'Price',chg:'Day',pe:'P/E',ps:'P/S',pb:'P/B',pfcf:'P/FCF',fcf_yield:'FCF yld',ev_sales:'EV/S',
   rev_growth:'Rev gr',ni_growth:'NI gr',gross_margin:'Gross m',op_margin:'Op m',net_margin:'Net m',roe:'ROE',debt_equity:'D/E',
-  revenue:'Revenue',net_income:'Net inc',fcf:'FCF',volume:'Volume',r1m:'1M',r3m:'3M',r1y:'1Y'};
+  revenue:'Revenue',net_income:'Net inc',fcf:'FCF',volume:'Volume',r1m:'1M',r3m:'3M',r1y:'1Y',div_yield:'Div yld'};
 var MOVES={chg:1,r1m:1,r3m:1,r1y:1};   // price moves get up/down colour; ratios don't
 var BASE=['mcap','price','chg','pe','ps','fcf_yield','rev_growth','net_margin','roe'];
 var PRESETS=[
   ['Profitable growth',{f:[['rev_growth',20,null],['net_margin',10,null],['mcap',1,null]],sort:'rev_growth'}],
   ['Quality at a fair price',{f:[['roe',15,null],['pe',null,25],['debt_equity',null,1],['mcap',1,null]],sort:'roe'}],
   ['Cash machines',{f:[['fcf_yield',6,null],['mcap',2,null]],sort:'fcf_yield'}],
+  ['Dividend payers',{f:[['div_yield',3,null],['mcap',2,null]],sort:'div_yield'}],
   ['Cheap by earnings',{f:[['pe',0.01,12],['mcap',1,null],['ni_growth',0,null]],sort:'pe',asc:true}],
   ['Big movers today',{f:[['chg',5,null],['mcap',2,null]],sort:'chg'}],
   ['Biggest losers today',{f:[['chg',null,-5],['mcap',2,null]],sort:'chg',asc:true}],
