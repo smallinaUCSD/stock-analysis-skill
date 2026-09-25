@@ -24,10 +24,9 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 From your laptop, copy the files that aren't in git (never email them):
 
 ```bash
-scp .env holdings.csv data/added.json stockskill@stocks-mini.local:~/stock-analysis-skill/
+scp .env holdings.csv stockskill@stocks-mini.local:~/stock-analysis-skill/
+scp data/added.json stockskill@stocks-mini.local:~/stock-analysis-skill/data/
 ```
-
-(`data/added.json` goes in the `data/` folder; move it after copying.)
 
 As the **admin** user:
 
