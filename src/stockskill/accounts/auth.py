@@ -593,11 +593,31 @@ def save_notify():
         return jsonify({"ok": False, "error": "Pick at least one way to get your summary."}), 400
     db.update_user(u["id"], summary_times=times, summary_groups=",".join(groups), notify_email=int(want_email),
                    notify_push=int(want_push), notify_inapp=int(want_inapp), notify_set=1)
-    sent = False
-    if want_email and not u.get("email_verified") and notify.email_ready() and not _limited("verify:" + str(u["id"]), 5, 3600):
-        sent = notify.send_verification(db.get_user(u["id"]))
-    return jsonify({"ok": True, "verification_sent": sent,
+    sent, err = False, None
+    if want_email and not u.get("email_verified"):
+        sent, err = _send_verification(u)
+    return jsonify({"ok": True, "verification_sent": sent, "email_error": err,
                     "email_pending": want_email and not u.get("email_verified")})
+
+
+def _send_verification(u: dict) -> tuple[bool, str | None]:
+    from . import notify
+    if not notify.email_ready():
+        return False, "Email isn't set up on this server (SMTP settings missing)."
+    if _limited("verify:" + str(u["id"]), 5, 3600):
+        return False, "Several confirmation emails were already sent. Try again in an hour."
+    ok = notify.send_verification(db.get_user(u["id"]))
+    return ok, None if ok else (notify.LAST_ERROR["msg"] or "The email couldn't be sent.")
+
+
+@bp.post("/api/me/verify/resend")
+@login_required
+def resend_verification():
+    u = current_user()
+    if u.get("email_verified"):
+        return jsonify({"ok": True, "already": True})
+    sent, err = _send_verification(u)
+    return jsonify({"ok": sent, "error": err})
 
 
 @bp.post("/api/me/push")

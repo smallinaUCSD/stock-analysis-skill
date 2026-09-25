@@ -626,9 +626,15 @@ var GROUPS=[];
 function notif(){ return '<div class="ac-sec"><h2>Notifications</h2>'+nfHTML(ME, GROUPS)+
    '<div class="wz-foot"><span class="small" id="nf-msg"></span><span style="display:flex;gap:8px"><button class="btn ghost" onclick="testNf()">Send me a test</button>'+
    '<button class="btn primary" onclick="saveNf()">Save notifications</button></span></div></div>'; }
-function saveNf(){ var m=document.getElementById('nf-msg'); nfSave().then(function(d){ m.className='small ok-msg';
-    m.textContent=d.email_pending?(d.verification_sent?'Saved. Check your inbox to confirm your email.':'Saved. Email starts once your address is confirmed.'):'Saved.'; })
+function saveNf(){ var m=document.getElementById('nf-msg'); nfSave().then(function(d){
+    if(d.email_pending && !d.verification_sent){ m.className='small err';
+      m.innerHTML='Saved, but the confirmation email wasn\'t sent: '+esc(d.email_error||'unknown error')+' <a onclick="resendV()" style="cursor:pointer">Try again</a>'; return; }
+    m.className='small ok-msg';
+    m.textContent=d.email_pending?'Saved. Check your inbox (and spam folder) to confirm your email.':'Saved.'; })
   .catch(function(e){ m.className='small err'; m.textContent=(e&&e.message)||e; }); }
+function resendV(){ var m=document.getElementById('nf-msg'); m.className='small muted'; m.textContent='Sending…';
+  post('/api/me/verify/resend').then(function(d){ m.className='small '+(d.ok?'ok-msg':'err');
+    m.textContent=d.already?'Your email is already confirmed.':d.ok?'Sent. Check your inbox and spam folder.':'Not sent: '+(d.error||'unknown error'); }); }
 function testNf(){ var m=document.getElementById('nf-msg'); post('/api/me/notify/test').then(function(d){
   m.className='small '+(d.ok?'ok-msg':'err');
   m.textContent=d.ok?('Sent'+(d.email?' by email':'')+(d.push?' to '+d.push+' browser'+(d.push>1?'s':''):'')+(d.inapp?' to your Today panel':'')+'.'):d.error; }); }
@@ -847,7 +853,8 @@ function nfHTML(me, groups){
   var n=me.user.notify, isIOS=/iPhone|iPad/.test(navigator.userAgent), standalone=window.navigator.standalone===true;
   var pushOk=('serviceWorker' in navigator)&&('PushManager' in window)&&!!me.push_key;
   var emailNote=!me.email_ready?'Email isn\'t set up on this server yet.':
-    (n.email_verified?'To '+esc(me.user.email):'To '+esc(me.user.email)+'. We\'ll send a link to confirm the address first.');
+    (n.email_verified?'To '+esc(me.user.email):'To '+esc(me.user.email)+'. We\'ll send a link to confirm the address first.'+
+     (n.email&&typeof resendV==='function'?' Not confirmed yet. <a onclick="resendV()" style="cursor:pointer">Resend the link</a>':''));
   var pushNote=pushOk?'Pop-up notifications from this browser, even when the site is closed.'+(me.push_count?' On for '+me.push_count+' browser'+(me.push_count>1?'s':'')+'.':''):
     (isIOS&&!standalone?'On iPhone and iPad: tap Share, then "Add to Home Screen", and open the site from there to turn this on.':'This browser can\'t show notifications.');
   return '<div class="wz-h">Daily market summary</div><div class="nf-seg" id="nf-times">'+TIMES.map(function(t){

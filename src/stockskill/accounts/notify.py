@@ -58,6 +58,21 @@ def read_token(tok: str, salt: str, max_age: int, secret: str | None = None) -> 
 
 # --- email -------------------------------------------------------------------
 
+LAST_ERROR = {"msg": None}
+
+
+def _explain(e: Exception) -> str:
+    """A plain-English reason an email didn't send."""
+    if isinstance(e, smtplib.SMTPAuthenticationError):
+        return ("Gmail didn't accept the sign-in. Check SMTP_USER and that SMTP_PASSWORD is an app password "
+                "(16 letters, no spaces) created with 2-Step Verification on.")
+    if isinstance(e, smtplib.SMTPRecipientsRefused):
+        return "The mail server refused that recipient address."
+    if isinstance(e, (OSError, smtplib.SMTPConnectError, smtplib.SMTPServerDisconnected)):
+        return f"Couldn't reach the mail server ({e})."
+    return f"The mail server returned an error ({e})."
+
+
 def email_ready() -> bool:
     return bool(os.environ.get("SMTP_HOST") and os.environ.get("SMTP_USER") and os.environ.get("SMTP_PASSWORD"))
 
@@ -83,11 +98,13 @@ def send_email(to: str, subject: str, text: str, html_body: str | None = None,
         with cls(os.environ["SMTP_HOST"], port, timeout=20) as s:
             if port != 465:
                 s.starttls()
-            s.login(os.environ["SMTP_USER"], os.environ["SMTP_PASSWORD"])
+            s.login(os.environ["SMTP_USER"], os.environ["SMTP_PASSWORD"].replace(" ", ""))
             s.send_message(msg)
+        LAST_ERROR["msg"] = None
         return True
     except Exception as e:  # noqa: BLE001
         import sys
+        LAST_ERROR["msg"] = _explain(e)
         print(f"email to {to} failed: {e}", file=sys.stderr, flush=True)
         return False
 

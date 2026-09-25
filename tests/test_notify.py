@@ -172,3 +172,34 @@ def test_pwa_assets(app):
     assert c.get("/manifest.webmanifest").get_json()["display"] == "standalone"
     png = c.get("/icon-192.png")
     assert png.status_code == 200 and png.data[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_confirmation_email_failure_is_explained(app, monkeypatch):
+    import smtplib
+    c = app.test_client()
+    _onboarded(c)
+    r = c.post("/api/me/notify", json={"times": "pre", "email": True}).get_json()
+    assert r["email_pending"] and not r["verification_sent"] and "SMTP settings missing" in r["email_error"]
+    monkeypatch.setenv("SMTP_HOST", "smtp.test")
+    monkeypatch.setenv("SMTP_USER", "u@test")
+    monkeypatch.setenv("SMTP_PASSWORD", "abcd efgh ijkl mnop")
+
+    class Boom:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def starttls(self):
+            pass
+
+        def login(self, user, pw):
+            assert " " not in pw                          # spaces in an app password are dropped
+            raise smtplib.SMTPAuthenticationError(535, b"bad credentials")
+    monkeypatch.setattr(smtplib, "SMTP", Boom)
+    r = c.post("/api/me/verify/resend").get_json()
+    assert not r["ok"] and "app password" in r["error"]
