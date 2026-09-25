@@ -45,7 +45,8 @@ REFERRALS = {"friend": "A friend or colleague", "search": "Search engine", "soci
              "reddit": "Reddit or a forum", "news": "News or a blog", "other": "Other"}
 _PUBLIC_PATHS = {"/", "/login", "/signup", "/terms", "/privacy", "/healthz", "/favicon.ico", "/logout",
                  "/sw.js", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/apple-touch-icon.png",
-                 "/notifications/verify", "/notifications/unsubscribe", "/api/board/meta"}
+                 "/notifications/verify", "/notifications/unsubscribe", "/api/board/meta",
+                 "/forgot", "/reset", "/account/email/confirm"}
 _ONBOARD_OK = {"/welcome", "/account", "/logout", "/terms", "/privacy"}
 
 
@@ -80,6 +81,7 @@ def init_app(app, board, tickers_path: str, cache_dir) -> None:
     app.config["ACCT"] = {"board": board, "tickers_path": tickers_path, "cache_dir": cache_dir}
     db.init()
     app.before_request(_gate)
+    from . import security  # noqa: F401  (registers its routes on the blueprint)
     app.register_blueprint(bp)
 
 
@@ -216,6 +218,8 @@ def signup():
     uid = db.create_user(email, password_hash=generate_password_hash(pw),
                          terms_version=legal.TERMS_VERSION, privacy_version=legal.PRIVACY_VERSION)
     _login(uid)
+    from .security import welcome
+    welcome(db.get_user(uid), verify=True)
     return jsonify({"ok": True, "next": "/welcome"})
 
 
@@ -232,6 +236,9 @@ def login():
         if u and not u.get("password_hash") and u.get("google_sub"):
             return jsonify({"ok": False, "error": "This account uses Sign in with Google."}), 401
         return jsonify({"ok": False, "error": "Email or password is incorrect."}), 401
+    if u.get("mfa_method"):
+        from .security import start_mfa
+        return start_mfa(u, b.get("next"))
     _login(u["id"])
     return jsonify({"ok": True, "next": _next_for(u, b.get("next"))})
 
@@ -286,6 +293,8 @@ def google_login():
         uid = db.create_user(email, google_sub=sub, first_name=c.get("given_name"), last_name=c.get("family_name"))
         db.update_user(uid, email_verified=1)
         u = db.get_user(uid)
+        from .security import welcome
+        welcome(u, verify=False)
     _login(u["id"])
     return jsonify({"ok": True, "next": _next_for(u, _body().get("next"))})
 
@@ -390,6 +399,9 @@ def _public_user(u: dict) -> dict:
     out = {k: u.get(k) for k in keep}
     out["groups"] = [x for x in (u.get("groups") or "").split(",") if x]
     out["has_password"] = bool(u.get("password_hash"))
+    out["mfa"] = u.get("mfa_method")
+    import json as _json
+    out["recovery_left"] = len(_json.loads(u.get("mfa_recovery") or "[]"))
     out["google_linked"] = bool(u.get("google_sub"))
     out["needs_terms"] = needs_terms(u)
     out["notify"] = {"times": u.get("summary_times") or "none",
@@ -567,6 +579,8 @@ def set_password():
     if len(pw) < 10 or len(set(pw)) < 5:
         return jsonify({"ok": False, "error": "Use a password of at least 10 characters."}), 400
     db.update_user(u["id"], password_hash=generate_password_hash(pw))
+    from .security import notice
+    notice(u, "Your password was changed", "The password for your account was just changed.")
     return jsonify({"ok": True})
 
 

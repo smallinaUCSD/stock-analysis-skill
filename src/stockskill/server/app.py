@@ -98,6 +98,16 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
                 return redirect("/")
             return login_html("signup", ACCT.google_client_id())
 
+        @app.get("/forgot")
+        def forgot_page():
+            from ..accounts.pages import forgot_html
+            return forgot_html()
+
+        @app.get("/reset")
+        def reset_page():
+            from ..accounts.pages import reset_html
+            return reset_html(request.args.get("t", ""))
+
         @app.get("/welcome")
         def welcome_page():
             from ..accounts.pages import welcome_html

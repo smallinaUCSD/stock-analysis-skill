@@ -61,7 +61,8 @@ PROFILE_FIELDS = ("first_name", "last_name", "dob", "gender", "investor_type", "
 # notification settings, added after the first release (see _migrate)
 NOTIFY_COLUMNS = {"email_verified": "INTEGER NOT NULL DEFAULT 0", "notify_email": "INTEGER NOT NULL DEFAULT 0",
                   "notify_push": "INTEGER NOT NULL DEFAULT 0", "notify_inapp": "INTEGER NOT NULL DEFAULT 1",
-                  "summary_times": "TEXT", "summary_groups": "TEXT", "notify_set": "INTEGER NOT NULL DEFAULT 0"}
+                  "summary_times": "TEXT", "summary_groups": "TEXT", "notify_set": "INTEGER NOT NULL DEFAULT 0",
+                  "mfa_method": "TEXT", "mfa_secret": "TEXT", "mfa_recovery": "TEXT"}
 
 
 def path() -> str:
@@ -278,3 +279,8 @@ def all_users() -> list[dict]:
 def prune_notifications(days: int = 90) -> None:
     with conn() as c:
         c.execute("DELETE FROM notifications WHERE created_at < ?", (time.time() - days * 86400,))
+
+
+def update_user_email(uid: int, email: str) -> None:
+    with conn() as c:
+        c.execute("UPDATE users SET email=?, email_verified=1 WHERE id=?", (email.strip().lower(), uid))

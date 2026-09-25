@@ -341,7 +341,8 @@ def login_html(mode: str = "login", google_client_id: str | None = None, nxt: st
   <form id="au-form" novalidate>
     <div class="field"><label for="em">Email</label><input class="inp" id="em" type="email" autocomplete="username webauthn" required></div>
     <div class="field"><label for="pw">Password</label><input class="inp" id="pw" type="password" autocomplete="current-password" required>
-      <span class="small muted" id="pw-hint" hidden>At least 10 characters.</span></div>
+      <span class="small muted" id="pw-hint" hidden>At least 10 characters.</span>
+      <a class="small au-forgot" id="forgot" href="/forgot">Forgot password?</a></div>
     <label class="au-accept" id="acc-wrap" hidden><input type="checkbox" id="acc"> <span>I am 18 or older and agree to the
       <a href="/terms" target="_blank">Terms of Service</a> (including binding arbitration and a class-action waiver) and the
       <a href="/privacy" target="_blank">Privacy Policy</a>.</span></label>
@@ -349,6 +350,15 @@ def login_html(mode: str = "login", google_client_id: str | None = None, nxt: st
     <button class="btn primary block" id="au-go" type="submit"></button>
   </form>
   <p class="small muted au-switch" id="au-switch"></p>
+</div>
+<div class="au-card" id="mfa" hidden>
+  <h1>2-step verification</h1><p class="muted" id="mfa-sub"></p>
+  <form id="mfa-form" novalidate><div class="field"><label for="code">Code</label>
+    <input class="inp" id="code" inputmode="numeric" autocomplete="one-time-code" placeholder="123456"></div>
+    <div class="err" id="mfa-err" role="alert"></div>
+    <button class="btn primary block" type="submit">Verify</button></form>
+  <p class="small muted au-switch">Lost access? Enter one of your backup codes instead.
+    <a id="mfa-resend" hidden onclick="resendMfa()">Email me a new code</a></p>
 </div>
 <p class="small muted au-legal">Not financial advice. <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a></p></div>"""
     js = ("var MODE=" + json.dumps(mode if mode in ("login", "signup") else "login") + ", NEXT=" + json.dumps(nxt or "")
@@ -369,6 +379,8 @@ _AUTH_CSS = """
 #pk-btn{margin-bottom:4px}
 .au-switch{text-align:center;margin:14px 0 0} .au-switch a{cursor:pointer}
 .au-legal{margin-top:18px}
+.au-forgot{align-self:flex-end;margin-top:4px;text-decoration:none}
+#mfa{margin-top:0}
 """
 
 _LOGIN_JS = r"""
@@ -380,6 +392,7 @@ function setMode(m){ MODE=m;
   document.getElementById('au-go').textContent=su?'Create account':'Sign in';
   document.getElementById('pw').setAttribute('autocomplete', su?'new-password':'current-password');
   document.getElementById('pw-hint').hidden=!su; document.getElementById('acc-wrap').hidden=!su;
+  document.getElementById('forgot').hidden=su;
   document.getElementById('pk-btn').hidden=su||!passkeySupported();
   document.getElementById('au-switch').innerHTML=su?'Already have an account? <a onclick="setMode(\'login\')">Sign in</a>':
     'New here? <a onclick="setMode(\'signup\')">Create an account</a>';
@@ -388,7 +401,16 @@ function setMode(m){ MODE=m;
   renderGoogle();
 }
 document.querySelectorAll('.au-tabs button').forEach(function(b){ b.addEventListener('click',function(){ setMode(b.getAttribute('data-m')); }); });
-function done(d){ if(d.ok){ location.href=d.next||'/'; } else { document.getElementById('au-err').textContent=d.error||'Something went wrong.'; } }
+function done(d){
+  if(d.mfa){ document.querySelector('.au-card').hidden=true; var m=document.getElementById('mfa'); m.hidden=false;
+    document.getElementById('mfa-sub').textContent=d.mfa==='email'?'We emailed a 6-digit code to '+(d.email_hint||'your address')+'.':
+      'Enter the 6-digit code from your authenticator app.';
+    document.getElementById('mfa-resend').hidden=d.mfa!=='email'; document.getElementById('code').focus(); return; }
+  if(d.ok){ location.href=d.next||'/'; } else { document.getElementById('au-err').textContent=d.error||'Something went wrong.'; } }
+document.getElementById('mfa-form').addEventListener('submit',function(e){ e.preventDefault();
+  post('/auth/mfa',{code:document.getElementById('code').value}).then(function(d){
+    if(d.ok) location.href=d.next||'/'; else document.getElementById('mfa-err').textContent=d.error; }); });
+function resendMfa(){ post('/auth/mfa/resend').then(function(d){ document.getElementById('mfa-err').textContent=d.ok?'Sent a new code.':d.error; }); }
 document.getElementById('au-form').addEventListener('submit',function(e){ e.preventDefault();
   var btn=document.getElementById('au-go'); btn.disabled=true;
   var body={email:document.getElementById('em').value, password:document.getElementById('pw').value, next:NEXT};
@@ -638,8 +660,42 @@ function resendV(){ var m=document.getElementById('nf-msg'); m.className='small 
 function testNf(){ var m=document.getElementById('nf-msg'); post('/api/me/notify/test').then(function(d){
   m.className='small '+(d.ok?'ok-msg':'err');
   m.textContent=d.ok?('Sent'+(d.email?' by email':'')+(d.push?' to '+d.push+' browser'+(d.push>1?'s':''):'')+(d.inapp?' to your Today panel':'')+'.'):d.error; }); }
+function secu(){ var u=ME.user, pwf=function(id){ return u.has_password?'<div class="field"><label>Current password</label><input class="inp" id="'+id+'" type="password" autocomplete="current-password"></div>':''; };
+  var mfa=u.mfa?'<p style="margin:0 0 10px"><b>On</b> · '+(u.mfa==='totp'?'authenticator app':'codes emailed to you')+' · '+u.recovery_left+' backup codes left</p>'+
+      '<div class="row2">'+pwf('mfp')+'</div><div class="wz-foot" style="margin-top:0"><span class="small" id="mf-msg"></span><span style="display:flex;gap:8px">'+
+      '<button class="btn ghost" onclick="newCodes()">New backup codes</button><button class="btn ghost" onclick="mfaOff()">Turn off</button></span></div>':
+    '<p class="small muted" style="margin:0 0 10px">Ask for a second code when you sign in with your password, so a stolen password isn\'t enough. '+
+      '(Passkeys and Google sign-in already verify you strongly.)</p><div style="display:flex;gap:8px;flex-wrap:wrap">'+
+      '<button class="btn ghost" onclick="mfaStart(\'totp\')">Use an authenticator app</button>'+
+      (ME.email_ready?'<button class="btn ghost" onclick="mfaStart(\'email\')">Email me a code</button>':'')+'</div><div class="small" id="mf-msg" style="margin-top:8px"></div>';
+  return '<div class="ac-sec"><h2>Email address</h2><div class="ac-row"><span>'+esc(u.email)+'<br><span class="small muted">'+
+      (u.notify.email_verified?'Confirmed':'Not confirmed yet')+'</span></span></div>'+
+    '<div class="row2"><div class="field"><label>New email</label><input class="inp" id="ne" type="email" autocomplete="email"></div>'+pwf('nep')+'</div>'+
+    '<div class="wz-foot" style="margin-top:0"><span class="small" id="ne-msg"></span><button class="btn ghost" onclick="chEmail()">Change email</button></div></div>'+
+    '<div class="ac-sec"><h2>2-step verification</h2>'+mfa+'<div id="mf-setup"></div></div>'; }
+function say(id, ok, t){ var m=document.getElementById(id); m.className='small '+(ok?'ok-msg':'err'); m.textContent=t; }
+function chEmail(){ var p=document.getElementById('nep'); post('/api/me/email',{email:v('ne'),password:p?p.value:''}).then(function(d){
+  say('ne-msg', d.ok, d.ok?'Check '+v('ne')+' for a link to confirm the change.':d.error); }); }
+function showCodes(codes){ document.getElementById('mf-setup').innerHTML='<div class="terms-box" style="margin-top:12px"><b>Save these backup codes.</b> '+
+  'Each works once if you lose your phone or can\'t get an email. They won\'t be shown again.<pre style="font-size:15px;line-height:1.7;margin:10px 0 0">'+
+  codes.map(esc).join('\n')+'</pre></div><button class="btn primary" style="margin-top:10px" onclick="load()">I saved them</button>'; }
+function mfaStart(kind){ var box=document.getElementById('mf-setup');
+  post(kind==='totp'?'/api/me/mfa/totp/start':'/api/me/mfa/email/start').then(function(d){
+    if(!d.ok){ say('mf-msg', false, d.error); return; }
+    box.innerHTML=(kind==='totp'?'<div class="terms-box" style="margin-top:12px"><p style="margin:0 0 8px">Scan this with an authenticator app '+
+      '(Google Authenticator, 1Password, Authy…), or enter the key by hand.</p><div style="width:190px;background:#fff;border-radius:8px">'+d.qr+
+      '</div><p class="small" style="margin:8px 0 0">Key: <code style="user-select:all">'+esc(d.secret)+'</code></p></div>':
+      '<p class="small" style="margin:12px 0 0">We emailed a 6-digit code to '+esc(ME.user.email)+'.</p>')+
+      '<div class="row2" style="margin-top:10px"><div class="field"><label>Code</label><input class="inp" id="mfc" inputmode="numeric" autocomplete="one-time-code"></div></div>'+
+      '<div class="wz-foot" style="margin-top:0"><span class="small" id="mfc-msg"></span><button class="btn primary" onclick="mfaConfirm(\''+kind+'\')">Turn on</button></div>'; }); }
+function mfaConfirm(kind){ post('/api/me/mfa/confirm',{method:kind, code:v('mfc')}).then(function(d){
+  if(!d.ok){ say('mfc-msg', false, d.error); return; } showCodes(d.recovery_codes); }); }
+function mfaOff(){ var p=document.getElementById('mfp'); if(!confirm('Turn off 2-step verification?')) return;
+  post('/api/me/mfa/disable',{password:p?p.value:''}).then(function(d){ if(d.ok) load(); else say('mf-msg', false, d.error); }); }
+function newCodes(){ var p=document.getElementById('mfp'); post('/api/me/mfa/recovery',{password:p?p.value:''}).then(function(d){
+  if(d.ok) showCodes(d.recovery_codes); else say('mf-msg', false, d.error); }); }
 function render(){ var a=document.getElementById('ac'); a.className=''; if(!NF) nfInit(ME);
-  a.innerHTML=prof()+wl()+notif()+signin()+danger(); nfBind(ME); }
+  a.innerHTML=prof()+wl()+notif()+signin()+secu()+danger(); nfBind(ME); }
 function load(){ Promise.all([fetch('/api/me').then(function(r){return r.json();}), fetch('/api/groups').then(function(r){return r.json();})])
   .then(function(a){ ME=a[0]; GROUPS=a[1].groups||[]; render(); }); }
 load();
@@ -917,3 +973,34 @@ function nfSave(){
       return post('/api/me/follows',{add:add, remove:rem}).then(function(){ NF0=Object.assign({},NF.follows); return d; }); });
 }
 """
+
+
+# --- forgot / reset password ----------------------------------------------------------------
+
+def forgot_html() -> str:
+    body = f"""<div class="au-wrap"><div class="au-top">{_brand_link()}</div>
+<div class="au-card"><h1>Reset your password</h1><p class="muted">Enter your account's email and we'll send you a link to
+choose a new password.</p>
+<form id="f" novalidate><div class="field"><label for="em">Email</label><input class="inp" id="em" type="email" autocomplete="username"></div>
+<div class="err" id="err" role="alert"></div><button class="btn primary block" type="submit">Send the link</button></form>
+<p class="small muted au-switch"><a href="/login">Back to sign in</a></p></div></div>"""
+    js = r"""document.getElementById('f').addEventListener('submit',function(e){ e.preventDefault();
+  post('/auth/forgot',{email:document.getElementById('em').value}).then(function(d){
+    if(!d.ok){ document.getElementById('err').textContent=d.error; return; }
+    document.querySelector('.au-card').innerHTML='<h1>Check your email</h1><p class="muted">If an account uses that address, a link to reset '+
+      'the password is on its way. It works once, for one hour. Check your spam folder too.</p><p><a href="/login">Back to sign in</a></p>'; }); });"""
+    return _shell(f"Reset your password · {BRAND}", body, _AUTH_CSS, js)
+
+
+def reset_html(token: str) -> str:
+    body = f"""<div class="au-wrap"><div class="au-top">{_brand_link()}</div>
+<div class="au-card"><h1>Choose a new password</h1><p class="muted">At least 10 characters.</p>
+<form id="f" novalidate><div class="field"><label for="pw">New password</label>
+<input class="inp" id="pw" type="password" autocomplete="new-password"></div>
+<div class="err" id="err" role="alert"></div><button class="btn primary block" type="submit">Save password</button></form></div></div>"""
+    js = ("var TOKEN=" + json.dumps(token) + ";\n" + r"""document.getElementById('f').addEventListener('submit',function(e){ e.preventDefault();
+  post('/auth/reset',{token:TOKEN,password:document.getElementById('pw').value}).then(function(d){
+    if(!d.ok){ document.getElementById('err').textContent=d.error; return; }
+    document.querySelector('.au-card').innerHTML='<h1>Password saved</h1><p class="muted">You can sign in with your new password now.</p>'+
+      '<a class="btn primary block" href="/login">Sign in</a>'; }); });""")
+    return _shell(f"New password · {BRAND}", body, _AUTH_CSS, js)

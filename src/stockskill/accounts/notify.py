@@ -115,16 +115,28 @@ def send_email(to: str, subject: str, text: str, html_body: str | None = None,
         return False
 
 
-def _email_html(title: str, lines: list[str], url: str, unsub: str) -> str:
+def send_simple(to: str, subject: str, lines: list[str], url: str | None = None,
+                label: str = "Open SMI Research") -> bool:
+    """A transactional email (welcome, codes, security notices): no unsubscribe."""
+    plain = "\n\n".join(html.unescape(_strip_tags(ln)) for ln in lines)
+    links = __import__("re").findall(r'href="([^"]+)"', " ".join(lines))
+    if links:
+        plain += "\n\n" + "\n".join(html.unescape(x) for x in links)
+    return send_email(to, subject, plain, _email_html(subject, lines, url or (public_url() + "/"), None, label))
+
+
+def _email_html(title: str, lines: list[str], url: str, unsub: str | None,
+                label: str = "Open your watchlist") -> str:
     body = "".join(f'<p style="margin:0 0 10px;line-height:1.55">{ln}</p>' for ln in lines)
     return (f'<div style="background:#faf9f5;padding:24px;font-family:Georgia,serif;color:#141413">'
             f'<div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #e6dfd8;border-radius:14px;padding:24px">'
             f'<h1 style="font-weight:500;font-size:24px;margin:0 0 14px">{html.escape(title)}</h1>{body}'
             f'<p style="margin:18px 0 0"><a href="{html.escape(url)}" style="background:#cc785c;color:#fff;text-decoration:none;'
-            f'padding:10px 18px;border-radius:8px;display:inline-block">Open your watchlist</a></p></div>'
+            f'padding:10px 18px;border-radius:8px;display:inline-block">{html.escape(label)}</a></p></div>'
             f'<p style="max-width:560px;margin:14px auto 0;font-size:12px;color:#6c6a64;line-height:1.5">Research, not financial '
-            f'advice. <a href="{html.escape(public_url())}/account" style="color:#6c6a64">Notification settings</a> · '
-            f'<a href="{html.escape(unsub)}" style="color:#6c6a64">Unsubscribe from emails</a></p></div>')
+            f'advice. <a href="{html.escape(public_url())}/account" style="color:#6c6a64">Account settings</a>'
+            + (f' · <a href="{html.escape(unsub)}" style="color:#6c6a64">Unsubscribe from these emails</a>' if unsub else "")
+            + '</p></div>')
 
 
 def send_verification(u: dict) -> bool:
@@ -134,7 +146,7 @@ def send_verification(u: dict) -> bool:
     lines = ["Confirm this email address to get your market summaries and alerts.",
              f'<a href="{html.escape(link)}">Confirm my email</a>', "If you didn't sign up, you can ignore this message."]
     return send_email(u["email"], "Confirm your email", text,
-                      _email_html("Confirm your email", lines, link, link))
+                      _email_html("Confirm your email", lines, link, None, "Confirm my email"))
 
 
 # --- browser push ---------------------------------------------------------------
