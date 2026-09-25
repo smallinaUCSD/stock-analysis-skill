@@ -710,14 +710,9 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
         from .breakouts_page import breakouts_html
         return breakouts_html()
 
-    @app.get("/api/breakouts")
-    def breakouts_api():
-        """Today's breakouts on the watchlist and how breakouts have done here
-        (cache-only, no network; refreshed every 30 minutes)."""
-        import time as _t
-        hit = _BO_CACHE.get("v")
-        if hit and _t.time() - hit[0] < 1800:
-            return jsonify(hit[1])
+    def _breakout_universe():
+        """{ticker: {close, high, volume, bench}} for the watchlist (cached
+        prices, no network) and the latest price date."""
         from ..leverage import registry
         from ..signals import breakouts as BK
         from ..watchlist.pipeline import _load_cached
@@ -737,6 +732,18 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
                       "bench": (BK.bench_on(o["dates"], spy.ohlcv["dates"], spy.ohlcv["close"]) if spy else None)}
             d = o["dates"][-1]
             last = max(last, d.isoformat() if hasattr(d, "isoformat") else str(d))
+        return uni, last
+
+    @app.get("/api/breakouts")
+    def breakouts_api():
+        """Today's breakouts on the watchlist and how breakouts have done here
+        (cache-only, no network; refreshed every 30 minutes)."""
+        import time as _t
+        hit = _BO_CACHE.get("v")
+        if hit and _t.time() - hit[0] < 1800:
+            return jsonify(hit[1])
+        from ..signals import breakouts as BK
+        uni, last = _breakout_universe()
         if not uni:
             return jsonify({"ok": False, "error": "no cached price history yet"}), 503
         bt = BK.backtest(uni)
@@ -1416,5 +1423,97 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
         except Exception:  # noqa: BLE001
             out["fear_greed"] = None
         return jsonify(out)
+
+    # --- phone alerts (ntfy) -------------------------------------------------
+    from ..alerts import phone as AL
+
+    def _watchlist_names() -> list[str]:
+        from ..leverage import registry
+        from ..watchlist.tickers import parse_tickers
+        try:
+            return [t for t in parse_tickers(tickers_path)["all"] if registry.get(t) is None]
+        except Exception:  # noqa: BLE001
+            return []
+
+    def _breakout_candidates():
+        from ..signals import breakouts as BK
+        uni, last = _breakout_universe()
+        return last, (BK.scan(uni) if uni else [])
+
+    checker = AL.Checker(_watchlist_names, _breakout_candidates)
+    checker.start()                         # only runs when NTFY_TOPIC is set
+
+    if not public:
+        # managing alerts is private: on a shared deployment anyone could
+        # otherwise make the owner's phone buzz
+        @app.get("/alerts")
+        def alerts_page():
+            from .alerts_page import alerts_html
+            return alerts_html()
+
+        @app.get("/api/alerts")
+        def alerts_list():
+            with AL._DOC_LOCK:
+                doc = AL.load()
+                tp = AL.topic()
+                if not tp and not doc["state"].get("suggested_topic"):
+                    # keep one suggestion, so a reload mid-setup shows the same name
+                    doc["state"]["suggested_topic"] = AL.suggest_topic()
+                    AL.save(doc)
+            return jsonify({"ok": True, "rules": doc["rules"], "log": list(reversed(doc["log"]))[:40],
+                            "topic": tp, "suggested": None if tp else doc["state"]["suggested_topic"],
+                            "types": [[k, v] for k, v in AL.TYPES.items()], "running": checker._started})
+
+        @app.post("/api/alerts")
+        def alerts_add():
+            b = request.get_json(silent=True) or {}
+            try:
+                val = b.get("value")
+                rule = AL.new_rule(str(b.get("type", "")), (b.get("ticker") or "").strip() or None,
+                                   float(val) if val not in (None, "") else None)
+            except (ValueError, TypeError) as e:
+                return jsonify({"ok": False, "error": str(e) or "invalid alert"}), 400
+            if rule.get("ticker") not in (None, "*") and not _TICKER_RE.match(rule["ticker"]):
+                return jsonify({"ok": False, "error": "invalid ticker"}), 400
+            with AL._DOC_LOCK:
+                doc = AL.load()
+                if rule["type"] in ("breakout", "insider_buy", "earnings") and any(r["type"] == rule["type"] for r in doc["rules"]):
+                    return jsonify({"ok": False, "error": "that alert is already set"}), 400
+                doc["rules"].append(rule)
+                AL.save(doc)
+            return jsonify({"ok": True, "rule": rule})
+
+        @app.post("/api/alerts/<rid>/toggle")
+        def alerts_toggle(rid: str):
+            with AL._DOC_LOCK:
+                doc = AL.load()
+                for r in doc["rules"]:
+                    if r["id"] == rid:
+                        r["on"] = not r.get("on")
+                AL.save(doc)
+            return jsonify({"ok": True})
+
+        @app.delete("/api/alerts/<rid>")
+        def alerts_delete(rid: str):
+            with AL._DOC_LOCK:
+                doc = AL.load()
+                doc["rules"] = [r for r in doc["rules"] if r["id"] != rid]
+                AL.save(doc)
+            return jsonify({"ok": True})
+
+        @app.post("/api/alerts/test")
+        def alerts_test():
+            if not AL.topic():
+                return jsonify({"ok": False, "error": "NTFY_TOPIC is not set"}), 400
+            ok = AL.send({"title": "StockSkill alerts are working",
+                          "body": "You'll get price, breakout, insider and earnings alerts here.", "tags": ["white_check_mark"]})
+            return jsonify({"ok": ok, "error": None if ok else "ntfy did not accept the message"})
+
+        @app.post("/api/alerts/check")
+        def alerts_check():
+            # insider checks take a call per watchlist name, so run in the background
+            import threading
+            threading.Thread(target=lambda: checker.run_once(force=True), daemon=True).start()
+            return jsonify({"ok": True})
 
     return app

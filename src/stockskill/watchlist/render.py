@@ -1386,7 +1386,8 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
         'autocomplete="off" oninput="addSearch()" onkeydown="addKey(event)">'
         '<div id="addsug" class="addsug"></div></div>'
         f'<button class="tbtn add" onclick="addTicker()">{icon("plus", 15)}Add</button>')
-    _holdings_btn = "" if public else '<button class="tool-b" onclick="openTab(\'/holdings\')">Holdings</button>'
+    _holdings_btn = "" if public else ('<button class="tool-b" onclick="openTab(\'/holdings\')">Holdings</button>'
+                                       '<button class="tool-b" onclick="openTab(\'/alerts\')">Alerts</button>')
     tools_html = (
         '<span class="toolsbar">'
         '<button class="tool-b" onclick="openTool(\'evaluate\')">Evaluate</button>'
