@@ -62,6 +62,15 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
     board.wait_ready(0)   # start building the board in the background at startup
     if os.environ.get("STOCKSKILL_KEEP_FRESH") == "1":
         board.keep_fresh()    # rebuild whenever stale, not only when someone visits
+        board.quote_feed()    # and keep live prices a few minutes fresh in between
+
+    @app.get("/api/quotes")
+    def live_quotes():
+        """Latest price and day change for every board ticker (pages poll this)."""
+        q = board.quotes()
+        import time as _t
+        newest = min((v[2] for v in q.values()), default=None)
+        return jsonify({"ok": True, "quotes": q, "as_of": (_t.time() - newest) if newest is not None else None})
 
     @app.get("/api/board/meta")
     def board_meta():

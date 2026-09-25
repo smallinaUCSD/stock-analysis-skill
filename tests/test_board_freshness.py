@@ -44,3 +44,17 @@ def test_a_stuck_build_lets_a_new_one_start(tmp_path, monkeypatch):
     s._build_started = time.time() - 1000
     WS.WatchlistService._real_start_bg_build(s)
     assert started == [1] and s._build_serial == 1
+
+
+def test_quotes_endpoint_serves_the_feed_cache(tmp_path, monkeypatch):
+    from stockskill.server import create_app
+    from stockskill.watchlist import build as B
+    tk = tmp_path / "t.csv"
+    tk.write_text("[M7]\nAAPL, MSFT\n")
+    c = create_app(tickers_path=str(tk), public=True).test_client()
+    B._QUOTES["AAPL"] = (time.time() - 30, {"price": 201.5, "change_pct": 0.012})
+    B._QUOTES["ZZZZ"] = (time.time(), {"price": 1.0, "change_pct": 0.0})     # not on the board
+    d = c.get("/api/quotes").get_json()
+    assert d["ok"] and set(d["quotes"]) == {"AAPL"}
+    p, ch, age = d["quotes"]["AAPL"]
+    assert p == 201.5 and ch == 0.012 and 29 <= age <= 32 and d["as_of"] > time.time() - 40

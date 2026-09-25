@@ -71,6 +71,7 @@ class WatchlistService:
         self._html_serial = 0                # ...and only a newer one may replace the board
         self._session = None                 # market session the current board was built in
         self._keeper = False
+        self._feed = False                   # live quote feed running (keeps prices fresh)
         self._lock = threading.Lock()
         self._fast_lock = threading.Lock()
         # Board generation: bumped on every add/remove. A build records the gen it
@@ -198,7 +199,9 @@ class WatchlistService:
             print(f"board build {serial} started", file=sys.stderr, flush=True)
             try:
                 self._ensure_loaded()   # restore persisted adds off the boot path
-                self._rebuild(serial=serial)
+                # with the quote feed running, reuse its prices (a few minutes old at
+                # most) instead of re-quoting every ticker through the rate limit
+                self._rebuild(serial=serial, quote_max_age=600.0 if self._feed else 0.0)
                 print(f"board build {serial} finished in {time.time() - t0:.0f}s", file=sys.stderr, flush=True)
             except Exception as e:  # noqa: BLE001
                 print(f"board build {serial} failed after {time.time() - t0:.0f}s: {e!r}", file=sys.stderr, flush=True)
@@ -235,6 +238,50 @@ class WatchlistService:
                     pass
                 time.sleep(every)
         threading.Thread(target=loop, daemon=True).start()
+
+    def quote_feed(self, chunk: int = 20) -> None:
+        """Background loop that keeps every board ticker's live quote fresh,
+        cycling through the list as fast as the Finnhub rate limit allows while
+        the market is open (every 15 minutes otherwise). Pages poll /api/quotes
+        to update prices in place between full rebuilds."""
+        from ..data import finnhub
+        if not finnhub.has_finnhub():
+            return
+        with self._lock:
+            if self._feed:
+                return
+            self._feed = True
+
+        def loop():
+            from ..marketclock import market_status
+            from ..watchlist import build as B
+            while True:
+                try:
+                    tks = sorted(self._current_tickers())
+                    for i in range(0, len(tks), chunk):
+                        got = finnhub.batch_quotes(tks[i:i + chunk])
+                        now = time.time()
+                        for t, q in (got or {}).items():
+                            if q and q.get("price"):
+                                B._QUOTES[t.upper()] = (now, q)
+                    if market_status().label != "open":
+                        time.sleep(900)
+                    else:
+                        time.sleep(5)
+                except Exception:  # noqa: BLE001
+                    time.sleep(60)
+        threading.Thread(target=loop, daemon=True).start()
+
+    def quotes(self) -> dict:
+        """{ticker: [price, day change, seconds old]} for the board's tickers."""
+        from ..watchlist import build as B
+        now = time.time()
+        out = {}
+        for t in self._current_tickers():
+            hit = B._QUOTES.get(t)
+            if hit and hit[1].get("price"):
+                out[t] = [hit[1]["price"], hit[1].get("change_pct"), round(now - hit[0])]
+        return out
 
     def meta(self) -> dict:
         with self._lock:

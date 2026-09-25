@@ -525,8 +525,9 @@ def _row_html(r):
     return (
         f'<tr class="item" {_data_attrs(r)}>'
         f'<td><span class="tk">{html.escape(r.ticker)}</span></td>'
-        f'<td data-sort="{r.price}">${r.price:,.2f}</td>'
-        + cell(r.changes.get("1d")) + cell(r.changes.get("5d")) + cell(r.changes.get("1m"))
+        f'<td data-sort="{r.price}" data-live="p">${r.price:,.2f}</td>'
+        + cell(r.changes.get("1d")).replace("<td ", '<td data-live="c" ', 1)
+        + cell(r.changes.get("5d")) + cell(r.changes.get("1m"))
         + cell(r.changes.get("1y"))
         + money_cell(r.week52_low) + money_cell(r.week52_high)
         + f'<td style="text-align:left" class="muted">{sector}</td>'
@@ -896,7 +897,7 @@ def _card_html(r):
     summary = (
         f'<div class="card-top"><div><span class="tk">{html.escape(r.ticker)}</span> '
         f'<span class="badge {sig_cls}">{r.signal}</span></div>'
-        f'<span class="card-price">${r.price:,.2f} <span class="chg {dcls}">{dtxt}</span></span></div>'
+        f'<span class="card-price"><span data-live="p">${r.price:,.2f}</span> <span class="chg {dcls}" data-live="c">{dtxt}</span></span></div>'
         f'<div class="nm">{html.escape((r.name or "")[:34])}</div>'
         f'{_ext_html(r)}'
         f'<div class="trendline {tcls}">{html.escape(trend_word)} '
@@ -923,7 +924,7 @@ def _tile_html(r):
     return (
         f'<div class="tile-item item" {_data_attrs(r)} style="background:{_tile_color(day)}">'
         f'<div class="t">{html.escape(r.ticker)}</div>'
-        f'<div class="c">{dtxt}</div>'
+        f'<div class="c" data-live="t">{dtxt}</div>'
         f'<div class="s">{r.signal} {r.trend_arrow}</div></div>'
     )
 
@@ -1760,8 +1761,30 @@ function _watchBoard(){{
     if(document.hidden) return;
     fetch('/api/board/meta',{{cache:'no-store'}}).then(r=>r.ok?r.json():null).then(m=>{{
       if(m && m.ts && m.ts>_boardTs+1){{ _boardTs=m.ts; refreshData(); }}
+      else _liveQuotes();
     }}).catch(()=>{{}});
   }}, 60000);
+}}
+// Between full rebuilds, update just the prices and day changes in place.
+function _tileBg(d){{ if(d==null) return 'transparent'; const a=0.10+0.55*Math.min(Math.abs(d)/0.06,1);
+  return d>=0?'rgba(30,160,90,'+a.toFixed(2)+')':'rgba(205,70,90,'+a.toFixed(2)+')'; }}
+function _liveQuotes(){{
+  fetch('/api/quotes',{{cache:'no-store'}}).then(r=>r.ok?r.json():null).then(d=>{{
+    if(!d||!d.quotes) return;
+    document.querySelectorAll('.item[data-ticker]').forEach(el=>{{
+      const q=d.quotes[el.dataset.ticker]; if(!q) return;
+      const px=q[0], ch=q[1];
+      el.querySelectorAll('[data-live="p"]').forEach(c=>{{ c.textContent='$'+px.toLocaleString('en-US',{{minimumFractionDigits:2,maximumFractionDigits:2}});
+        if(c.dataset.sort!==undefined) c.dataset.sort=px; }});
+      if(ch==null) return;
+      const txt=(ch>=0?'+':'')+(ch*100).toFixed(1)+'%';
+      el.querySelectorAll('[data-live="c"]').forEach(c=>{{ c.textContent=txt; c.classList.toggle('up',ch>=0); c.classList.toggle('down',ch<0);
+        if(c.dataset.sort!==undefined) c.dataset.sort=ch; }});
+      el.querySelectorAll('[data-live="t"]').forEach(c=>{{ c.textContent=txt; el.style.background=_tileBg(ch); }});
+    }});
+    if(d.as_of){{ const u=document.getElementById('updated'); if(u){{ u.dataset.ts=Math.round(d.as_of*1000); fmtUpdated(); }} }}
+    _resort();
+  }}).catch(()=>{{}});
 }}
 (function init(){{
   const t=localStorage.getItem('wl_theme'); if(t) document.documentElement.setAttribute('data-theme', t);
