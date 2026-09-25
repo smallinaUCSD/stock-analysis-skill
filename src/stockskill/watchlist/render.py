@@ -19,7 +19,7 @@ _SIG_CLASS = {"BUY": "buy", "SELL": "sell", "SHORT": "short", "HOLD": "hold"}
 # human labels for ticker-file sections (acronyms kept, everything else sentence case)
 _SECTION_LABEL = {"M7": "M7", "AI-DATACENTER": "AI datacenter", "NASDAQ100": "Nasdaq 100",
                   "DOW": "Dow", "INTL": "International", "SEMIS": "Semiconductors",
-                  "LEVERAGED": "Leveraged long", "LEVERAGED-BEAR": "Leveraged bear"}
+                  "LEVERAGED": "Leveraged long", "LEVERAGED-BEAR": "Leveraged bear", "ETFS": "ETFs"}
 # sections that stay on the board but get no filter chip
 _HIDDEN_SECTION_CHIPS = {"TICKERS", "ADDED", "DOW"}
 
@@ -1185,6 +1185,9 @@ function doAddMany(list){
     .then(r=>r.json()).then(d=>{
       if(!d.ok){ addMsg(d.error||'could not add','bad'); return; }
       document.getElementById('addq').value='';
+      if(window.MYWL && (d.mine||[]).length){           // signed in: it's on your list now
+        d.mine.forEach(t=>window.MYWL.add(t)); applyFilter();
+        if(!(d.queued||[]).length){ addMsg('added '+d.mine.join(', ')+' to your watchlist','ok'); return; } }
       if(!(d.queued||[]).length){ _addResult({added:[],failed:[],skipped:d.skipped||[]}); return; }
       _pollAdd(d.job);
     }).catch(()=>addMsg('network error','bad'));
@@ -1489,6 +1492,8 @@ function vals(el, group){{
   return (el.dataset.secs||'').split(' ');
 }}
 function matches(el){{
+  // signed-in users see their own watchlist unless they switch to "All stocks"
+  if(window.MYWL && window.MYWL_ON && !window.MYWL.has((el.dataset.ticker||'').toUpperCase())) return false;
   for(const g in active){{
     if(active[g].size===0) continue;
     const v = vals(el, g);

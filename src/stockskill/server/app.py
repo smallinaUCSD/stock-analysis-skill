@@ -18,7 +18,7 @@ from __future__ import annotations
 import html
 import re
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, redirect, request
 
 from ..analyze import analyze_ticker
 from .page import analyzer_html
@@ -61,8 +61,58 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
                              cache_ttl=cache_ttl)
     board.wait_ready(0)   # start building the board in the background at startup
 
+    # --- accounts (public site): landing, sign-in, onboarding, per-user lists ---
+    auth = os.environ.get("STOCKSKILL_AUTH", "").lower() in ("1", "true", "yes")
+    if auth:
+        from ..accounts import auth as ACCT
+        ACCT.init_app(app, board, tickers_path, cache_dir)
+
+        @app.get("/login")
+        def login_page():
+            from ..accounts.pages import login_html
+            u = ACCT.current_user()
+            if u:
+                return redirect(ACCT._next_for(u))
+            return login_html("login", ACCT.google_client_id(), request.args.get("next", ""))
+
+        @app.get("/signup")
+        def signup_page():
+            from ..accounts.pages import login_html
+            if ACCT.current_user():
+                return redirect("/")
+            return login_html("signup", ACCT.google_client_id())
+
+        @app.get("/welcome")
+        def welcome_page():
+            from ..accounts.pages import welcome_html
+            return welcome_html()
+
+        @app.get("/account")
+        def account_page():
+            from ..accounts.pages import account_html
+            return account_html()
+
+    @app.get("/terms")
+    def terms_page():
+        from ..accounts.pages import legal_html
+        return legal_html("terms")
+
+    @app.get("/privacy")
+    def privacy_page():
+        from ..accounts.pages import legal_html
+        return legal_html("privacy")
+
     @app.get("/")
     def index():
+        if auth:
+            from ..accounts import db as ADB
+            from ..accounts.pages import landing_html, personalize_board
+            u = ACCT.current_user()
+            if not u:
+                return landing_html()
+            if not u.get("onboarded") or ACCT.needs_terms(u):
+                return redirect("/welcome")
+            return personalize_board(board.html(), u, ADB.watchlist(u["id"]))
         return board.html()
 
     @app.get("/analyze")
@@ -165,6 +215,15 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
         body = request.get_json(silent=True) or {}
         tickers = body.get("tickers") or request.args.get("tickers") or request.form.get("tickers") or ""
         res = board.add_bulk(tickers)
+        if auth and res.get("ok"):
+            # signed in: the tickers also go on this user's own watchlist
+            from ..accounts import db as ADB
+            from .watchlist_service import _TICKER_RE as _TK, parse_ticker_list
+            u = ACCT.current_user()
+            if u:
+                mine = [t for t in parse_ticker_list(tickers) if _TK.match(t)]
+                ADB.add_tickers(u["id"], mine)
+                res["mine"] = mine
         return jsonify(res), (200 if res.get("ok") else 400)
 
     @app.get("/api/watchlist/add_status/<job_id>")

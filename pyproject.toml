@@ -15,6 +15,7 @@ dependencies = [
     "pypdf>=6.19.0",
     "requests>=2.34.2",
     "tzdata>=2025.1",       # IANA tz DB for zoneinfo (Linux/slim containers lack it)
+    "webauthn>=2.0",
     "yfinance>=1.5.2",
 ]
 
