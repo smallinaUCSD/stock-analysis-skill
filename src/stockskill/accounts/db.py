@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   created_at REAL NOT NULL, last_seen REAL NOT NULL, ended_at REAL,
   method TEXT, ip TEXT, city TEXT, region TEXT, country TEXT, cc TEXT,
-  device TEXT, browser TEXT, os TEXT, revoked INTEGER NOT NULL DEFAULT 0
+  device TEXT, browser TEXT, os TEXT, revoked INTEGER NOT NULL DEFAULT 0, risk TEXT
 );
 CREATE INDEX IF NOT EXISTS sessions_user ON sessions (user_id, last_seen);
 CREATE TABLE IF NOT EXISTS login_failures (
@@ -116,6 +116,8 @@ def _migrate(c) -> None:
             c.execute(f"ALTER TABLE users ADD COLUMN {col} {decl}")
     if "channels" not in {r["name"] for r in c.execute("PRAGMA table_info(notifications)")}:
         c.execute("ALTER TABLE notifications ADD COLUMN channels TEXT")
+    if "risk" not in {r["name"] for r in c.execute("PRAGMA table_info(sessions)")}:
+        c.execute("ALTER TABLE sessions ADD COLUMN risk TEXT")
 
 
 def _row(r) -> dict | None:
@@ -182,6 +184,43 @@ def add_session(sid: str, uid: int, **info) -> None:
         c.execute(f"INSERT INTO sessions (id, user_id, created_at, last_seen, {', '.join(SESSION_COLS)}) "
                   f"VALUES (?,?,?,?,{','.join('?' * len(SESSION_COLS))})",
                   (sid, uid, now, now, *[info[k] for k in SESSION_COLS]))
+
+
+MAX_ACTIVE_SESSIONS = 20
+
+
+def cap_sessions(uid: int, keep: int = MAX_ACTIVE_SESSIONS) -> int:
+    """Sign out the least recently used devices beyond ``keep``."""
+    with conn() as c:
+        old = [r[0] for r in c.execute("SELECT id FROM sessions WHERE user_id=? AND ended_at IS NULL "
+                                       "ORDER BY last_seen DESC LIMIT -1 OFFSET ?", (uid, keep))]
+        for sid in old:
+            c.execute("UPDATE sessions SET ended_at=? WHERE id=?", (time.time(), sid))
+        return len(old)
+
+
+def set_session_risk(sid: str, risk: str | None) -> None:
+    with conn() as c:
+        c.execute("UPDATE sessions SET risk=? WHERE id=?", (risk, sid))
+
+
+def session_history(uid: int, exclude: str, days: float = 90) -> list[dict]:
+    """Earlier sign-ins to compare a new one with, newest first."""
+    with conn() as c:
+        return [dict(r) for r in c.execute(
+            "SELECT * FROM sessions WHERE user_id=? AND id != ? AND last_seen > ? ORDER BY last_seen DESC LIMIT 200",
+            (uid, exclude, time.time() - days * 86400))]
+
+
+def recent_failures(uid: int, seconds: float = 3600) -> int:
+    with conn() as c:
+        return c.execute("SELECT COUNT(*) FROM login_failures WHERE user_id=? AND ts > ?",
+                         (uid, time.time() - seconds)).fetchone()[0]
+
+
+def unread_count(uid: int) -> int:
+    with conn() as c:
+        return c.execute("SELECT COUNT(*) FROM notifications WHERE user_id=? AND read_at IS NULL", (uid,)).fetchone()[0]
 
 
 def get_session(sid: str) -> dict | None:

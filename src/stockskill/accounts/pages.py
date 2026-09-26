@@ -596,6 +596,7 @@ _AC_CSS = """
 .ss-row:first-child{border-top:none;padding-top:0}
 .ss-this{display:inline-block;font-size:11px;padding:1px 8px;border-radius:10px;border:1px solid var(--up);color:var(--up);margin-left:4px}
 .ss-old summary{cursor:pointer;color:var(--muted);margin-top:8px}
+.ss-odd{display:inline-block;font-size:11px;padding:1px 8px;border-radius:10px;border:1px solid var(--down);color:var(--down);margin-left:4px}
 .ac-sec h2{font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:500;margin:0 0 14px}
 .tk-list{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
 .tk{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--border-strong);border-radius:14px;padding:3px 4px 3px 10px;font-size:13px;background:var(--bg)}
@@ -719,7 +720,8 @@ function ssLoad(){ fetch('/api/me/sessions').then(function(r){return r.json();})
   var el=document.getElementById('ss-list'); if(!el||!d.ok) return; el.className='';
   var act=d.sessions.filter(function(x){ return x.active; }), old=d.sessions.filter(function(x){ return !x.active; });
   function row(x){ var when=new Date(x.signed_in*1000).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
-    return '<div class="ss-row"><span><b>'+esc((x.browser||'Browser')+' on '+(x.os||'unknown'))+'</b>'+(x.this?' <span class="ss-this">This device</span>':'')+
+    var odd=(x.unusual||[]).length?' <span class="ss-odd" title="'+esc(x.unusual.join(', '))+'">Unusual: '+esc(x.unusual.join(', '))+'</span>':'';
+    return '<div class="ss-row"><span><b>'+esc((x.browser||'Browser')+' on '+(x.os||'unknown'))+'</b>'+(x.this?' <span class="ss-this">This device</span>':'')+odd+
       '<br><span class="small muted">'+esc(x.where)+' · '+(x.active?ssAgo(x.last_seen):'signed out')+(x.method==='earlier sign-in'?' · first seen '+esc(when):' · signed in '+esc(when)+(x.method?' with '+esc(x.method):''))+'</span></span>'+
       (x.active&&!x.this?'<button class="btn ghost" type="button" data-ss="'+esc(x.id)+'">Sign out</button>':'')+'</div>'; }
   el.innerHTML=(act.map(row).join('')||'<p class="small muted">No other sign-ins.</p>')+
@@ -887,6 +889,24 @@ window.tdOpen=function(){ var l=document.getElementById('td-list'); if(typeof tr
     ITEMS.forEach(function(i){ i.read_at=i.read_at||1; }); document.getElementById('me-today').classList.remove('unread'); }); };
 window.tdClose=function(){ document.getElementById('td-drawer').classList.remove('show'); };
 document.addEventListener('keydown',function(ev){ if(ev.key==='Escape') tdClose(); });
+// signed in on several devices: catch up when this tab comes back into view (and each minute while it's open)
+var _syncAt=0;
+function meSync(){ if(document.hidden || Date.now()-_syncAt<15000) return; _syncAt=Date.now();
+  fetch('/api/me/sync',{cache:'no-store'}).then(function(r){ if(r.status===401){ location.href='/login'; return null; } return r.json(); }).then(function(d){
+    if(!d||!d.ok) return;
+    var now=d.tickers.slice().sort().join(','), had=Array.from(window.MYWL||[]).sort().join(',');
+    if(window.MYWL && now!==had){ window.MYWL=new Set(d.tickers);
+      if(typeof applyFilter==='function') applyFilter();
+      if(d.tickers.some(function(t){ return !document.querySelector('.card-item[data-ticker="'+t+'"]'); }) && typeof refreshWhenFree==='function') refreshWhenFree(); }
+    if(d.unread && !document.getElementById('me-today').classList.contains('unread')){
+      fetch('/api/me/notifications').then(function(r){return r.json();}).then(function(n){ ITEMS=n.items||[];
+        if(n.unread) document.getElementById('me-today').classList.add('unread'); }); }
+    var t=d.theme==='system'?null:d.theme, cur=document.documentElement.getAttribute('data-theme');
+    if(t!==cur){ try{ if(t) localStorage.setItem('wl_theme',t); else localStorage.removeItem('wl_theme'); }catch(_){}
+      if(t) document.documentElement.setAttribute('data-theme',t); else document.documentElement.removeAttribute('data-theme'); }
+  }).catch(function(){}); }
+document.addEventListener('visibilitychange', meSync); window.addEventListener('focus', meSync);
+setInterval(meSync, 60000);
 fetch('/api/me/notifications').then(function(r){return r.json();}).then(function(d){
   ITEMS=d.items||[]; if(d.unread) document.getElementById('me-today').classList.add('unread');
   var s=ITEMS.find(function(i){ return i.kind==='summary' && !i.read_at && (Date.now()/1000-i.created_at)<18*3600; });
@@ -904,6 +924,28 @@ def message_html(title: str, text: str) -> str:
             f'<div class="wz-card"><h1>{html.escape(title)}</h1><p class="lead" style="color:var(--muted)">{html.escape(text)}</p>'
             f'<a class="btn primary" href="/">Go to your watchlist</a></div></div>')
     return _shell(f"{title} · {BRAND}", body, _WZ_CSS + _LG_CSS)
+
+
+def not_me_html(tok: str | None) -> str:
+    """From an unusual-sign-in alert: confirm, then sign out every device."""
+    if not tok:
+        return message_html("This link has expired", "Sign in and open Account settings to see where you're signed "
+                            "in and sign out other devices, or reset your password from the sign-in page.")
+    body = f"""<div class="lg-wrap"><div class="wz-top">{_brand_link()}<a class="small" href="/">Home</a></div>
+<div class="wz-card" id="nm"><h1>Wasn't you?</h1>
+<p class="lead" style="color:var(--muted)">We'll sign out every device signed in to your account, including this one,
+and email you a link to choose a new password. Then turn on 2-step verification in Account settings.</p>
+<div class="err" id="err"></div>
+<button class="btn primary" id="go" type="button">Sign out everywhere</button></div></div>"""
+    js = ("document.getElementById('go').onclick=function(){ var b=this; b.disabled=true;"
+          "fetch('/security/not-me',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({t:"
+          + json.dumps(tok) + "})}).then(function(r){return r.json();}).then(function(d){"
+          "if(!d.ok){ b.disabled=false; document.getElementById('err').textContent=d.error; return; }"
+          "document.getElementById('nm').innerHTML='<h1>Done</h1><p class=\"lead\" style=\"color:var(--muted)\">We signed out '+d.signed_out+"
+          "' device'+(d.signed_out===1?'':'s')+'. '+(d.password?'Check your email for the link to choose a new password.':"
+          "'Sign in again with Google, and check your Google account\\u2019s security settings.')+'</p><a class=\"btn primary\" href=\"/login\">Sign in</a>'; });"
+          "};")
+    return _shell(f"Secure your account · {BRAND}", body, _WZ_CSS + _LG_CSS + _AUTH_CSS, js)
 
 
 SERVICE_WORKER = r"""

@@ -287,15 +287,105 @@ def forgot():
         return jsonify({"ok": False, "error": "Too many requests. Try again in an hour."}), 429
     u = db.by_email(email) if _EMAIL_RE.match(email) else None
     if u:
-        from itsdangerous import URLSafeTimedSerializer
-        tok = URLSafeTimedSerializer(notify._secret(), salt="reset").dumps(_reset_payload(u))
-        link = f"{notify.public_url()}/reset?t={tok}"
-        threading.Thread(target=notify.send_simple, args=(u["email"], "Reset your password", [
-            "Someone asked to reset the password for this account.",
-            f'<a href="{html.escape(link)}">Choose a new password</a> (the link works once, for one hour).',
-            "If it wasn't you, ignore this email; your password hasn't changed."]), daemon=True).start()
+        send_reset(u)
     # the same answer whether or not the account exists
     return jsonify({"ok": True})
+
+
+def send_reset(u: dict, why: str = "Someone asked to reset the password for this account.") -> None:
+    from itsdangerous import URLSafeTimedSerializer
+    from . import notify
+    tok = URLSafeTimedSerializer(notify._secret(), salt="reset").dumps(_reset_payload(u))
+    link = f"{notify.public_url()}/reset?t={tok}"
+    threading.Thread(target=notify.send_simple, args=(u["email"], "Reset your password", [
+        html.escape(why),
+        f'<a href="{html.escape(link)}">Choose a new password</a> (the link works once, for one hour).',
+        "If you didn't ask for this, ignore this email; your password hasn't changed."]), daemon=True).start()
+
+
+# --- unusual sign-ins -------------------------------------------------------------------------
+
+def unusual_sign_in(u: dict, new: dict, reasons: list[str]) -> None:
+    """Tell the person about a sign-in that doesn't look like them: email (always),
+    the Today panel, browser notifications and a text if they have those on."""
+    from itsdangerous import URLSafeTimedSerializer
+    from .. import geoip
+    from . import notify, risk
+    from .pages import BRAND
+    if not u or _limited(f"unusual:{u['id']}", 5, 3600):
+        return
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    when = datetime.now(ZoneInfo("America/New_York")).strftime("%a %b %-d at %-I:%M %p ET")
+    place = geoip.label(new) or "an unknown location"
+    device = f"{new.get('browser') or 'a browser'} on {new.get('os') or 'an unknown system'}"
+    tok = URLSafeTimedSerializer(notify._secret(), salt="notme").dumps({"u": u["id"], "s": new["id"]})
+    notme = f"{notify.public_url()}/security/not-me?t={tok}"
+    title = "Unusual sign-in to your account" if set(reasons) & {"failed attempts", "impossible travel", "new country"} \
+        else "New sign-in to your account"
+    lines = [f"Your {html.escape(BRAND)} account was signed in to on {html.escape(when)} from "
+             f"<b>{html.escape(place)}</b> (address {html.escape(new.get('ip') or 'unknown')}) using {html.escape(device)}.",
+             html.escape(risk.explain(reasons)),
+             "<b>If this was you,</b> there's nothing to do.",
+             f'<b>If it wasn\'t you,</b> <a href="{html.escape(notme)}">sign out everywhere and secure your account</a>. '
+             "We'll sign out every device and send you a link to choose a new password."]
+    threading.Thread(target=notify.send_simple, args=(u["email"], title, lines, notify.public_url() + "/account",
+                                                      "See where you're signed in"), daemon=True).start()
+    short = f"{place}, {device}"
+    try:
+        db.add_notification(u["id"], "security", title, "\n".join(html.unescape(notify._strip_tags(x)) for x in lines),
+                            "/account", f"signin:{new['id']}")
+    except Exception:  # noqa: BLE001
+        pass
+
+    def extra():
+        try:
+            notify.send_push(u["id"], title, short, "/account")
+        except Exception:  # noqa: BLE001
+            pass
+        if u.get("phone_verified") and u.get("phone"):
+            from . import sms
+            sms.send_sms(u["phone"], f"{BRAND}: {title.lower().capitalize()} from {short}. Not you? {notme}")
+    threading.Thread(target=extra, daemon=True).start()
+
+
+def _notme_payload(tok: str) -> dict | None:
+    from itsdangerous import BadSignature, URLSafeTimedSerializer
+    from . import notify
+    try:
+        return URLSafeTimedSerializer(notify._secret(), salt="notme").loads(tok or "", max_age=14 * 86400)
+    except BadSignature:
+        return None
+
+
+@bp.get("/security/not-me")
+def not_me_page():
+    """The link in an unusual sign-in alert. A page with a button (a POST), so
+    an email scanner opening the link doesn't sign anyone out."""
+    from .pages import not_me_html
+    d = _notme_payload(request.args.get("t") or "")
+    if not d or not db.get_user(d["u"]):
+        return not_me_html(None), 400
+    return not_me_html(request.args.get("t"))
+
+
+@bp.post("/security/not-me")
+def not_me():
+    d = _notme_payload(_body().get("t") or "")
+    u = db.get_user(d["u"]) if d else None
+    if not u:
+        return jsonify({"ok": False, "error": "This link has expired. Sign in and use Account settings instead."}), 400
+    n = db.revoke_sessions(u["id"])
+    from .auth import _SEEN
+    _SEEN.clear()
+    if session.get("uid") == u["id"]:
+        session.clear()
+    if u.get("password_hash"):
+        send_reset(u, "You told us a sign-in to your account wasn't you, so we signed out every device.")
+    notice(u, "We signed out all your devices", f"At your request we signed out {n} device(s). "
+           + ("Use the link we emailed to choose a new password, then sign in again." if u.get("password_hash")
+              else "Sign in again with Google, and check your Google account's security settings."))
+    return jsonify({"ok": True, "signed_out": n, "password": bool(u.get("password_hash"))})
 
 
 @bp.post("/auth/reset")

@@ -59,6 +59,7 @@ _EXTRA_CSS = """
 .ad-w td{vertical-align:top}
 .ad-w td small{display:block;color:var(--muted);font-size:12px;margin:1px 0 0}
 .ad-w tr.pick{cursor:pointer} .ad-w tr.pick:hover td{background:var(--surface-2)}
+.ad-w td small.ad-odd{color:var(--down)}
 .ad-st{display:inline-block;font-size:12px;padding:1px 8px;border-radius:10px;border:1px solid var(--border)}
 .ad-st.on{color:var(--up);border-color:var(--up)} .ad-st.bad{color:var(--down);border-color:var(--down)}
 .ad-t td small{color:var(--muted);margin-left:6px}
@@ -116,7 +117,8 @@ function render(d){
     '<div class="ad-kpis">'+kpi('Requests, 24h',d.requests_24h,'p50 '+ms(d.p50_ms)+' · p95 '+ms(d.p95_ms))+
     kpi('Server errors, 24h',d.errors_24h,(errRate*100).toFixed(2)+'% of requests',errRate>0.02)+
     kpi('Board age',ago(b.age),(b.session||'')+(b.building?' · rebuilding':''),b.session==='open'&&b.age>2700)+
-    kpi('Failed sign-ins, 24h',d.failures_24h||0,'wrong passwords and codes',(d.failures_24h||0)>20)+kpi('Live prices',(h.quotes||{}).count||0,'median age '+ago((h.quotes||{}).median_age))+kpi('Analytics data',(h.db_mb||0)+' MB','')+'</div>'+
+    kpi('Failed sign-ins, 24h',d.failures_24h||0,'wrong passwords and codes',(d.failures_24h||0)>20)+
+    kpi('Unusual sign-ins, 7d',d.unusual_7d||0,'new device, country or travel',(d.unusual_7d||0)>0)+kpi('Live prices',(h.quotes||{}).count||0,'median age '+ago((h.quotes||{}).median_age))+kpi('Analytics data',(h.db_mb||0)+' MB','')+'</div>'+
     '<div class="ad-grid"><div class="ad-card"><h3>People per day</h3>'+lines(d.daily||[],['users','visitors'],['var(--accent)','var(--axis)'])+
       '<div class="ad-leg"><span><i style="background:var(--accent)"></i>Signed in</span><span><i style="background:var(--axis)"></i>Anonymous</span></div></div>'+
     '<div class="ad-card"><h3>Page views and sign-ups per day</h3>'+lines((d.daily||[]).map(function(r){ var s=(d.signups||[]).find(function(x){return x.day===r.day;}); return {day:r.day,pages:r.pages,signups:(s?s.n:0)*10}; }),['pages','signups'],['var(--ink)','var(--up)'])+
@@ -168,7 +170,7 @@ function renderWho(){ if(!D) return; var q=(document.getElementById('ad-q').valu
   var si=(D.signins||[]).filter(match(q));
   document.getElementById('ad-signins').innerHTML=si.length?'<div class="ad-scroll"><table class="ad-t ad-w"><thead><tr><th>Person</th><th>Signed in</th><th>From</th><th>Device</th><th>How</th><th>Last active</th><th>Length</th><th>Status</th></tr></thead><tbody>'+
     si.slice(0,150).map(function(r){ return '<tr><td>'+esc(r.name||r.email)+'<small>'+esc(r.name?r.email:'')+'</small></td><td>'+esc(when(r.created_at))+'</td><td>'+esc(place(r))+'<small>'+esc(r.ip||'')+'</small></td><td>'+
-      esc(dev(r))+'</td><td>'+esc(r.method||'')+'</td><td>'+esc(rel(now-r.last_seen))+'</td><td>'+esc(dur((r.ended_at||r.last_seen)-r.created_at))+'</td><td>'+status(r)+'</td></tr>'; }).join('')+'</tbody></table></div>'
+      esc(dev(r))+(r.risk?'<small class="ad-odd">Unusual: '+esc(r.risk.replace(/,/g,', '))+'</small>':'')+'</td><td>'+esc(r.method||'')+'</td><td>'+esc(rel(now-r.last_seen))+'</td><td>'+esc(dur((r.ended_at||r.last_seen)-r.created_at))+'</td><td>'+status(r)+'</td></tr>'; }).join('')+'</tbody></table></div>'
     :'<div class="muted small">No sign-ins '+(q?'match.':'yet.')+'</div>';
   var fl=(D.failures||[]).filter(function(f){ return !q || [f.email,f.ip,f.country].join(' ').toLowerCase().indexOf(q.toLowerCase())>=0; });
   document.getElementById('ad-fail').innerHTML=fl.length?'<div class="ad-scroll"><table class="ad-t ad-w"><thead><tr><th>Account</th><th>When</th><th>From</th><th>Why</th></tr></thead><tbody>'+

@@ -105,7 +105,7 @@ def is_public(ip: str) -> bool:
 
 @lru_cache(maxsize=4096)
 def lookup(ip: str) -> dict:
-    """{"city", "region", "country", "cc"} (any may be missing), or {}."""
+    """{"city", "region", "country", "cc", "lat", "lon"} (any may be missing), or {}."""
     if not is_public(ip):
         return {}
     r = _reader()
@@ -118,9 +118,11 @@ def lookup(ip: str) -> dict:
 
     def name(x):
         return ((x or {}).get("names") or {}).get("en")
+    loc = rec.get("location") or {}
     out = {"city": name(rec.get("city")), "region": name((rec.get("subdivisions") or [{}])[0]),
-           "country": name(rec.get("country")), "cc": (rec.get("country") or {}).get("iso_code")}
-    return {k: v for k, v in out.items() if v}
+           "country": name(rec.get("country")), "cc": (rec.get("country") or {}).get("iso_code"),
+           "lat": loc.get("latitude"), "lon": loc.get("longitude")}
+    return {k: v for k, v in out.items() if v is not None and v != ""}
 
 
 def label(g: dict | None) -> str:

@@ -22,7 +22,7 @@ def _pages():
             "politician": PP.politician_html("x"), "sw": "<script>" + P.SERVICE_WORKER + "</script>",
             "financials": FP.financials_html(""), "financials_t": FP.financials_html("NVDA"),
             "earnings": EP.earnings_html(""), "screener": SP.screener_html(), "economy": ECP.economy_html(),
-            "graph": GP.graph_html("NVDA"), "forgot": P.forgot_html(), "reset": P.reset_html("tok"),
+            "graph": GP.graph_html("NVDA"), "forgot": P.forgot_html(), "notme": P.not_me_html("tok"), "reset": P.reset_html("tok"),
             "markets": MK.markets_html(), "fund": FD.fund_html(1067983), "admin": AD.admin_html(),
             "served_board": __import__("stockskill.watchlist.render", fromlist=["x"]).render_watchlist([], served=True)}
 

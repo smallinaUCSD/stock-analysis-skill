@@ -44,6 +44,7 @@ GENDERS = {"female": "Female", "male": "Male", "nonbinary": "Non-binary", "self"
 REFERRALS = {"friend": "A friend or colleague", "search": "Search engine", "social": "Social media",
              "reddit": "Reddit or a forum", "news": "News or a blog", "other": "Other"}
 _PUBLIC_PATHS = {"/", "/login", "/signup", "/terms", "/privacy", "/healthz", "/favicon.ico", "/logout",
+                 "/security/not-me",
                  "/sw.js", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/apple-touch-icon.png",
                  "/notifications/verify", "/notifications/unsubscribe", "/api/board/meta",
                  "/forgot", "/reset", "/account/email/confirm", "/api/t"}
@@ -112,6 +113,7 @@ def current_user() -> dict | None:
 
 
 _SEEN: dict[str, tuple[float, bool]] = {}         # sid -> (checked at, still valid)
+IDLE_DAYS = 30                                    # same as the cookie's lifetime
 
 
 def _session_ok(uid: int) -> bool:
@@ -127,6 +129,9 @@ def _session_ok(uid: int) -> bool:
         return hit[1]
     row = db.get_session(sid)
     ok = bool(row) and row["user_id"] == uid and not row["revoked"] and row["ended_at"] is None
+    if ok and now - row["last_seen"] > IDLE_DAYS * 86400:     # unused for a month: signed out
+        db.end_session(sid)
+        ok = False
     if ok:
         db.touch_session(sid)
     if len(_SEEN) > 5000:
@@ -144,13 +149,29 @@ def _client() -> dict:
     return {"ip": ip, **geoip.lookup(ip), "device": dev[0], "browser": dev[1], "os": dev[2]}
 
 
-def _record_session(uid: int, method: str) -> None:
+def _record_session(uid: int, method: str) -> dict | None:
     sid = secrets.token_urlsafe(18)
     try:
-        db.add_session(sid, uid, method=method, **_client())
+        info = _client()
+        db.add_session(sid, uid, method=method, **info)
         session["sid"] = sid
+        db.cap_sessions(uid)
+        return {"id": sid, **info}
     except Exception:  # noqa: BLE001
-        pass
+        return None
+
+
+def _check_sign_in(uid: int, new: dict) -> list[str]:
+    """Flag a sign-in that's unusual for this person, and tell them."""
+    from .. import geoip
+    from . import risk
+    reasons = risk.assess({**new, "ts": time.time()}, db.session_history(uid, exclude=new["id"]),
+                          db.recent_failures(uid), where=geoip.lookup)
+    if reasons:
+        db.set_session_risk(new["id"], ",".join(reasons))
+        from .security import unusual_sign_in
+        unusual_sign_in(db.get_user(uid), new, reasons)
+    return reasons
 
 
 def needs_terms(u: dict) -> bool:
@@ -161,7 +182,12 @@ def _login(uid: int, method: str) -> None:
     session.clear()
     session["uid"] = uid
     session.permanent = True
-    _record_session(uid, method)
+    new = _record_session(uid, method)
+    if new and method != "password (new account)":
+        try:
+            _check_sign_in(uid, new)
+        except Exception:  # noqa: BLE001 - a failed check never blocks signing in
+            pass
     db.update_user(uid, last_login=time.time())
     g.pop("user", None)
 
@@ -665,8 +691,19 @@ def my_sessions():
         items.append({"id": r["id"], "this": r["id"] == cur, "active": r["ended_at"] is None,
                       "method": r["method"], "where": geoip.label(r) or "Unknown location",
                       "device": r["device"], "browser": r["browser"], "os": r["os"],
+                      "unusual": [x for x in (r.get("risk") or "").split(",") if x],
                       "signed_in": r["created_at"], "last_seen": r["last_seen"], "ended": r["ended_at"]})
     return jsonify({"ok": True, "sessions": items, "attribution": geoip.ATTRIBUTION})
+
+
+@bp.get("/api/me/sync")
+@login_required
+def sync():
+    """What an open page on another device needs to catch up: the watchlist,
+    unread notifications and theme."""
+    u = current_user()
+    return jsonify({"ok": True, "tickers": db.watchlist(u["id"]), "unread": db.unread_count(u["id"]),
+                    "theme": u.get("theme") or "system"})
 
 
 @bp.post("/api/me/sessions/revoke")

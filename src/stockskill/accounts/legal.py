@@ -14,7 +14,7 @@ from __future__ import annotations
 import html
 import os
 
-TERMS_VERSION = "2026-09-26"
+TERMS_VERSION = "2026-09-26.2"
 PRIVACY_VERSION = "2026-09-26.2"
 EFFECTIVE = "September 26, 2026"
 
@@ -86,7 +86,7 @@ create accounts by automated means, or impersonate anyone. We may refuse, suspen
 discretion, including for violations of these Terms.</p>
 <p><b>Text message alerts.</b> If you give us a mobile number and agree to texts, {op} will send the recurring
 alerts you choose (daily market summaries, big market moves, and trades by the politicians and funds you
-follow) and one-time confirmation codes. Message frequency varies, usually 1 to 5 a day. Message and data
+follow), security alerts about unusual sign-ins to your account, and one-time confirmation codes. Message frequency varies, usually 1 to 5 a day. Message and data
 rates may apply. Reply STOP to any message to stop all texts, or HELP for help; you can also turn texts off or
 remove your number in account settings. Agreeing to texts is not a condition of using the Service. Carriers
 are not liable for delayed or undelivered messages. Texts can be delayed and are not a substitute for checking

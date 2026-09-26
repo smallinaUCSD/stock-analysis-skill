@@ -291,12 +291,14 @@ def _account_stats(users_db: str | None, since: str) -> dict:
         out["signins"] = [dict(r) for r in c.execute(
             """SELECT s.id, s.user_id, u.email, TRIM(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,'')) AS name,
                       s.method, s.created_at, s.last_seen, s.ended_at, s.revoked, s.ip, s.city, s.region, s.country,
-                      s.device, s.browser, s.os
+                      s.device, s.browser, s.os, s.risk
                FROM sessions s JOIN users u ON u.id = s.user_id
                WHERE s.created_at >= ? OR s.ended_at IS NULL ORDER BY s.created_at DESC LIMIT 200""", (ts0,))]
         out["failures"] = [dict(r) for r in c.execute(
             """SELECT f.ts, u.email, f.ip, f.country, f.reason FROM login_failures f
                LEFT JOIN users u ON u.id = f.user_id ORDER BY f.ts DESC LIMIT 50""")]
+        out["unusual_7d"] = c.execute("SELECT COUNT(*) FROM sessions WHERE risk IS NOT NULL AND created_at > ?",
+                                      (time.time() - 7 * 86400,)).fetchone()[0]
         out["failures_24h"] = c.execute("SELECT COUNT(*) FROM login_failures WHERE ts > ?",
                                         (time.time() - 86400,)).fetchone()[0]
         out["people"] = [dict(r) for r in c.execute(
@@ -310,7 +312,7 @@ def _account_stats(users_db: str | None, since: str) -> dict:
                         ORDER BY s.created_at DESC LIMIT 1) AS last_place
                FROM users u ORDER BY COALESCE(last_seen, u.last_login, u.created_at) DESC LIMIT 300""", (ts0,))]
     except sqlite3.OperationalError:                   # an older database without these tables
-        out.update({"signins": [], "failures": [], "failures_24h": 0, "people": []})
+        out.update({"signins": [], "failures": [], "failures_24h": 0, "unusual_7d": 0, "people": []})
     # alerts sent per day, by type, and how many went out by email / push / text
     kind = ("CASE WHEN kind = 'summary' AND dedupe LIKE '%:pre' THEN 'Pre-market summary' "
             "WHEN kind = 'summary' AND dedupe LIKE '%:post' THEN 'Post-market summary' "
