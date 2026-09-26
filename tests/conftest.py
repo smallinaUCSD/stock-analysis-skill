@@ -46,3 +46,5 @@ def _analytics_to_tmp(tmp_path, monkeypatch):
     """Analytics from the accounts tests go to a throwaway file, never data/."""
     monkeypatch.setenv("STOCKSKILL_ANALYTICS_DB", str(tmp_path / "analytics.db"))
     monkeypatch.delenv("STOCKSKILL_ADMINS", raising=False)
+    # texts never reach a real Messages helper from a test
+    monkeypatch.setenv("STOCKSKILL_IMESSAGE_DIR", str(tmp_path / "imessage"))

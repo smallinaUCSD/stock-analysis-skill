@@ -15,7 +15,7 @@ import html
 import os
 
 TERMS_VERSION = "2026-09-26.2"
-PRIVACY_VERSION = "2026-09-26.2"
+PRIVACY_VERSION = "2026-09-26.3"
 EFFECTIVE = "September 26, 2026"
 
 
@@ -248,8 +248,8 @@ advertising.</b> We share it only:</p>
 <li>with service providers that host or deliver the Service for us (for example our hosting and network
 providers), who may use it only to provide those services;</li>
 <li>with Google, only if you choose to sign in with Google;</li>
-<li>with our email provider, to deliver emails you asked for, with our text-message provider (Twilio), to deliver
-texts you asked for, and with your browser's push service, to deliver browser notifications you turned on;</li>
+<li>with our email provider, to deliver emails you asked for, with Apple (iMessage) or our text-message provider
+(Twilio), to deliver texts you asked for, and with your browser's push service, to deliver browser notifications you turned on;</li>
 <li>when required by law, subpoena or court order, or to protect the rights, property or safety of us, our
 users or others;</li>
 <li>in connection with a merger, acquisition or sale of assets, in which case this policy continues to apply

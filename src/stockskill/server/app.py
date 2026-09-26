@@ -105,6 +105,8 @@ def _observe(app, ACCT) -> None:
                   "db_mb": round(os.path.getsize(OBS.db_path()) / 1e6, 1) if os.path.exists(OBS.db_path()) else 0}
         from .. import geoip
         health["geo_db"] = os.path.exists(geoip.db_path())
+        from ..accounts import sms as _S
+        health["texts"] = _S.provider()
         return jsonify({"ok": True, **OBS.report(days), "retention": OBS.retention(), "health": health,
                         "geo_attr": geoip.ATTRIBUTION})
 

@@ -513,7 +513,7 @@ def me():
     return jsonify({"ok": True, "user": _public_user(u), "watchlist": db.watchlist(u["id"]),
                     "passkeys": db.passkeys(u["id"]), "follows": db.follows(u["id"]),
                     "push_key": notify.vapid_public_key(), "email_ready": notify.email_ready(),
-                    "push_count": len(db.push_subs(u["id"])), "sms_ready": _sms().sms_ready(),
+                    "push_count": len(db.push_subs(u["id"])), "sms_ready": _sms().sms_ready(), "sms_via": _sms().provider(),
                     "funds": [[f"fund:{cik}", name, mgr] for name, mgr, cik in _funds()],
                     # ordered [key, label] pairs (a JSON object would be re-sorted alphabetically)
                     "options": {k: [[a, b] for a, b in m.items()] for k, m in (

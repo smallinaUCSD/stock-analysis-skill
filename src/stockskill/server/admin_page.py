@@ -118,7 +118,8 @@ function render(d){
     kpi('Server errors, 24h',d.errors_24h,(errRate*100).toFixed(2)+'% of requests',errRate>0.02)+
     kpi('Board age',ago(b.age),(b.session||'')+(b.building?' · rebuilding':''),b.session==='open'&&b.age>2700)+
     kpi('Failed sign-ins, 24h',d.failures_24h||0,'wrong passwords and codes',(d.failures_24h||0)>20)+
-    kpi('Unusual sign-ins, 7d',d.unusual_7d||0,'new device, country or travel',(d.unusual_7d||0)>0)+kpi('Live prices',(h.quotes||{}).count||0,'median age '+ago((h.quotes||{}).median_age))+kpi('Analytics data',(h.db_mb||0)+' MB','')+'</div>'+
+    kpi('Unusual sign-ins, 7d',d.unusual_7d||0,'new device, country or travel',(d.unusual_7d||0)>0)+kpi('Live prices',(h.quotes||{}).count||0,'median age '+ago((h.quotes||{}).median_age))+kpi('Analytics data',(h.db_mb||0)+' MB','')+kpi('Text messages',h.texts==='imessage'?'iMessage':h.texts==='twilio'?'Twilio':'Off',
+      h.texts==='imessage'?'sent from the Mac mini':h.texts?'SMS':'run imessage_setup.sh on the Mac mini')+'</div>'+
     '<div class="ad-grid"><div class="ad-card"><h3>People per day</h3>'+lines(d.daily||[],['users','visitors'],['var(--accent)','var(--axis)'])+
       '<div class="ad-leg"><span><i style="background:var(--accent)"></i>Signed in</span><span><i style="background:var(--axis)"></i>Anonymous</span></div></div>'+
     '<div class="ad-card"><h3>Page views and sign-ups per day</h3>'+lines((d.daily||[]).map(function(r){ var s=(d.signups||[]).find(function(x){return x.day===r.day;}); return {day:r.day,pages:r.pages,signups:(s?s.n:0)*10}; }),['pages','signups'],['var(--ink)','var(--up)'])+

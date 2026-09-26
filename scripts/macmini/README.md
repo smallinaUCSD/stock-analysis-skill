@@ -55,3 +55,30 @@ Logs are in `logs/` (trimmed to the last 5,000 lines daily).
 
 The refresh times use the Mac's clock, so set its time zone to Eastern (or
 shift the times in `install.sh`) so 16:10 lands after the US close.
+
+## Text alerts by iMessage (free)
+
+The site can send its text alerts (summaries, big moves, politician trades,
+sign-in alerts, confirmation codes) as iMessages from this Mac instead of
+paying for Twilio. macOS only lets a logged-in user's session control
+Messages, so a small helper does the sending:
+
+1. Log in on the Mac mini's screen (or Screen Sharing) with the account that
+   should send the texts, open **Messages** and sign in to iMessage. A
+   separate Apple ID just for the site is best, so texts don't come from your
+   personal number.
+2. In Terminal, as that account (no sudo), with your own number for a test:
+
+   ```bash
+   ~/stock-analysis-skill/scripts/macmini/imessage_setup.sh +15551234567
+   ```
+
+   (Use the repo's real path if it lives in another user's home.) macOS asks
+   whether the helper may control Messages: click **OK**.
+3. Turn on **System Settings > Users & Groups > Automatically log in as** that
+   account, so the helper is back after a restart.
+
+The admin page shows "Text messages: iMessage" when it's working. iMessages
+only reach iPhones, iPads and Macs; for other phones, set up Twilio (see
+`.env.example`), which is used whenever the iMessage helper isn't running.
+Failed sends are kept for 7 days in `/Users/Shared/smi-imessage/failed/`.

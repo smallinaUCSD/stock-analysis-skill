@@ -1071,7 +1071,7 @@ function nfHTML(me, groups){
    '<label class="nf-ch"><input type="checkbox" id="nf-inapp"'+(NF.inapp?' checked':'')+'><span><b>Today panel in the app</b><small>Your summary and alerts waiting on your watchlist when you sign in.</small></span></label>'+
    '<label class="nf-ch"><input type="checkbox" id="nf-sms"'+(NF.sms?' checked':'')+'><span><b>Text messages</b><small id="nf-sms-note">'+
      (n.phone_verified?'To '+esc(n.phone)+'.':n.phone?'To '+esc(n.phone)+' (not confirmed yet).':'Summaries and alerts as short texts to your phone.')+
-     (me.sms_ready?'':' Texts start once they\'re switched on for the site.')+'</small></span></label>'+
+     (me.sms_via==='imessage'?' Sent by iMessage, so they reach iPhones, iPads and Macs.':me.sms_ready?'':' Texts start once they\'re switched on for the site.')+'</small></span></label>'+
    '<div class="nf-phone" id="nf-phone"'+(NF.sms?'':' hidden')+'>'+
      '<div id="nf-ph-have"'+(n.phone?'':' hidden')+'><span class="small">Your number: <b id="nf-ph-mask">'+esc(n.phone||'')+'</b></span> '+
        '<a id="nf-ph-change" class="small" style="cursor:pointer">Change</a> · <a id="nf-ph-rm" class="small" style="cursor:pointer">Remove</a></div>'+

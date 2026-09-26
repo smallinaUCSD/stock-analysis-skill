@@ -1,9 +1,12 @@
-"""Text-message alerts through Twilio's REST API (no SDK).
+"""Text-message alerts, sent one of two ways:
 
-Off until the host sets TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and either
-TWILIO_FROM (a Twilio number, +1...) or TWILIO_MESSAGING_SERVICE_SID. US
-numbers need a registered sender (toll-free verification or A2P 10DLC) before
-carriers will deliver. Twilio handles STOP / HELP replies on its own.
+* **iMessage from the Mac mini** (free): the site drops each message into a
+  shared folder and a small helper in the logged-in user's session sends it
+  through Messages (scripts/macmini/imessage_setup.sh installs it). Used when
+  that helper is running (its heartbeat is fresh). Reaches Apple devices only.
+* **Twilio** (paid SMS to any phone): TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and
+  TWILIO_FROM or TWILIO_MESSAGING_SERVICE_SID. US numbers need a registered
+  sender (toll-free verification or A2P 10DLC). Twilio handles STOP / HELP.
 """
 
 from __future__ import annotations
@@ -20,10 +23,48 @@ import requests
 MAX_LEN = 320                      # two SMS segments
 
 
-def sms_ready() -> bool:
+def twilio_ready() -> bool:
     e = os.environ.get
     return bool(e("TWILIO_ACCOUNT_SID") and e("TWILIO_AUTH_TOKEN")
                 and (e("TWILIO_FROM") or e("TWILIO_MESSAGING_SERVICE_SID")))
+
+
+def imessage_dir() -> str:
+    return os.environ.get("STOCKSKILL_IMESSAGE_DIR") or "/Users/Shared/smi-imessage"
+
+
+def imessage_ready(max_age: float = 120.0) -> bool:
+    """The Mac's Messages helper is running (it touches a heartbeat every 2 s)."""
+    try:
+        return time.time() - os.path.getmtime(os.path.join(imessage_dir(), "heartbeat")) < max_age
+    except OSError:
+        return False
+
+
+def provider() -> str | None:
+    """How texts go out right now: "imessage", "twilio" or None."""
+    return "imessage" if imessage_ready() else "twilio" if twilio_ready() else None
+
+
+def sms_ready() -> bool:
+    return provider() is not None
+
+
+def _queue_imessage(to: str, body: str) -> tuple[bool, str | None]:
+    """Hand one message to the Messages helper: <spool>/outbox/<id>.msg, the
+    number on line 1 and the text after it, readable by the helper's user."""
+    out = os.path.join(imessage_dir(), "outbox")
+    name = f"{int(time.time() * 1000)}-{secrets.token_hex(4)}.msg"
+    tmp = os.path.join(out, "." + name + ".tmp")
+    try:
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o660)
+        with os.fdopen(fd, "w") as f:
+            f.write(to + "\n" + body.replace("\r", ""))
+        os.chmod(tmp, 0o660)
+        os.replace(tmp, os.path.join(out, name))
+        return True, None
+    except OSError as ex:
+        return False, f"Couldn't hand the message to Messages ({ex.strerror or ex})."
 
 
 def normalize_phone(raw: str | None) -> str | None:
@@ -44,8 +85,13 @@ def mask(phone: str | None) -> str:
 
 
 def send_sms(to: str, body: str) -> tuple[bool, str | None]:
-    """(sent, error)."""
-    if not sms_ready():
+    """(sent, error). iMessage when the Mac's helper is running, else Twilio."""
+    if not re.fullmatch(r"\+[1-9]\d{7,14}", to or ""):
+        return False, "That isn't a valid phone number."
+    how = provider()
+    if how == "imessage":
+        return _queue_imessage(to, body[:2000])
+    if how is None:
         return False, "Text messages aren't set up on this server yet."
     e = os.environ.get
     data = {"To": to, "Body": body[:MAX_LEN]}
