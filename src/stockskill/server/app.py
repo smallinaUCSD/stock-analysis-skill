@@ -16,6 +16,7 @@ numbers of its own, and emits analysis, not buy/sell/hold advice.
 from __future__ import annotations
 
 import html
+import os
 import re
 
 from flask import Flask, jsonify, redirect, request
@@ -105,6 +106,64 @@ def _observe(app, ACCT) -> None:
         return jsonify({"ok": True, **OBS.report(days), "retention": OBS.retention(), "health": health})
 
 
+def _fast_local_time() -> None:
+    """macOS: in a forked process (every gunicorn worker) each local-time call
+    re-reads the time-zone file, ~40 microseconds a call, which made some pages
+    hundreds of milliseconds slower. A TZ given as a rule (the zone file's own
+    last line, e.g. PST8PDT,M3.2.0,M11.1.0) needs no file, and gives the same
+    local time. Skipped when TZ is already set or elsewhere than macOS."""
+    import sys
+    import time as _t
+    if sys.platform != "darwin" or os.environ.get("TZ"):
+        return
+    try:
+        raw = open(os.path.realpath("/etc/localtime"), "rb").read()
+        rule = raw.rstrip(b"\n").rsplit(b"\n", 1)[-1].decode("ascii")
+        if raw[:4] == b"TZif" and re.fullmatch(r"[A-Za-z<][A-Za-z0-9<>+\-:,./]{2,60}", rule):
+            os.environ["TZ"] = rule
+            _t.tzset()
+    except (OSError, UnicodeDecodeError):
+        pass
+
+
+_GZIP_TYPES = ("text/html", "application/json", "text/css", "application/javascript", "text/javascript",
+               "image/svg+xml", "text/plain", "application/manifest+json")
+
+
+def _compress(app) -> None:
+    """Gzip text responses (the board page is ~10x smaller) and mark page
+    requests as foreground for the Finnhub rate limiter."""
+    import gzip
+    from ..data import finnhub
+
+    @app.before_request
+    def _fg_on():
+        finnhub.foreground(True)
+
+    @app.teardown_request
+    def _fg_off(exc):
+        finnhub.foreground(False)
+
+    @app.after_request
+    def _gzip(resp):
+        try:
+            if (resp.status_code < 200 or resp.status_code >= 300 or resp.direct_passthrough or resp.is_streamed
+                    or "Content-Encoding" in resp.headers
+                    or "gzip" not in (request.headers.get("Accept-Encoding") or "").lower()
+                    or (resp.mimetype or "") not in _GZIP_TYPES):
+                return resp
+            data = resp.get_data()
+            if len(data) < 1400:
+                return resp
+            resp.set_data(gzip.compress(data, 5))
+            resp.headers["Content-Encoding"] = "gzip"
+            resp.headers["Content-Length"] = str(len(resp.get_data()))
+            resp.vary.add("Accept-Encoding")
+        except Exception:  # noqa: BLE001
+            pass
+        return resp
+
+
 def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = None,
                holdings_path: str = "holdings.csv", public: bool | None = None,
                bmc_url: str | None = None) -> Flask:
@@ -131,12 +190,16 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
     except ValueError:
         cache_ttl = 1800.0
 
+    _fast_local_time()
     app = Flask(__name__)
+    _compress(app)
     board = WatchlistService(tickers_path=tickers_path, cache_dir=cache_dir,
                              public=public, bmc_url=bmc_url, period=period,
                              cache_ttl=cache_ttl)
     board.wait_ready(0)   # start building the board in the background at startup
     if os.environ.get("STOCKSKILL_KEEP_FRESH") == "1":
+        import threading as _th
+        _th.Thread(target=board.html, daemon=True).start()   # draw the board now, not on the first visit
         board.keep_fresh()    # rebuild whenever stale, not only when someone visits
         board.quote_feed()    # and keep live prices a few minutes fresh in between
 
@@ -240,7 +303,8 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
             if not u.get("onboarded") or ACCT.needs_terms(u):
                 return redirect("/welcome")
             is_admin = app.config.get("IS_ADMIN")
-            return personalize_board(board.html(), u, ADB.watchlist(u["id"]), admin=bool(is_admin and is_admin()))
+            mine = ADB.watchlist(u["id"])
+            return personalize_board(board.html_for(mine), u, mine, admin=bool(is_admin and is_admin()))
         return board.html()
 
     @app.get("/analyze")
@@ -320,7 +384,7 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
         # Overlay the live price (Finnhub) + extended-hours (Yahoo) so the page
         # shows the current price, not the days-old committed snapshot.
         status = market_status()
-        _overlay_live_prices([row], status)   # Finnhub: fast, reliable, one symbol
+        _overlay_live_prices([row], status, max_age=120.0)   # the feed's price if under 2 min old, else one Finnhub call
         # NOT live=True: that fetches Yahoo extended-hours synchronously, which
         # stalls on the host's datacenter IP and hangs the page (and the worker).
         # live=False clears any stale snapshot ext price without a network call;
@@ -991,7 +1055,8 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
         from datetime import date as _date, timedelta as _td
         since = (_date.today() - _td(days=window)).isoformat()
         tr = [t for t in tr if (t.get("filed") or "") >= since]
-        recent = [t for t in (data.get("trades") or []) if (t.get("filed") or "") >= (_date.today() - _td(days=90)).isoformat()]
+        since90 = (_date.today() - _td(days=90)).isoformat()
+        recent = [t for t in (data.get("trades") or []) if (t.get("filed") or "") >= since90]
         if tk:
             tr = [t for t in tr if (t.get("ticker") or "") == tk]
         if who:

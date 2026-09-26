@@ -282,13 +282,22 @@ def _refresh(days: int, cache_dir) -> None:
         _STATE["loading"] = False
 
 
+_PARSED: dict[str, tuple[float, dict]] = {}     # trades.json is several MB: parse once per change
+
+
 def recent_trades(cache_dir=None, days: int = 730, max_age: float = 6 * 3600) -> dict:
     """{"trades": [...], "as_of", "loading"}: the cached set, refreshed in the
     background when older than ``max_age`` (the first build takes a minute)."""
     path = os.path.join(_dir(cache_dir), "trades.json")
     data = None
     try:
-        data = json.load(open(path))
+        mt = os.path.getmtime(path)
+        hit = _PARSED.get(path)
+        if hit and hit[0] == mt:                    # parsed copy still matches the file
+            data = hit[1]
+        else:
+            data = json.load(open(path))
+            _PARSED[path] = (mt, data)
     except Exception:  # noqa: BLE001
         data = None
     stale = (data is None or time.time() - os.path.getmtime(path) > max_age

@@ -402,13 +402,15 @@ def build_watchlist_html(tickers_spec, *, period: str = "5y", workers: int = 5,
         _apply_ext_prices(rows, status, live=live)   # Yahoo ext during extended sessions
 
     now = datetime.now(ET)
-    html_out = render_watchlist(
-        rows, title=title, updated=now.strftime("%a %b %d, %I:%M %p") + " ET",
-        updated_ts=int(now.timestamp() * 1000),
-        status_badge=status.badge, status_label=status.label, alerts=alerts,
-        sectors=sectors, markets=markets, macro=macro,
-        refresh_seconds=refresh, served=served, public=public, bmc_url=bmc_url)
+    render_kw = dict(title=title, updated=now.strftime("%a %b %d, %I:%M %p") + " ET",
+                     updated_ts=int(now.timestamp() * 1000),
+                     status_badge=status.badge, status_label=status.label, alerts=alerts,
+                     sectors=sectors, markets=markets, macro=macro,
+                     refresh_seconds=refresh, served=served, public=public, bmc_url=bmc_url)
+    html_out = render_watchlist(rows, **render_kw)
     ok = sum(1 for r in rows if r.price is not None)
     meta = {"status": status, "refresh": refresh, "ok": ok, "n": len(rows),
-            "line": f"[{status.badge}] ({ok}/{len(rows)} tickers), reload {refresh}s"}
+            "line": f"[{status.badge}] ({ok}/{len(rows)} tickers), reload {refresh}s",
+            # what the page was drawn from, so a person's board can be drawn with only their stocks
+            "parts": (rows, render_kw)}
     return html_out, meta

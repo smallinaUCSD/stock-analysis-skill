@@ -26,22 +26,36 @@ def has_finnhub() -> bool:
     return bool(_key())
 
 
+_FG = threading.local()
+
+
+def foreground(on: bool) -> None:
+    """Mark this thread as serving someone who is waiting (a page request).
+    Background work (the board build, the quote feed, alerts) leaves a reserve
+    of the per-minute budget for these calls, so a page never queues behind a
+    few hundred background quotes."""
+    _FG.on = on
+
+
 class _RateLimiter:
-    """Allow at most ``max_calls`` per ``period`` seconds across threads."""
+    """Allow at most ``max_calls`` per ``period`` seconds across threads, with
+    the last ``reserve`` of them kept for foreground (page) calls."""
 
     def __init__(self, max_calls: int, period: float = 60.0):
         self.max = max_calls
         self.period = period
+        self.reserve = max(2, max_calls // 5) if max_calls > 4 else 0
         self.calls: deque[float] = deque()
         self.lock = threading.Lock()
 
     def acquire(self) -> None:
         while True:
+            cap = self.max if getattr(_FG, "on", False) else self.max - self.reserve
             with self.lock:
                 now = time.monotonic()
                 while self.calls and now - self.calls[0] >= self.period:
                     self.calls.popleft()
-                if len(self.calls) < self.max:
+                if len(self.calls) < cap:
                     self.calls.append(now)
                     return
                 wait = self.period - (now - self.calls[0])
@@ -133,7 +147,10 @@ def batch_quotes(tickers: list[str], workers: int = 4) -> dict[str, dict]:
     if not syms:
         return {}
 
+    fg = getattr(_FG, "on", False)            # the pool's threads inherit the caller's priority
+
     def one(sym: str):
+        _FG.on = fg
         _LIMITER.acquire()
         try:
             return sym, quote(sym)

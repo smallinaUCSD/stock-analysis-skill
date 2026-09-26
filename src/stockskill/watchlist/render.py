@@ -1280,6 +1280,8 @@ function doAddMany(list){
       document.getElementById('addq').value='';
       if(window.MYWL && (d.mine||[]).length){           // signed in: it's on your list now
         d.mine.forEach(t=>window.MYWL.add(t)); applyFilter();
+        // your board only carries your stocks: fetch the new one's card
+        if(d.mine.some(t=>!document.querySelector('.card-item[data-ticker="'+t+'"]'))) refreshWhenFree();
         if(!(d.queued||[]).length){ addMsg('added '+d.mine.join(', ')+' to your watchlist','ok'); return; } }
       if(!(d.queued||[]).length){ _addResult({added:[],failed:[],skipped:d.skipped||[]}); return; }
       _pollAdd(d.job);

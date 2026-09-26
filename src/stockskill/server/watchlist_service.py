@@ -63,6 +63,8 @@ class WatchlistService:
         self._added: list[str] = []          # user-added, in order
         self._loaded = False                 # persisted adds restored yet?
         self._html: str | None = None
+        self._parts = None                   # (rows, render kwargs) behind self._html
+        self._mine: dict = {}                # per-person boards drawn from _parts
         self._ts = 0.0
         self._refresh = 1800
         self._building = False
@@ -144,6 +146,8 @@ class WatchlistService:
             if serial is not None and serial < self._html_serial:
                 return self._html or html    # a build that started later already finished
             self._html = html
+            self._parts = meta.get("parts")
+            self._mine = {}
             self._html_gen = gen
             if serial is not None:
                 self._html_serial = serial
@@ -301,6 +305,34 @@ class WatchlistService:
             cached = self._cold_paint()
         self._start_bg_build()          # live refresh (or first build) in the background
         return cached if cached is not None else _WARMING_HTML
+
+    def html_for(self, tickers: list[str]) -> str:
+        """The board with only these stocks (a signed-in person's watchlist):
+        a fraction of the full page's size, drawn in a few milliseconds from the
+        last build. Falls back to the full board before the first build lands."""
+        base = self.html()
+        want = [t.upper() for t in tickers or []]
+        with self._lock:
+            parts, key = self._parts, tuple(want)
+            hit = self._mine.get(key) if parts else None
+        if hit is not None:
+            return hit
+        if not parts or not want:
+            return base
+        from ..watchlist import render_watchlist
+        rows_all, kw = parts
+        keep = set(want)
+        rows = [r for r in rows_all if r.ticker.upper() in keep]
+        if not rows:
+            return base
+        kw = dict(kw, alerts=[a for a in kw.get("alerts") or [] if (a.ticker or "").upper() in keep])
+        out = render_watchlist(rows, **kw)
+        with self._lock:
+            if self._parts is parts:          # still the current build
+                if len(self._mine) > 300:
+                    self._mine.clear()
+                self._mine[key] = out
+        return out
 
     def wait_ready(self, timeout: float = 0.0) -> bool:
         """Block up to ``timeout`` s for the first board (used at startup)."""
