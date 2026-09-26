@@ -15,6 +15,14 @@ def admin_html() -> str:
             "<span class=\"seg ad-seg\" id=\"ad-days\"><button data-d=\"7\">7 days</button><button data-d=\"30\" class=\"on\">30 days</button>"
             "<button data-d=\"90\">90 days</button></span>"
             "<button class=\"page-x\" onclick=\"return goBack(event)\" title=\"Close\" aria-label=\"Close\">" + icon("x", 17) + "</button></header>"
+            "<div id=\"ad-k\"></div>"
+            "<div class=\"ad-card ad-who\"><div class=\"ad-who-h\"><h3>People and sign-ins</h3>"
+            "<input id=\"ad-q\" class=\"ad-q\" type=\"search\" placeholder=\"Search a name, email or place\" autocomplete=\"off\"></div>"
+            "<div id=\"ad-people\" class=\"muted small\">Loading…</div>"
+            "<h3 style=\"margin-top:16px\">Sign-ins <span class=\"ad-sub\">newest first; click a person above to see only theirs</span></h3>"
+            "<div id=\"ad-signins\"></div>"
+            "<h3 style=\"margin-top:16px\">Failed sign-in attempts</h3><div id=\"ad-fail\"></div>"
+            "<p class=\"ad-note\" id=\"ad-geo\"></p></div>"
             "<div id=\"ad\" class=\"muted\">Loading…</div>"
             "<p class=\"ad-note\">First-party counts from this server's own logs. People = signed-in accounts plus anonymous "
             "visitors (a daily hash of IP and browser; the IP isn't stored). Bots and scripts are left out. Data is kept 90 days, as the Privacy Policy says.</p>"
@@ -42,6 +50,17 @@ _EXTRA_CSS = """
 .ad-bar{display:inline-block;height:7px;border-radius:4px;background:var(--accent);vertical-align:middle;margin-right:6px}
 .ad-leg{display:flex;gap:14px;font-size:12px;color:var(--muted);margin-top:4px} .ad-leg i{display:inline-block;width:12px;height:3px;margin-right:5px;vertical-align:3px}
 .ad-note{font-size:13px;color:var(--muted);line-height:1.55}
+.ad-who{margin-bottom:12px}
+.ad-who-h{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:6px}
+.ad-who-h h3{margin:0}
+.ad-q{height:34px;min-width:240px;flex:0 1 320px;border:1px solid var(--border-strong);border-radius:var(--r);background:var(--bg);color:var(--ink);padding:0 10px;font:14px var(--font)}
+.ad-sub{text-transform:none;letter-spacing:0;font-size:12px;color:var(--muted)}
+.ad-scroll{overflow-x:auto}
+.ad-w td{vertical-align:top}
+.ad-w td small{display:block;color:var(--muted);font-size:12px;margin:1px 0 0}
+.ad-w tr.pick{cursor:pointer} .ad-w tr.pick:hover td{background:var(--surface-2)}
+.ad-st{display:inline-block;font-size:12px;padding:1px 8px;border-radius:10px;border:1px solid var(--border)}
+.ad-st.on{color:var(--up);border-color:var(--up)} .ad-st.bad{color:var(--down);border-color:var(--down)}
 .ad-t td small{color:var(--muted);margin-left:6px}
 @media (max-width:800px){.ad-grid{grid-template-columns:1fr}.ad-kpis.k8{grid-template-columns:repeat(2,1fr)}.ad-t td small{display:none}}
 """
@@ -97,7 +116,7 @@ function render(d){
     '<div class="ad-kpis">'+kpi('Requests, 24h',d.requests_24h,'p50 '+ms(d.p50_ms)+' · p95 '+ms(d.p95_ms))+
     kpi('Server errors, 24h',d.errors_24h,(errRate*100).toFixed(2)+'% of requests',errRate>0.02)+
     kpi('Board age',ago(b.age),(b.session||'')+(b.building?' · rebuilding':''),b.session==='open'&&b.age>2700)+
-    kpi('Live prices',(h.quotes||{}).count||0,'median age '+ago((h.quotes||{}).median_age))+kpi('Analytics data',(h.db_mb||0)+' MB','')+'</div>'+
+    kpi('Failed sign-ins, 24h',d.failures_24h||0,'wrong passwords and codes',(d.failures_24h||0)>20)+kpi('Live prices',(h.quotes||{}).count||0,'median age '+ago((h.quotes||{}).median_age))+kpi('Analytics data',(h.db_mb||0)+' MB','')+'</div>'+
     '<div class="ad-grid"><div class="ad-card"><h3>People per day</h3>'+lines(d.daily||[],['users','visitors'],['var(--accent)','var(--axis)'])+
       '<div class="ad-leg"><span><i style="background:var(--accent)"></i>Signed in</span><span><i style="background:var(--axis)"></i>Anonymous</span></div></div>'+
     '<div class="ad-card"><h3>Page views and sign-ups per day</h3>'+lines((d.daily||[]).map(function(r){ var s=(d.signups||[]).find(function(x){return x.day===r.day;}); return {day:r.day,pages:r.pages,signups:(s?s.n:0)*10}; }),['pages','signups'],['var(--ink)','var(--up)'])+
@@ -124,7 +143,45 @@ function render(d){
     '<div class="ad-card"><h3>Weekly sign-up cohorts: came back within a week</h3>'+table((d.retention||[]).map(function(r){ return {week:r.week,signups:r.signups,returned:r.returned}; }),
       [['week','Week of'],['signups','Sign-ups'],['returned','Came back']])+'</div>';
 }
-function load(){ fetch('/api/admin/report?days='+DAYS).then(function(r){return r.json();}).then(function(d){ if(d.ok) render(d); else document.getElementById('ad').textContent='Not available.'; }); }
+function when(ts){ if(!ts) return ''; var d=new Date(ts*1000);
+  return d.toLocaleDateString(undefined,{month:'short',day:'numeric'})+', '+d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'}); }
+function dur(s){ if(s==null||s<0) return ''; if(s<60) return 'under a minute'; if(s<3600) return Math.round(s/60)+' min';
+  if(s<86400) return (s/3600).toFixed(s<36000?1:0)+' h'; return Math.round(s/86400)+' days'; }
+function place(r){ return [r.city,r.region,r.country].filter(function(x,i,a){ return x && a.indexOf(x)===i; }).join(', ')||'Unknown location'; }
+function dev(r){ return (r.browser||'?')+' on '+(r.os||'?')+(r.device&&r.device!=='desktop'?' ('+r.device+')':''); }
+function status(r){ var now=Date.now()/1000;
+  if(r.revoked) return '<span class="ad-st bad">Signed out remotely</span>';
+  if(r.ended_at) return '<span class="ad-st">Signed out</span>';
+  if(now-r.last_seen>30*86400) return '<span class="ad-st">Expired</span>';
+  return '<span class="ad-st on">'+(now-r.last_seen<300?'Online now':'Signed in')+'</span>'; }
+var D=null, WHO='';
+function rel(s){ return s<60?'just now':ago(s)+' ago'; }
+function match(q){ q=q.toLowerCase(); return function(r){ return !q || [r.name,r.email,r.city,r.region,r.country,r.ip,r.last_place].join(' ').toLowerCase().indexOf(q)>=0; }; }
+function renderWho(){ if(!D) return; var q=(document.getElementById('ad-q').value||'').trim(), now=Date.now()/1000;
+  var ppl=(D.people||[]).filter(match(q));
+  document.getElementById('ad-people').className='ad-scroll';
+  document.getElementById('ad-people').innerHTML=ppl.length?'<table class="ad-t ad-w"><thead><tr><th>Person</th><th>Last active</th><th>Sign-ins ('+D.days+' days)</th><th>Signed in now</th><th>Time on site (7 days)</th><th>Last location</th><th>Joined</th></tr></thead><tbody>'+
+    ppl.map(function(p){ return '<tr class="pick" data-email="'+esc(p.email)+'"><td>'+esc(p.name||'(no name)')+'<small>'+esc(p.email)+'</small></td><td>'+
+      (p.last_seen?esc(rel(now-p.last_seen)):'<span class="muted">never</span>')+'</td><td>'+(p.signins||0)+'</td><td>'+(p.active||0)+'</td><td>'+
+      (p.minutes_7d?esc(dur(p.minutes_7d*60)):'<span class="muted">-</span>')+'</td><td>'+esc(p.last_place||'')+'</td><td>'+esc(when(p.created_at))+'</td></tr>'; }).join('')+'</tbody></table>'
+    :'<div class="muted small">No one matches.</div>';
+  var si=(D.signins||[]).filter(match(q));
+  document.getElementById('ad-signins').innerHTML=si.length?'<div class="ad-scroll"><table class="ad-t ad-w"><thead><tr><th>Person</th><th>Signed in</th><th>From</th><th>Device</th><th>How</th><th>Last active</th><th>Length</th><th>Status</th></tr></thead><tbody>'+
+    si.slice(0,150).map(function(r){ return '<tr><td>'+esc(r.name||r.email)+'<small>'+esc(r.name?r.email:'')+'</small></td><td>'+esc(when(r.created_at))+'</td><td>'+esc(place(r))+'<small>'+esc(r.ip||'')+'</small></td><td>'+
+      esc(dev(r))+'</td><td>'+esc(r.method||'')+'</td><td>'+esc(rel(now-r.last_seen))+'</td><td>'+esc(dur((r.ended_at||r.last_seen)-r.created_at))+'</td><td>'+status(r)+'</td></tr>'; }).join('')+'</tbody></table></div>'
+    :'<div class="muted small">No sign-ins '+(q?'match.':'yet.')+'</div>';
+  var fl=(D.failures||[]).filter(function(f){ return !q || [f.email,f.ip,f.country].join(' ').toLowerCase().indexOf(q.toLowerCase())>=0; });
+  document.getElementById('ad-fail').innerHTML=fl.length?'<div class="ad-scroll"><table class="ad-t ad-w"><thead><tr><th>Account</th><th>When</th><th>From</th><th>Why</th></tr></thead><tbody>'+
+    fl.map(function(f){ return '<tr><td>'+esc(f.email||'(no such account)')+'</td><td>'+esc(when(f.ts))+'</td><td>'+esc(f.country||'Unknown')+'<small>'+esc(f.ip||'')+'</small></td><td>'+esc(f.reason||'')+'</td></tr>'; }).join('')+'</tbody></table></div>'
+    :'<div class="muted small">None.</div>';
+  document.getElementById('ad-geo').innerHTML='Places are approximate (city level), looked up from the IP address on this server. '+(D.geo_attr||'');
+}
+document.getElementById('ad-q').addEventListener('input', renderWho);
+document.getElementById('ad-people').addEventListener('click', function(e){ var tr=e.target.closest('tr[data-email]'); if(!tr) return;
+  var q=document.getElementById('ad-q'); q.value=q.value===tr.dataset.email?'':tr.dataset.email; renderWho(); });
+function load(){ fetch('/api/admin/report?days='+DAYS).then(function(r){return r.json();}).then(function(d){
+  if(d.ok){ D=d; render(d); var k=document.getElementById('ad-k'); k.innerHTML='';
+    document.querySelectorAll('#ad .ad-kpis').forEach(function(n){ k.appendChild(n); }); renderWho(); } else document.getElementById('ad').textContent='Not available.'; }); }
 document.querySelectorAll('#ad-days button').forEach(function(b){ b.onclick=function(){ DAYS=+b.dataset.d;
   document.querySelectorAll('#ad-days button').forEach(function(x){ x.classList.toggle('on',x===b); }); load(); }; });
 load(); setInterval(function(){ if(!document.hidden) load(); }, 60000);

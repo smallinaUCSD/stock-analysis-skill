@@ -55,6 +55,19 @@ CREATE TABLE IF NOT EXISTS passkeys (
   public_key BLOB NOT NULL, sign_count INTEGER NOT NULL DEFAULT 0,
   name TEXT, created_at REAL NOT NULL, last_used REAL
 );
+-- one row per sign-in: where and on what, and how long it stayed in use
+CREATE TABLE IF NOT EXISTS sessions (
+  id TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at REAL NOT NULL, last_seen REAL NOT NULL, ended_at REAL,
+  method TEXT, ip TEXT, city TEXT, region TEXT, country TEXT, cc TEXT,
+  device TEXT, browser TEXT, os TEXT, revoked INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS sessions_user ON sessions (user_id, last_seen);
+CREATE TABLE IF NOT EXISTS login_failures (
+  ts REAL NOT NULL, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  ip TEXT, country TEXT, reason TEXT
+);
 """
 
 PROFILE_FIELDS = ("first_name", "last_name", "dob", "gender", "investor_type", "experience", "referral")
@@ -155,6 +168,69 @@ def delete_user(uid: int) -> None:
     """Remove the account and everything tied to it (watchlist, passkeys)."""
     with conn() as c:
         c.execute("DELETE FROM users WHERE id=?", (uid,))
+
+
+# --- sign-in sessions ----------------------------------------------------------
+
+SESSION_COLS = ("method", "ip", "city", "region", "country", "cc", "device", "browser", "os")
+
+
+def add_session(sid: str, uid: int, **info) -> None:
+    now = time.time()
+    info = {k: info.get(k) for k in SESSION_COLS}
+    with conn() as c:
+        c.execute(f"INSERT INTO sessions (id, user_id, created_at, last_seen, {', '.join(SESSION_COLS)}) "
+                  f"VALUES (?,?,?,?,{','.join('?' * len(SESSION_COLS))})",
+                  (sid, uid, now, now, *[info[k] for k in SESSION_COLS]))
+
+
+def get_session(sid: str) -> dict | None:
+    with conn() as c:
+        return _row(c.execute("SELECT * FROM sessions WHERE id=?", (sid,)).fetchone())
+
+
+def touch_session(sid: str) -> None:
+    with conn() as c:
+        c.execute("UPDATE sessions SET last_seen=? WHERE id=?", (time.time(), sid))
+
+
+def end_session(sid: str) -> None:
+    with conn() as c:
+        c.execute("UPDATE sessions SET ended_at=COALESCE(ended_at, ?) WHERE id=?", (time.time(), sid))
+
+
+def revoke_sessions(uid: int, sid: str | None = None, keep: str | None = None) -> int:
+    """Sign out one session (``sid``) or all but ``keep``. Returns how many."""
+    now = time.time()
+    with conn() as c:
+        if sid:
+            cur = c.execute("UPDATE sessions SET revoked=1, ended_at=COALESCE(ended_at, ?) "
+                            "WHERE id=? AND user_id=? AND ended_at IS NULL", (now, sid, uid))
+        else:
+            cur = c.execute("UPDATE sessions SET revoked=1, ended_at=COALESCE(ended_at, ?) "
+                            "WHERE user_id=? AND id != ? AND ended_at IS NULL", (now, uid, keep or ""))
+        return cur.rowcount
+
+
+def user_sessions(uid: int, days: float = 30) -> list[dict]:
+    """This person's sign-ins still in use or used in the last ``days`` days, newest first."""
+    with conn() as c:
+        return [dict(r) for r in c.execute(
+            "SELECT * FROM sessions WHERE user_id=? AND (ended_at IS NULL OR last_seen > ?) "
+            "ORDER BY ended_at IS NOT NULL, last_seen DESC LIMIT 30", (uid, time.time() - days * 86400))]
+
+
+def add_login_failure(uid: int | None, ip: str, country: str | None, reason: str) -> None:
+    with conn() as c:
+        c.execute("INSERT INTO login_failures VALUES (?,?,?,?,?)", (time.time(), uid, ip, country, reason))
+
+
+def prune_sessions(days: float = 90) -> None:
+    """Drop sign-in records unused for ``days`` days (the Privacy Policy's limit)."""
+    cut = time.time() - days * 86400
+    with conn() as c:
+        c.execute("DELETE FROM sessions WHERE last_seen < ?", (cut,))
+        c.execute("DELETE FROM login_failures WHERE ts < ?", (cut,))
 
 
 # --- watchlists -------------------------------------------------------------

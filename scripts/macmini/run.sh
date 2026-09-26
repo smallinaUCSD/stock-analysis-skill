@@ -23,7 +23,8 @@ export STOCKSKILL_KEEP_FRESH=1                      # rebuild the board whenever
 
 case "${1:-}" in
   public)
-    export STOCKSKILL_PUBLIC=1 STOCKSKILL_AUTH=1 STOCKSKILL_NOTIFY=1 STOCKSKILL_ALERTS=0 FINNHUB_PER_MIN=35 PORT=8787 ;;
+    export STOCKSKILL_PUBLIC=1 STOCKSKILL_AUTH=1 STOCKSKILL_NOTIFY=1 STOCKSKILL_ALERTS=0 FINNHUB_PER_MIN=35 PORT=8787
+    export STOCKSKILL_GEOIP=1 ;;                    # keep the sign-in location database current
   private)
     export STOCKSKILL_PUBLIC=0 STOCKSKILL_ALERTS=1 FINNHUB_PER_MIN=20 PORT=8788 ;;
   refresh)

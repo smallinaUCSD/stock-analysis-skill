@@ -592,6 +592,10 @@ _AC_CSS = """
 .ac-wrap{max-width:860px;margin:0 auto;padding:24px 16px 60px}
 .ac-h{font-family:var(--font-display);font-weight:500;font-size:36px;margin:0 0 18px}
 .ac-sec{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:22px;margin-bottom:14px}
+.ss-row{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border)}
+.ss-row:first-child{border-top:none;padding-top:0}
+.ss-this{display:inline-block;font-size:11px;padding:1px 8px;border-radius:10px;border:1px solid var(--up);color:var(--up);margin-left:4px}
+.ss-old summary{cursor:pointer;color:var(--muted);margin-top:8px}
 .ac-sec h2{font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);font-weight:500;margin:0 0 14px}
 .tk-list{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
 .tk{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--border-strong);border-radius:14px;padding:3px 4px 3px 10px;font-size:13px;background:var(--bg)}
@@ -707,8 +711,29 @@ function setLook(t){ ME.user.theme=t;
   if(t==='system') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme',t);
   document.querySelectorAll('#theme-seg button').forEach(function(b){ b.classList.toggle('on',b.getAttribute('data-t')===t); });
   post('/api/me/theme',{theme:t}); }
+function devices(){ return '<div class="ac-sec"><h2>Where you\'re signed in</h2><div id="ss-list" class="small muted">Loading…</div>'+
+  '<div class="ac-row" id="ss-foot" style="margin-top:10px"><span class="small muted" id="ss-msg"></span>'+
+  '<button class="btn ghost" id="ss-all" type="button">Sign out everywhere else</button></div></div>'; }
+function ssAgo(ts){ var s=Date.now()/1000-ts; return s<120?'active now':s<5400?Math.round(s/60)+' minutes ago':s<129600?Math.round(s/3600)+' hours ago':Math.round(s/86400)+' days ago'; }
+function ssLoad(){ fetch('/api/me/sessions').then(function(r){return r.json();}).then(function(d){
+  var el=document.getElementById('ss-list'); if(!el||!d.ok) return; el.className='';
+  var act=d.sessions.filter(function(x){ return x.active; }), old=d.sessions.filter(function(x){ return !x.active; });
+  function row(x){ var when=new Date(x.signed_in*1000).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+    return '<div class="ss-row"><span><b>'+esc((x.browser||'Browser')+' on '+(x.os||'unknown'))+'</b>'+(x.this?' <span class="ss-this">This device</span>':'')+
+      '<br><span class="small muted">'+esc(x.where)+' · '+(x.active?ssAgo(x.last_seen):'signed out')+(x.method==='earlier sign-in'?' · first seen '+esc(when):' · signed in '+esc(when)+(x.method?' with '+esc(x.method):''))+'</span></span>'+
+      (x.active&&!x.this?'<button class="btn ghost" type="button" data-ss="'+esc(x.id)+'">Sign out</button>':'')+'</div>'; }
+  el.innerHTML=(act.map(row).join('')||'<p class="small muted">No other sign-ins.</p>')+
+    (old.length?'<details class="ss-old"><summary class="small">Recently signed out ('+old.length+')</summary>'+old.map(row).join('')+'</details>':'')+
+    '<p class="small muted" style="margin:8px 0 0">Places are approximate, from the internet address. '+(d.attribution||'')+'</p>';
+  document.getElementById('ss-all').style.display=act.length>1?'':'none';
+  document.getElementById('ss-foot').style.display=act.length>1||document.getElementById('ss-msg').textContent?'':'none'; }); }
+function ssRevoke(body){ post('/api/me/sessions/revoke',body).then(function(d){
+  document.getElementById('ss-msg').textContent=d.ok?(d.signed_out?'Signed out '+d.signed_out+(d.signed_out>1?' devices.':' device.'):'Nothing to sign out.'):(d.error||'Couldn\'t sign out.');
+  ssLoad(); }); }
 function render(){ var a=document.getElementById('ac'); a.className=''; if(!NF) nfInit(ME);
-  a.innerHTML=prof()+look()+wl()+notif()+signin()+secu()+danger(); nfBind(ME);
+  a.innerHTML=prof()+look()+wl()+notif()+signin()+devices()+secu()+danger(); nfBind(ME); ssLoad();
+  document.getElementById('ss-all').onclick=function(){ ssRevoke({all_others:true}); };
+  document.getElementById('ss-list').onclick=function(e){ var b=e.target.closest('[data-ss]'); if(b) ssRevoke({id:b.getAttribute('data-ss')}); };
   document.querySelectorAll('#theme-seg button').forEach(function(b){ b.onclick=function(){ setLook(b.getAttribute('data-t')); }; }); }
 function load(){ Promise.all([fetch('/api/me').then(function(r){return r.json();}), fetch('/api/groups').then(function(r){return r.json();})])
   .then(function(a){ ME=a[0]; GROUPS=a[1].groups||[]; render(); }); }

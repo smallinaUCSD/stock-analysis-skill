@@ -458,6 +458,7 @@ class Scheduler:
             self.last_trades = time.time()
             self.run_trades()
             db.prune_notifications(90)
+            db.prune_sessions(90)
 
     def run_summaries(self, slot: str, today: date) -> int:
         cfg = self.app.config["ACCT"]

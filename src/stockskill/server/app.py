@@ -103,7 +103,10 @@ def _observe(app, ACCT) -> None:
         health = {"board": board.meta() if board else None,
                   "quotes": {"count": len(fresh), "median_age": sorted(fresh)[len(fresh) // 2] if fresh else None},
                   "db_mb": round(os.path.getsize(OBS.db_path()) / 1e6, 1) if os.path.exists(OBS.db_path()) else 0}
-        return jsonify({"ok": True, **OBS.report(days), "retention": OBS.retention(), "health": health})
+        from .. import geoip
+        health["geo_db"] = os.path.exists(geoip.db_path())
+        return jsonify({"ok": True, **OBS.report(days), "retention": OBS.retention(), "health": health,
+                        "geo_attr": geoip.ATTRIBUTION})
 
 
 def _fast_local_time() -> None:
@@ -222,6 +225,9 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
         from ..accounts import auth as ACCT
         ACCT.init_app(app, board, tickers_path, cache_dir)
         _observe(app, ACCT)
+        if os.environ.get("STOCKSKILL_GEOIP") == "1":
+            from .. import geoip
+            geoip.keep_current()          # the sign-in location database, refreshed monthly
 
         @app.get("/login")
         def login_page():

@@ -235,8 +235,26 @@ def report(days: int = 30, users_db: str | None = None) -> dict:
     out["p50_ms"] = allms[len(allms) // 2] if allms else None
     out["p95_ms"] = allms[min(len(allms) - 1, int(len(allms) * 0.95))] if allms else None
     out["recent_errors"] = _q(c, """SELECT ts, path, status, ms FROM hits WHERE status >= 500 ORDER BY ts DESC LIMIT 15""")
+    on_site = time_on_site(c, now - 7 * 86400)
     c.close()
     out.update(_account_stats(users_db, since))
+    for p in out.get("people") or []:
+        p["minutes_7d"] = round(on_site.get(p["id"], 0) / 60)
+    return out
+
+
+def time_on_site(c, since_ts: float, gap: float = 1800.0) -> dict[int, float]:
+    """Seconds each signed-in person spent on the site: requests less than 30
+    minutes apart count as one visit, and each visit counts at least 30 s."""
+    out: dict[int, float] = {}
+    last: dict[int, float] = {}
+    for uid, ts in c.execute("SELECT uid, ts FROM hits WHERE uid IS NOT NULL AND ts > ? ORDER BY uid, ts", (since_ts,)):
+        prev = last.get(uid)
+        if prev is None or ts - prev > gap:
+            out[uid] = out.get(uid, 0.0) + 30.0
+        else:
+            out[uid] = out.get(uid, 0.0) + (ts - prev)
+        last[uid] = ts
     return out
 
 
@@ -268,6 +286,31 @@ def _account_stats(users_db: str | None, since: str) -> dict:
                    "events": _n(c, "SELECT COUNT(*) FROM users WHERE notify_events = 1"),
                    "follows": c.execute("SELECT COUNT(*) FROM follows").fetchone()[0]},
     }
+    # sign-ins: who, when, how, from where and on what, and for how long
+    try:
+        out["signins"] = [dict(r) for r in c.execute(
+            """SELECT s.id, s.user_id, u.email, TRIM(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,'')) AS name,
+                      s.method, s.created_at, s.last_seen, s.ended_at, s.revoked, s.ip, s.city, s.region, s.country,
+                      s.device, s.browser, s.os
+               FROM sessions s JOIN users u ON u.id = s.user_id
+               WHERE s.created_at >= ? OR s.ended_at IS NULL ORDER BY s.created_at DESC LIMIT 200""", (ts0,))]
+        out["failures"] = [dict(r) for r in c.execute(
+            """SELECT f.ts, u.email, f.ip, f.country, f.reason FROM login_failures f
+               LEFT JOIN users u ON u.id = f.user_id ORDER BY f.ts DESC LIMIT 50""")]
+        out["failures_24h"] = c.execute("SELECT COUNT(*) FROM login_failures WHERE ts > ?",
+                                        (time.time() - 86400,)).fetchone()[0]
+        out["people"] = [dict(r) for r in c.execute(
+            """SELECT u.id, u.email, TRIM(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,'')) AS name,
+                      u.created_at, u.last_login,
+                      (SELECT COUNT(*) FROM sessions s WHERE s.user_id = u.id AND s.created_at >= ?) AS signins,
+                      (SELECT COUNT(*) FROM sessions s WHERE s.user_id = u.id AND s.ended_at IS NULL) AS active,
+                      (SELECT MAX(last_seen) FROM sessions s WHERE s.user_id = u.id) AS last_seen,
+                      (SELECT TRIM(COALESCE(city,'') || CASE WHEN city IS NOT NULL AND country IS NOT NULL THEN ', ' ELSE '' END
+                                   || COALESCE(country,'')) FROM sessions s WHERE s.user_id = u.id
+                        ORDER BY s.created_at DESC LIMIT 1) AS last_place
+               FROM users u ORDER BY COALESCE(last_seen, u.last_login, u.created_at) DESC LIMIT 300""", (ts0,))]
+    except sqlite3.OperationalError:                   # an older database without these tables
+        out.update({"signins": [], "failures": [], "failures_24h": 0, "people": []})
     # alerts sent per day, by type, and how many went out by email / push / text
     kind = ("CASE WHEN kind = 'summary' AND dedupe LIKE '%:pre' THEN 'Pre-market summary' "
             "WHEN kind = 'summary' AND dedupe LIKE '%:post' THEN 'Post-market summary' "

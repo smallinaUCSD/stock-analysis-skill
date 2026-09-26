@@ -15,7 +15,7 @@ import html
 import os
 
 TERMS_VERSION = "2026-09-26"
-PRIVACY_VERSION = "2026-09-26"
+PRIVACY_VERSION = "2026-09-26.2"
 EFFECTIVE = "September 26, 2026"
 
 
@@ -219,6 +219,13 @@ that service encrypted. We keep the summaries and alerts shown in your Today pan
 secure the Service: IP address, browser type, the pages and features requested, and error logs. We use one
 essential cookie to keep you signed in. We do not use advertising cookies, cross-site trackers or third-party
 analytics.</p>
+<p><b>Sign-in history.</b> Each time you sign in we record when, how (password, Google or passkey, and any
+second step), your IP address, an approximate location (city, region and country) that we look up from the IP
+address on our own server using the DB-IP database (the address is not sent to anyone for this), and your
+browser, operating system and type of device, plus when that sign-in was last used. We also record failed
+sign-in attempts to your account. We use this to show you where you're signed in, let you sign out other
+devices, and detect and investigate suspicious activity; our administrators can see it for the same
+purposes.</p>
 <p>We do not collect Social Security numbers, bank or brokerage credentials, or payment card details.</p>
 
 <h2>3. How we use information</h2>
@@ -256,13 +263,14 @@ or promotional purposes.</p>
 
 <h2>5. Retention</h2>
 <p>We keep account information while your account is open. When you delete your account we delete your
-profile, watchlist and passkeys immediately from the live database, and from backups within 30 days. Server
-logs are kept for up to 90 days. We may keep limited records longer where the law requires, such as a record
+profile, watchlist, passkeys and sign-in history immediately from the live database, and from backups within
+30 days. Server logs, and sign-in records, are kept for up to 90 days after they were last used. We may keep limited records longer where the law requires, such as a record
 that you accepted our Terms.</p>
 
 <h2>6. Your choices and rights</h2>
 <ul>
 <li>View and edit your profile and watchlist, and remove passkeys, in account settings.</li>
+<li>See where you're signed in, and sign out other devices, in account settings.</li>
 <li>Stop text messages by replying STOP, or turn them off or remove your number in account settings.</li>
 <li>Delete your account and its data at any time from account settings.</li>
 <li>Ask us for a copy of your information, or ask us to correct or delete it, by contacting {c}.</li>

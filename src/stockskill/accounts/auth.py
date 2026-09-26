@@ -105,19 +105,73 @@ def current_user() -> dict | None:
         g.user = db.get_user(uid) if uid else None
         if uid and not g.user:
             session.clear()
+        elif g.user and not _session_ok(uid):
+            session.clear()                       # signed out from another device
+            g.user = None
     return g.user
+
+
+_SEEN: dict[str, tuple[float, bool]] = {}         # sid -> (checked at, still valid)
+
+
+def _session_ok(uid: int) -> bool:
+    """Is this browser's sign-in still valid (not signed out elsewhere)? Also
+    keeps its "last active" time, at most once a minute."""
+    sid = session.get("sid")
+    if not sid:                                   # signed in before sessions were recorded
+        _record_session(uid, "earlier sign-in")
+        return True
+    now = time.time()
+    hit = _SEEN.get(sid)
+    if hit and now - hit[0] < 60:
+        return hit[1]
+    row = db.get_session(sid)
+    ok = bool(row) and row["user_id"] == uid and not row["revoked"] and row["ended_at"] is None
+    if ok:
+        db.touch_session(sid)
+    if len(_SEEN) > 5000:
+        _SEEN.clear()
+    _SEEN[sid] = (now, ok)
+    return ok
+
+
+def _client() -> dict:
+    """Where and on what this request comes from: IP, approximate place, device."""
+    from .. import geoip
+    from ..observability import classify_ua
+    ip = _ip()
+    dev = classify_ua(request.headers.get("User-Agent", "")) or ("other", "Other", "Other")
+    return {"ip": ip, **geoip.lookup(ip), "device": dev[0], "browser": dev[1], "os": dev[2]}
+
+
+def _record_session(uid: int, method: str) -> None:
+    sid = secrets.token_urlsafe(18)
+    try:
+        db.add_session(sid, uid, method=method, **_client())
+        session["sid"] = sid
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def needs_terms(u: dict) -> bool:
     return u.get("terms_version") != legal.TERMS_VERSION or u.get("privacy_version") != legal.PRIVACY_VERSION
 
 
-def _login(uid: int) -> None:
+def _login(uid: int, method: str) -> None:
     session.clear()
     session["uid"] = uid
     session.permanent = True
+    _record_session(uid, method)
     db.update_user(uid, last_login=time.time())
     g.pop("user", None)
+
+
+def _failed(u: dict | None, reason: str) -> None:
+    from .. import geoip
+    try:
+        db.add_login_failure(u["id"] if u else None, _ip(), geoip.lookup(_ip()).get("country"), reason)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def _next_for(u: dict, want: str | None = None) -> str:
@@ -217,7 +271,7 @@ def signup():
         return jsonify({"ok": False, "error": "An account with this email already exists. Sign in instead."}), 409
     uid = db.create_user(email, password_hash=generate_password_hash(pw),
                          terms_version=legal.TERMS_VERSION, privacy_version=legal.PRIVACY_VERSION)
-    _login(uid)
+    _login(uid, "password (new account)")
     from .security import welcome
     welcome(db.get_user(uid), verify=True)
     return jsonify({"ok": True, "next": "/welcome"})
@@ -233,18 +287,22 @@ def login():
     u = db.by_email(email) if email else None
     # same message whether the email exists or not
     if not u or not u.get("password_hash") or not check_password_hash(u["password_hash"], pw):
+        _failed(u, "wrong password" if u else "no such account")
         if u and not u.get("password_hash") and u.get("google_sub"):
             return jsonify({"ok": False, "error": "This account uses Sign in with Google."}), 401
         return jsonify({"ok": False, "error": "Email or password is incorrect."}), 401
     if u.get("mfa_method"):
         from .security import start_mfa
         return start_mfa(u, b.get("next"))
-    _login(u["id"])
+    _login(u["id"], "password")
     return jsonify({"ok": True, "next": _next_for(u, b.get("next"))})
 
 
 @bp.route("/logout", methods=["GET", "POST"])
 def logout():
+    if session.get("sid"):
+        db.end_session(session["sid"])
+        _SEEN.pop(session["sid"], None)
     session.clear()
     return redirect("/") if request.method == "GET" else jsonify({"ok": True, "next": "/"})
 
@@ -295,7 +353,7 @@ def google_login():
         u = db.get_user(uid)
         from .security import welcome
         welcome(u, verify=False)
-    _login(u["id"])
+    _login(u["id"], "Google")
     return jsonify({"ok": True, "next": _next_for(u, _body().get("next"))})
 
 
@@ -381,9 +439,10 @@ def passkey_login_verify():
                                            expected_origin=_origin(), credential_public_key=pk["public_key"],
                                            credential_current_sign_count=pk["sign_count"])
     except Exception:  # noqa: BLE001
+        _failed(db.get_user(pk["user_id"]), "passkey not verified")
         return jsonify({"ok": False, "error": "The passkey couldn't be verified."}), 401
     db.touch_passkey(pk["credential_id"], v.new_sign_count)
-    _login(pk["user_id"])
+    _login(pk["user_id"], "passkey")
     return jsonify({"ok": True, "next": _next_for(db.get_user(pk["user_id"]), b.get("next"))})
 
 
@@ -588,9 +647,41 @@ def set_password():
     if len(pw) < 10 or len(set(pw)) < 5:
         return jsonify({"ok": False, "error": "Use a password of at least 10 characters."}), 400
     db.update_user(u["id"], password_hash=generate_password_hash(pw))
+    out = db.revoke_sessions(u["id"], keep=session.get("sid"))      # sign out everywhere else
+    _SEEN.clear()
     from .security import notice
     notice(u, "Your password was changed", "The password for your account was just changed.")
-    return jsonify({"ok": True})
+    return jsonify({"ok": True, "signed_out": out})
+
+
+@bp.get("/api/me/sessions")
+@login_required
+def my_sessions():
+    """Where you're signed in (and recently were)."""
+    from .. import geoip
+    cur = session.get("sid")
+    items = []
+    for r in db.user_sessions(current_user()["id"]):
+        items.append({"id": r["id"], "this": r["id"] == cur, "active": r["ended_at"] is None,
+                      "method": r["method"], "where": geoip.label(r) or "Unknown location",
+                      "device": r["device"], "browser": r["browser"], "os": r["os"],
+                      "signed_in": r["created_at"], "last_seen": r["last_seen"], "ended": r["ended_at"]})
+    return jsonify({"ok": True, "sessions": items, "attribution": geoip.ATTRIBUTION})
+
+
+@bp.post("/api/me/sessions/revoke")
+@login_required
+def revoke_my_sessions():
+    b = _body()
+    u = current_user()
+    if b.get("all_others"):
+        n = db.revoke_sessions(u["id"], keep=session.get("sid"))
+    elif b.get("id") and b.get("id") != session.get("sid"):
+        n = db.revoke_sessions(u["id"], sid=str(b["id"]))
+    else:
+        return jsonify({"ok": False, "error": "Use Sign out to end this session."}), 400
+    _SEEN.clear()
+    return jsonify({"ok": True, "signed_out": n})
 
 
 # --- notifications ------------------------------------------------------------------

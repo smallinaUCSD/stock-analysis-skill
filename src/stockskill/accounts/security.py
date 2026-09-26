@@ -174,9 +174,11 @@ def finish_mfa():
         return jsonify({"ok": False, "error": "Too many attempts. Wait 15 minutes and try again."}), 429
     u = db.get_user(uid)
     if not u or not verify_second_factor(u, _body().get("code") or ""):
+        from .auth import _failed
+        _failed(u, "wrong 2-step code")
         return jsonify({"ok": False, "error": "That code didn't work. Check it and try again."}), 401
     nxt = session.get("mfa_next")
-    _login(uid)
+    _login(uid, "password + " + ("authenticator app" if u.get("mfa_method") == "totp" else "emailed code"))
     return jsonify({"ok": True, "next": _next_for(u, nxt)})
 
 
@@ -312,6 +314,9 @@ def reset_password():
     if len(pw) < 10 or len(set(pw)) < 5:
         return jsonify({"ok": False, "error": "Use a password of at least 10 characters."}), 400
     db.update_user(u["id"], password_hash=generate_password_hash(pw), email_verified=1)
+    db.revoke_sessions(u["id"])                      # a reset signs out every device
+    from .auth import _SEEN
+    _SEEN.clear()
     notice(u, "Your password was changed", "The password for your account was just reset.")
     return jsonify({"ok": True, "next": "/login"})
 
