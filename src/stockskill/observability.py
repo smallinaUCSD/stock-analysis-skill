@@ -264,10 +264,33 @@ def _account_stats(users_db: str | None, since: str) -> dict:
         "notify": {"summary": c.execute("SELECT COUNT(*) FROM users WHERE summary_times IN ('pre','post','both')").fetchone()[0],
                    "email": c.execute("SELECT COUNT(*) FROM users WHERE notify_email = 1 AND email_verified = 1").fetchone()[0],
                    "push": c.execute("SELECT COUNT(DISTINCT user_id) FROM push_subs").fetchone()[0],
+                   "sms": _n(c, "SELECT COUNT(*) FROM users WHERE notify_sms = 1 AND phone_verified = 1"),
+                   "events": _n(c, "SELECT COUNT(*) FROM users WHERE notify_events = 1"),
                    "follows": c.execute("SELECT COUNT(*) FROM follows").fetchone()[0]},
     }
+    # alerts sent per day, by type, and how many went out by email / push / text
+    kind = ("CASE WHEN kind = 'summary' AND dedupe LIKE '%:pre' THEN 'Pre-market summary' "
+            "WHEN kind = 'summary' AND dedupe LIKE '%:post' THEN 'Post-market summary' "
+            "WHEN kind = 'event' THEN 'Market event' WHEN kind = 'trade' THEN 'Politician trade' "
+            "WHEN kind = 'fund' THEN 'Fund filing' ELSE kind END")
+    try:
+        out["alerts"] = [dict(r) for r in c.execute(
+            f"""SELECT date(created_at, 'unixepoch', '-4 hours') AS day, {kind} AS kind, COUNT(*) AS n,
+                       SUM(COALESCE(channels, '') LIKE '%email%') AS email, SUM(COALESCE(channels, '') LIKE '%push%') AS push,
+                       SUM(COALESCE(channels, '') LIKE '%sms%') AS sms
+                FROM notifications WHERE created_at >= ? AND kind != 'test'
+                GROUP BY day, kind ORDER BY day DESC, kind LIMIT 60""", (time.time() - 14 * 86400,))]
+    except sqlite3.OperationalError:
+        out["alerts"] = []
     c.close()
     return out
+
+
+def _n(c, sql: str) -> int:
+    try:
+        return c.execute(sql).fetchone()[0]
+    except sqlite3.OperationalError:                   # an older database without the column
+        return 0
 
 
 def retention(users_db: str | None = None, weeks: int = 6) -> list[dict]:

@@ -25,7 +25,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from . import db
 from .auth import (_EMAIL_RE, _body, _limited, _login, _next_for, bp, current_user, login_required)
 
-ISSUER = "SMI Research"
+ISSUER = "SM Investments"
 
 
 # --- authenticator codes (TOTP) ---------------------------------------------------
@@ -381,4 +381,4 @@ def welcome(u: dict, verify: bool) -> None:
         link = f"{notify.public_url()}/notifications/verify?t={tok}"
         lines.append(f'<a href="{html.escape(link)}">Confirm your email address</a> so we can send your summaries '
                      "and alerts, and help you if you forget your password.")
-    threading.Thread(target=notify.send_simple, args=(u["email"], "Welcome to SMI Research", lines), daemon=True).start()
+    threading.Thread(target=notify.send_simple, args=(u["email"], "Welcome to SM Investments", lines), daemon=True).start()

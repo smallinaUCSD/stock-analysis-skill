@@ -62,8 +62,13 @@ _EXTRA_CSS = """
 
 _JS = r"""
 function goBack(e){ if(e) e.preventDefault();
-  if(window.opener && !window.opener.closed){ try{window.opener.focus();}catch(_){}; window.close(); }
-  else location.href='/'; return false; }
+  // came here inside this tab: step back; opened as its own tab: close it
+  var r=document.referrer||'';
+  if(history.length>1 && r.indexOf(location.origin+'/')===0 && r!==location.href){ history.back(); return false; }
+  try{ if(window.opener && !window.opener.closed) window.opener.focus(); }catch(_){}
+  window.close();
+  setTimeout(function(){ location.href='/'; }, 200);          // the browser refused to close it
+  return false; }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
 var HELP={price_above:['ticker','$','Buzz when the price reaches this level or higher.'],
   price_below:['ticker','$','Buzz when the price falls to this level or lower.'],

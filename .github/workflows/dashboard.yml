@@ -11,9 +11,7 @@ name: Dashboard
 # Pages, enable it once at Settings -> Pages -> Source: GitHub Actions.
 
 on:
-  schedule:
-    # every 30 min, ~US market hours in UTC (covers EDT & EST), weekdays.
-    - cron: "*/30 13-21 * * 1-5"
+  # No schedule: the Mac mini refreshes the site itself. Run by hand from the Actions tab if needed.
   workflow_dispatch:
 
 permissions:

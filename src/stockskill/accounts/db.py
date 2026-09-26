@@ -62,7 +62,10 @@ PROFILE_FIELDS = ("first_name", "last_name", "dob", "gender", "investor_type", "
 NOTIFY_COLUMNS = {"email_verified": "INTEGER NOT NULL DEFAULT 0", "notify_email": "INTEGER NOT NULL DEFAULT 0",
                   "notify_push": "INTEGER NOT NULL DEFAULT 0", "notify_inapp": "INTEGER NOT NULL DEFAULT 1",
                   "summary_times": "TEXT", "summary_groups": "TEXT", "notify_set": "INTEGER NOT NULL DEFAULT 0",
-                  "mfa_method": "TEXT", "mfa_secret": "TEXT", "mfa_recovery": "TEXT", "theme": "TEXT"}
+                  "mfa_method": "TEXT", "mfa_secret": "TEXT", "mfa_recovery": "TEXT", "theme": "TEXT",
+                  # text-message alerts: E.164 number, confirmed by a texted code, with the consent time
+                  "phone": "TEXT", "phone_verified": "INTEGER NOT NULL DEFAULT 0", "notify_sms": "INTEGER NOT NULL DEFAULT 0",
+                  "sms_consent_at": "REAL", "notify_events": "INTEGER NOT NULL DEFAULT 0"}
 
 
 def path() -> str:
@@ -98,6 +101,8 @@ def _migrate(c) -> None:
     for col, decl in NOTIFY_COLUMNS.items():
         if col not in have:
             c.execute(f"ALTER TABLE users ADD COLUMN {col} {decl}")
+    if "channels" not in {r["name"] for r in c.execute("PRAGMA table_info(notifications)")}:
+        c.execute("ALTER TABLE notifications ADD COLUMN channels TEXT")
 
 
 def _row(r) -> dict | None:
@@ -257,6 +262,12 @@ def add_notification(uid: int, kind: str, title: str, body: str, url: str | None
         cur = c.execute("INSERT OR IGNORE INTO notifications (user_id, kind, title, body, url, dedupe, created_at) "
                         "VALUES (?,?,?,?,?,?,?)", (uid, kind, title, body, url, dedupe, time.time()))
         return cur.rowcount > 0
+
+
+def set_delivery(uid: int, dedupe: str, channels: str) -> None:
+    """Record which channels a notification actually went out on (for the admin page)."""
+    with conn() as c:
+        c.execute("UPDATE notifications SET channels=? WHERE user_id=? AND dedupe=?", (channels, uid, dedupe))
 
 
 def notifications(uid: int, limit: int = 30) -> list[dict]:

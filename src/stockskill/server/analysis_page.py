@@ -526,13 +526,18 @@ def analysis_html(row, closes=None, refresh_seconds: int = 900) -> str:
 <p class="a-note">Analysis, not advice. Every figure is a model estimate on free,
 possibly delayed data; the decision is yours.
 <a class="a-help" href="/interpret" onclick="return openHelp(event)">Read the full guide</a></p>
-<div class="a-foot">2026 SMI Investments. All rights reserved.</div>
+<div class="a-foot">2026 SM Investments. All rights reserved.</div>
 </div>
 <script>
 const REFRESH={int(refresh_seconds)}*1000;
 function goBack(e){{ if(e) e.preventDefault();
-  if(window.opener && !window.opener.closed){{ try{{window.opener.focus();}}catch(_){{}}; window.close(); }}
-  else location.href='/'; return false; }}
+  // came here inside this tab: step back; opened as its own tab: close it
+  var r=document.referrer||'';
+  if(history.length>1 && r.indexOf(location.origin+'/')===0 && r!==location.href){{ history.back(); return false; }}
+  try{{ if(window.opener && !window.opener.closed) window.opener.focus(); }}catch(_){{}}
+  window.close();
+  setTimeout(function(){{ location.href='/'; }}, 200);          // the browser refused to close it
+  return false; }}
 function openHelp(e){{ if(e) e.preventDefault(); window.open(e.currentTarget.getAttribute('href'),'_blank'); return false; }}
 let _busy=false;
 function refresh(){{ if(_busy) return; _busy=true;
@@ -718,7 +723,7 @@ function holdRender(){ if(!HOLD) return;
   h+=sigRow('Congress, last 90 days', c.length?'<span class="up">'+buys+' buys</span> · <span class="down">'+sells+' sells</span>':'<span class="muted">no trades reported</span>');
   if(c.length){ var t=c[0]; h+=sigRow('Latest', sigEsc(t.member)+' <span class="muted">('+sigEsc(t.chamber)+')</span> '+sigEsc((t.type||'').toLowerCase())+' '+sigEsc(t.amount)); }
   h+='<div class="a-read">Funds: SEC 13F filings of well-known managers (long positions, up to 45 days old). Congress: members\' '+
-    'reported trades (up to 45 days late; not market-beating on average). <a class="a-help" href="/trades?q='+encodeURIComponent(TK)+'" target="_blank" rel="noopener">See all on Trades</a></div>';
+    'reported trades (up to 45 days late; not market-beating on average). <a class="a-help" href="/trades?q='+encodeURIComponent(TK)+'" target="_blank" rel="noopener">See all on Politicians &amp; Funds</a></div>';
   sigSet('holders', h); }
 fetch('/api/holders/'+encodeURIComponent(TK)).then(function(r){return r.json();}).then(function(d){ HOLD=d; holdRender(); }).catch(function(){ sigSet('holders','Unavailable right now.',true); });
 (function(){ fetch('/api/signals/'+encodeURIComponent(TK)).then(function(r){return r.json();})

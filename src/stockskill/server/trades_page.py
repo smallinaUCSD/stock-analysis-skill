@@ -1,4 +1,4 @@
-"""Trades page: what members of Congress and well-known hedge funds are buying
+"""Politicians & Funds page (/trades): what members of Congress and well-known hedge funds are buying
 and selling, with one search box for a ticker, a politician or a fund.
 
 Politicians: STOCK Act periodic transaction reports (House Clerk + Senate eFD).
@@ -18,10 +18,10 @@ from ..dashboard.render import _CSS, _THEME_BOOT, icon
 def trades_html(q: str = "") -> str:
     return ("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
             "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
-            "<title>Trades</title>" + _THEME_BOOT + "<style>" + _CSS + _EXTRA_CSS +
+            "<title>Politicians &amp; Funds</title>" + _THEME_BOOT + "<style>" + _CSS + _EXTRA_CSS +
             "</style></head><body><div class=\"wrap\">"
-            "<header><h1>Trades</h1>"
-            "<span class=\"sub\" style=\"margin:0\">What politicians and big funds are buying and selling</span>"
+            "<header><h1>Politicians &amp; Funds</h1>"
+            "<span class=\"sub\" style=\"margin:0\">Follow what members of Congress and big hedge funds buy and sell</span>"
             "<button class=\"page-x\" onclick=\"return goBack(event)\" title=\"Close\" "
             "aria-label=\"Close\">" + icon("x", 17) + "</button></header>"
             "<div class=\"tr-bar\"><span class=\"seg\" id=\"tabs\">"
@@ -110,13 +110,18 @@ _EXTRA_CSS = """
 
 _JS = r"""
 function goBack(e){ if(e) e.preventDefault();
-  if(window.opener && !window.opener.closed){ try{window.opener.focus();}catch(_){}; window.close(); }
-  else location.href='/'; return false; }
+  // came here inside this tab: step back; opened as its own tab: close it
+  var r=document.referrer||'';
+  if(history.length>1 && r.indexOf(location.origin+'/')===0 && r!==location.href){ history.back(); return false; }
+  try{ if(window.opener && !window.opener.closed) window.opener.focus(); }catch(_){}
+  window.close();
+  setTimeout(function(){ location.href='/'; }, 200);          // the browser refused to close it
+  return false; }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
 function fdate(iso){ if(!iso) return '-'; var p=iso.split('-'); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+p[1]-1]+' '+(+p[2])+(p[0]!==String(new Date().getFullYear())?' '+p[0]:''); }
 function big(v){ if(v==null) return '-'; var a=Math.abs(v); return a>=1e9?'$'+(v/1e9).toFixed(1)+'B':(a>=1e6?'$'+(v/1e6).toFixed(0)+'M':'$'+Math.round(v).toLocaleString()); }
 function daysBetween(a,b){ if(!a||!b) return null; return Math.round((new Date(b)-new Date(a))/86400000); }
-function tkLink(t){ return t?'<a href="/analysis/'+encodeURIComponent(t)+'" target="_blank" rel="noopener">'+esc(t)+'</a>':'<span class="mu">-</span>'; }
+function tkLink(t){ return t?'<a href="/analysis/'+encodeURIComponent(t)+'">'+esc(t)+'</a>':'<span class="mu">-</span>'; }
 function typeCell(t){ var c=(t||'').indexOf('Buy')===0?'up':((t||'').indexOf('Sell')===0?'down':'mu'); return '<span class="'+c+'">'+esc(t)+'</span>'; }
 var TAB='pol', CH='', KIND='', FILTER={ticker:'',member:''}, SHOWN=100, POL=null;
 
@@ -161,7 +166,7 @@ function renderPeople(){ var box=document.getElementById('people'); if(!PEOPLE) 
   if(!ppl.length){ box.innerHTML=''; return; }
   var cards=ppl.slice(0,PSHOW).map(function(p){ var party=(p.party||'I')[0];
     var where=p.chamber==='President'?'President':((p.chamber==='Senate'?'Senate':'House')+' · '+esc(p.state||''));
-    return '<a class="person" href="/politician/'+encodeURIComponent(p.id)+'" target="_blank" rel="noopener">'+
+    return '<a class="person" href="/politician/'+encodeURIComponent(p.id)+'">'+
       '<img src="'+esc(p.photo)+'" alt="" loading="lazy" onerror="this.outerHTML=\'<div class=&quot;mono&quot;>'+esc(initials(p.name))+'</div>\'">'+
       '<b>'+esc(p.name)+'</b><small><span class="pty '+party+'">'+esc(p.party||'')+'</span> '+where+'</small>'+
       '<small>In office '+yrs(p.since)+' · '+p.trades+' trade'+(p.trades===1?'':'s')+'</small></a>'; }).join('');
@@ -185,7 +190,7 @@ function renderPol(){ var d=POL, box=document.getElementById('pol-t');
   box.className='tr-tw';
   box.innerHTML='<table class="tr-t"><thead><tr><th>Member</th><th>Ticker</th><th>Asset</th><th>Type</th><th class="r">Amount</th><th>Traded</th><th>Reported</th><th>Owner</th></tr></thead><tbody>'+
     rows.map(function(t){ var lag=daysBetween(t.traded,t.filed);
-      var who=t.member_id?'<a href="/politician/'+encodeURIComponent(t.member_id)+'" target="_blank" rel="noopener">'+esc(t.member)+'</a>':esc(t.member);
+      var who=t.member_id?'<a href="/politician/'+encodeURIComponent(t.member_id)+'">'+esc(t.member)+'</a>':esc(t.member);
       return '<tr><td>'+who+'<span class="sub">'+esc(t.chamber)+(t.state?' · '+esc(t.state):'')+'</span></td><td>'+tkLink(t.ticker)+'</td><td class="wrap">'+esc(t.asset)+
         '</td><td>'+typeCell(t.type)+'</td><td class="r">'+esc(t.amount)+'</td><td>'+fdate(t.traded)+'</td><td><a href="'+esc(t.url)+'" target="_blank" rel="noopener">'+fdate(t.filed)+'</a>'+
         (lag!=null?'<span class="sub">'+lag+' days later</span>':'')+'</td><td>'+esc(t.owner)+'</td></tr>'; }).join('')+'</tbody></table>'+
@@ -209,7 +214,7 @@ function renderFunds(){ var g=document.getElementById('fund-grid');
       '<div class="n">'+(f.period?big(f.total_value)+' · '+f.positions+' positions · '+fdate(f.period):'<span class="m">Loading filings…</span>')+'</div>'+
       (f.period?'<div class="n m">'+(c.New||0)+' new, '+(c.Added||0)+' added, '+(c.Trimmed||0)+' trimmed, '+(c['Sold out']||0)+' sold</div>':'')+'</button>'; }).join(''); }
 function openFund(cik){ CUR=cik; if(FUNDS) renderFunds();       // full profile, like politicians
-  var w=window.open('/fund/'+cik,'_blank'); if(!w) location.href='/fund/'+cik; }
+  location.href='/fund/'+cik; }
 function fundSearch(q){ var box=document.getElementById('fund-search');
   fetch('/api/funds/search?q='+encodeURIComponent(q)).then(function(r){return r.json();}).then(function(d){
     var r=d.results||[]; if(!r.length){ box.innerHTML=''; return; }

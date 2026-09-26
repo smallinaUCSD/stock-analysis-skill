@@ -156,7 +156,7 @@ table.wl td:first-child{z-index:1}
 table.wl th:first-child{z-index:3}
 .tablewrap.scrolled table.wl th:first-child,.tablewrap.scrolled table.wl td:first-child{
   box-shadow:8px 0 12px -8px rgba(0,0,0,.4)}
-table.wl tr.item{cursor:default}
+table.wl tr.item{cursor:pointer}
 table.wl tr.item:hover td,table.wl tr.item:hover td:first-child{background:var(--surface-2)}
 /* left-align Sector (9), Conf (14), Indicators (15) */
 table.wl th:nth-child(9),table.wl td:nth-child(9),
@@ -433,12 +433,6 @@ body.simple #wl th:nth-child(4),body.simple #wl td:nth-child(4),body.simple #wl 
 .tool-menu button{text-align:left;border:none;background:none;color:var(--ink);font:14px var(--font);padding:9px 12px;border-radius:var(--r);cursor:pointer}
 .tool-menu button:hover{background:var(--surface)}
 
-.wl-rm{display:none;align-items:center;justify-content:center;width:22px;height:22px;margin-left:6px;border-radius:50%;
-  border:1px solid var(--border-strong);background:var(--surface);color:var(--muted);font:16px/1 var(--font);cursor:pointer;vertical-align:1px}
-.wl-rm:hover{color:var(--down);border-color:var(--down)}
-body.mine .item:hover .wl-rm{display:inline-flex}
-@media (hover:none){body.mine .wl-rm{display:inline-flex}}
-#modal-body .wl-rm{display:none!important}
 .wl-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:80;background:var(--ink);color:var(--bg);
   border-radius:var(--r-lg);padding:10px 14px;font-size:14px;display:flex;gap:14px;align-items:center;box-shadow:0 12px 30px -10px rgba(0,0,0,.4)}
 .wl-toast button{border:none;background:none;color:var(--accent);font:500 14px var(--font);cursor:pointer}
@@ -551,13 +545,6 @@ def _factor_chip(r):
             f'<span class="fscore {_factor_cls(comp)}">{comp}</span>{read}</span></div>')
 
 
-def _rm_btn(t: str) -> str:
-    """'Remove from my watchlist' control; only shown to signed-in users (body.mine)."""
-    t = html.escape(t)
-    return (f'<button type="button" class="wl-rm" data-rm="{t}" title="Remove {t} from my watchlist" '
-            f'aria-label="Remove {t} from my watchlist">&times;</button>')
-
-
 def _row_html(r):
     if r.error or r.price is None:
         return (f'<tr class="item" {_data_attrs(r)}><td class="tk">{html.escape(r.ticker)}</td>'
@@ -579,7 +566,7 @@ def _row_html(r):
     sector = html.escape((_abbr_sector(r.sector) or "-")[:16])
     return (
         f'<tr class="item" {_data_attrs(r)}>'
-        f'<td><span class="tk">{html.escape(r.ticker)}</span>{_rm_btn(r.ticker)}</td>'
+        f'<td><span class="tk">{html.escape(r.ticker)}</span></td>'
         f'<td data-sort="{r.price}" data-live="p">${r.price:,.2f}</td>'
         + cell(r.changes.get("1d")).replace("<td ", '<td data-live="c" ', 1)
         + cell(r.changes.get("5d")) + cell(r.changes.get("1m"))
@@ -989,7 +976,7 @@ def _card_html(r):
         c, t = _pct(x)
         return f'<div class="card-row"><span>{label}</span><b class="{c}">{t}</b></div>'
     summary = (
-        f'<div class="card-top"><div><span class="tk">{html.escape(r.ticker)}</span>{_rm_btn(r.ticker)} '
+        f'<div class="card-top"><div><span class="tk">{html.escape(r.ticker)}</span> '
         f'<span class="badge {sig_cls}">{r.signal}</span></div>'
         f'<span class="card-price"><span data-live="p">${r.price:,.2f}</span> <span class="chg {dcls}" data-live="c">{dtxt}</span></span></div>'
         f'<div class="nm">{html.escape((r.name or "")[:34])}</div>'
@@ -1502,7 +1489,7 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
         '<button class="tool-b" onclick="openTab(\'/screener\')">Screener</button>'
         '<button class="tool-b" onclick="openTab(\'/markets\')">Markets</button>'
         '<button class="tool-b" onclick="openTab(\'/earnings\')">Earnings</button>'
-        '<button class="tool-b" onclick="openTab(\'/trades\')">Trades</button>'
+        '<button class="tool-b" onclick="openTab(\'/trades\')">Politicians &amp; Funds</button>'
         '<button class="tool-b" onclick="openTab(\'/compare\')">Compare</button>'
         '<details class="tool-more"><summary class="tool-b">More tools</summary><div class="tool-menu">'
         '<button onclick="openTab(\'/financials\')">Financials</button>'
@@ -1593,7 +1580,7 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
 Signals are rule-based indicator states, not investment advice. Free data may be
 delayed. All values computed by tested Python.
 <a class="site-help" href="/interpret" onclick="openTab('/interpret');return false">How to read this</a></p>
-<div class="site-foot">2026 SMI Investments. All rights reserved.</div>
+<div class="site-foot">2026 SM Investments. All rights reserved.</div>
 </div>
 <script>
 const active = {{signal:new Set(), condition:new Set(), category:new Set(), section:new Set()}};
@@ -1649,8 +1636,9 @@ function clearChips(){{
 }}
 document.addEventListener('click',e=>{{ document.querySelectorAll('.tool-more[open]').forEach(m=>{{
   if(!m.contains(e.target) || e.target.closest('.tool-menu button')) m.removeAttribute('open'); }}); }});
-document.addEventListener('click',e=>{{ const b=e.target.closest('.wl-rm'); if(!b) return;
-  e.preventDefault(); e.stopPropagation(); if(typeof window.wlRemove==='function') window.wlRemove(b.dataset.rm); }}, true);
+// table rows open the same quick look as cards (that's where "Remove from watchlist" lives)
+document.addEventListener('click',e=>{{ const row=e.target.closest('#wl tr.item'); if(!row || e.target.closest('a,button,input,select')) return;
+  const card=document.querySelector('.card-item[data-ticker="'+row.dataset.ticker+'"]'); if(card) openCard(card); }});
 function track(n,d){{ try{{ navigator.sendBeacon('/api/t', new Blob([JSON.stringify({{name:n,detail:d||''}})],{{type:'application/json'}})); }}catch(_){{}} }}
 let _uiReady=false;
 function setDensity(d){{
@@ -1702,7 +1690,7 @@ function openCard(card){{
     .map(b=>'<button type="button" class="'+b[2]+'" data-go="'+b[0]+'">'+b[1]+'</button>').join('');
   if(window.MYWL && window.MYWL.has(tkr))
     jump.insertAdjacentHTML('beforeend','<button type="button" class="ql-rm" data-rmq="'+tkr+'">Remove from watchlist</button>');
-  jump.addEventListener('click',e=>{{ const b=e.target.closest('[data-go]'); if(b){{ track('ql_'+b.textContent.toLowerCase().replace(/\s+/g,'_'), tkr); openTab(b.dataset.go); }}
+  jump.addEventListener('click',e=>{{ const b=e.target.closest('[data-go]'); if(b){{ track('ql_'+b.textContent.toLowerCase().replace(/\\s+/g,'_'), tkr); openTab(b.dataset.go); }}
     const r=e.target.closest('[data-rmq]'); if(r && typeof window.wlRemove==='function'){{ window.wlRemove(r.dataset.rmq); closeModal(); }} }});
   const kg=document.createElement('div'); kg.className='mx-kg';
   kg.innerHTML='<div class="det-h">Supply chain and connections <a class="site-help" style="font-weight:400;margin-left:8px" '+

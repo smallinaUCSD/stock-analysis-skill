@@ -10,7 +10,7 @@ import json
 from ..dashboard.render import _CSS, _THEME_BOOT, icon
 from . import legal
 
-BRAND = "SMI Research"
+BRAND = "SM Investments"
 
 
 def _shell(title: str, body: str, css: str = "", js: str = "", head: str = "") -> str:
@@ -760,7 +760,7 @@ def personalize_board(board_html: str, user: dict, tickers: list[str], admin: bo
 
 
 _MENU = [("/", "Your watchlist"), ("/screener", "Screener"), ("/markets", "Markets"), ("/earnings", "Earnings"),
-         ("/trades", "Politicians and hedge funds"), ("/compare", "Compare"), ("/financials", "Financials"),
+         ("/trades", "Politicians & Funds"), ("/compare", "Compare"), ("/financials", "Financials"),
          ("/economy", "Economy and rates"), ("/breakouts", "Breakouts"), ("/indicators", "Indicators"),
          ("/interpret", "How to read this")]
 
@@ -883,8 +883,8 @@ def message_html(title: str, text: str) -> str:
 
 SERVICE_WORKER = r"""
 self.addEventListener('push', function(e){
-  var d={}; try{ d=e.data.json(); }catch(_){ d={title:'SMI Research', body:e.data?e.data.text():''}; }
-  e.waitUntil(self.registration.showNotification(d.title||'SMI Research',
+  var d={}; try{ d=e.data.json(); }catch(_){ d={title:'SM Investments', body:e.data?e.data.text():''}; }
+  e.waitUntil(self.registration.showNotification(d.title||'SM Investments',
     {body:d.body||'', icon:'/icon-192.png', badge:'/icon-192.png', data:{url:d.url||'/'}}));
 });
 self.addEventListener('notificationclick', function(e){
@@ -897,7 +897,7 @@ self.addEventListener('notificationclick', function(e){
 });
 """
 
-MANIFEST = {"name": BRAND, "short_name": "SMI", "start_url": "/", "display": "standalone",
+MANIFEST = {"name": BRAND, "short_name": "SM Invest", "start_url": "/", "display": "standalone",
             "background_color": "#faf9f5", "theme_color": "#cc785c",
             "icons": [{"src": "/icon-192.png", "sizes": "192x192", "type": "image/png"},
                       {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}]}
@@ -959,13 +959,19 @@ _NF_CSS = """
 .nf-ch input{margin-top:3px;width:17px;height:17px;accent-color:var(--accent);flex:none}
 .nf-ch b{font-weight:500} .nf-ch small{display:block;color:var(--muted);font-size:13px;line-height:1.45;margin-top:2px}
 .nf-ch.off{opacity:.55;cursor:not-allowed}
+.nf-phone{border:1px solid var(--border);border-radius:12px;background:var(--bg);padding:12px 14px;margin:-2px 0 8px}
+.nf-phone>div{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:6px}
+.nf-consent{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;line-height:1.45;color:var(--muted);flex:1 1 100%}
+.nf-consent input{margin-top:2px;width:16px;height:16px;accent-color:var(--accent);flex:none}
+.nf-phone .ok{color:var(--up)} .nf-phone .err-t{color:var(--down)}
 """
 
 _NF_JS = r"""
-var NF=null, NF0={}, PEOPLE=[];
+var NF=null, NF0={}, PEOPLE=[], NF_ME=null;
 var TIMES=[['pre','Before the open','8:30am ET'],['post','After the close','4:30pm ET'],['both','Both',''],['none','No daily summary','']];
-function nfInit(me){ var n=me.user.notify;
-  NF={times:n.set?n.times:'pre', groups:{}, email:n.set?n.email:false, push:n.set?n.push:false, inapp:n.set?n.inapp:true, follows:{}};
+function nfInit(me){ var n=me.user.notify; NF_ME=me;
+  NF={times:n.set?n.times:'pre', groups:{}, email:n.set?n.email:false, push:n.set?n.push:false, inapp:n.set?n.inapp:true, follows:{},
+      sms:n.set?n.sms:false, events:n.set?n.events:true};
   (n.groups.length?n.groups:me.user.groups).forEach(function(k){ NF.groups[k]=true; });
   (me.follows||[]).forEach(function(f){ NF.follows[f.pid]=f.name||f.pid; }); NF0=Object.assign({},NF.follows); }
 function nfHTML(me, groups){
@@ -981,6 +987,9 @@ function nfHTML(me, groups){
    '<div id="nf-gwrap"><div class="wz-h">Sectors to cover</div><div class="nf-chipset" id="nf-groups">'+groups.map(function(g){
       return '<button type="button" class="nf-chip'+(NF.groups[g.key]?' on':'')+'" data-g="'+g.key+'">'+esc(g.label)+'</button>'; }).join('')+'</div>'+
    '<p class="small muted" style="margin:8px 0 0">Plus your watchlist\'s biggest movers, their earnings dates and the day\'s economic releases.</p></div>'+
+   '<div class="wz-h">Market events</div>'+
+   '<label class="nf-ch"><input type="checkbox" id="nf-events"'+(NF.events?' checked':'')+'><span><b>Big moves</b><small>When a stock on your '+
+     'watchlist moves 5% or more in a day, or the S&amp;P 500 moves 2% or more. Checked every 10 minutes while the market is open.</small></span></label>'+
    '<div class="wz-h">Follow politicians <span style="text-transform:none;letter-spacing:0">(optional)</span></div>'+
    '<p class="small muted" style="margin:0 0 8px">Get notified when their stock trades are disclosed. Members of Congress report up to 45 days after trading.</p>'+
    '<input class="inp" id="nf-q" placeholder="Search by name, state or party" autocomplete="off" style="max-width:360px">'+
@@ -992,13 +1001,51 @@ function nfHTML(me, groups){
    '<div class="wz-h">How should we reach you?</div>'+
    '<label class="nf-ch'+(me.email_ready?'':' off')+'"><input type="checkbox" id="nf-email"'+(NF.email&&me.email_ready?' checked':'')+(me.email_ready?'':' disabled')+'><span><b>Email</b><small>'+emailNote+'</small></span></label>'+
    '<label class="nf-ch'+(pushOk?'':' off')+'"><input type="checkbox" id="nf-push"'+(NF.push&&pushOk?' checked':'')+(pushOk?'':' disabled')+'><span><b>Browser notifications</b><small id="nf-push-note">'+pushNote+'</small></span></label>'+
-   '<label class="nf-ch"><input type="checkbox" id="nf-inapp"'+(NF.inapp?' checked':'')+'><span><b>Today panel in the app</b><small>Your summary and alerts waiting on your watchlist when you sign in.</small></span></label>';
+   '<label class="nf-ch"><input type="checkbox" id="nf-inapp"'+(NF.inapp?' checked':'')+'><span><b>Today panel in the app</b><small>Your summary and alerts waiting on your watchlist when you sign in.</small></span></label>'+
+   '<label class="nf-ch"><input type="checkbox" id="nf-sms"'+(NF.sms?' checked':'')+'><span><b>Text messages</b><small id="nf-sms-note">'+
+     (n.phone_verified?'To '+esc(n.phone)+'.':n.phone?'To '+esc(n.phone)+' (not confirmed yet).':'Summaries and alerts as short texts to your phone.')+
+     (me.sms_ready?'':' Texts start once they\'re switched on for the site.')+'</small></span></label>'+
+   '<div class="nf-phone" id="nf-phone"'+(NF.sms?'':' hidden')+'>'+
+     '<div id="nf-ph-have"'+(n.phone?'':' hidden')+'><span class="small">Your number: <b id="nf-ph-mask">'+esc(n.phone||'')+'</b></span> '+
+       '<a id="nf-ph-change" class="small" style="cursor:pointer">Change</a> · <a id="nf-ph-rm" class="small" style="cursor:pointer">Remove</a></div>'+
+     '<div id="nf-ph-new"'+(n.phone?' hidden':'')+'>'+
+       '<input class="inp" id="nf-ph" type="tel" inputmode="tel" autocomplete="tel" placeholder="Mobile number" style="max-width:240px">'+
+       '<label class="nf-consent"><input type="checkbox" id="nf-ph-ok"><span>I agree to get recurring text alerts from '+esc(BRAND)+' at this number. '+
+       'Message frequency varies (usually 1 to 5 a day). Msg &amp; data rates may apply. Reply STOP to opt out, HELP for help. '+
+       'Agreeing isn\'t required to use the site. <a href="/terms" target="_blank">Terms</a> · <a href="/privacy" target="_blank">Privacy</a></span></label>'+
+       '<button type="button" class="btn ghost" id="nf-ph-send">'+(me.sms_ready?'Text me a code':'Save number')+'</button></div>'+
+     '<div id="nf-code-row" hidden><input class="inp" id="nf-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" style="max-width:140px"> '+
+       '<button type="button" class="btn ghost" id="nf-code-ok">Confirm</button></div>'+
+     '<p class="small" id="nf-ph-msg" style="margin:6px 0 0"></p></div>';
+}
+function nfPhone(me){
+  var box=document.getElementById('nf-phone'), cb=document.getElementById('nf-sms'), msg=document.getElementById('nf-ph-msg');
+  function say(t,ok){ msg.textContent=t||''; msg.className='small '+(ok?'ok':'err-t'); }
+  function show(id,on){ document.getElementById(id).hidden=!on; }
+  cb.onchange=function(){ box.hidden=!cb.checked; };
+  document.getElementById('nf-ph-change').onclick=function(){ show('nf-ph-have',false); show('nf-ph-new',true); };
+  document.getElementById('nf-ph-rm').onclick=function(){ post('/api/me/phone/remove').then(function(){
+    me.user.notify.phone=''; cb.checked=false; box.hidden=true; show('nf-ph-have',false); show('nf-ph-new',true);
+    document.getElementById('nf-sms-note').textContent='Number removed. Texts are off.'; }); };
+  document.getElementById('nf-ph-send').onclick=function(){
+    if(!document.getElementById('nf-ph-ok').checked){ say('Tick the box to agree to text messages first.'); return; }
+    say('Sending…',true);
+    post('/api/me/phone',{phone:document.getElementById('nf-ph').value, consent:true}).then(function(d){
+      if(!d.ok){ say(d.error); return; }
+      me.user.notify.phone=d.phone; document.getElementById('nf-ph-mask').textContent=d.phone;
+      if(d.code_sent){ show('nf-code-row',true); say('We texted a code to '+d.phone+'.',true); document.getElementById('nf-code').focus(); }
+      else { show('nf-ph-new',false); show('nf-ph-have',true); say(d.message||'Saved.',true); } }); };
+  document.getElementById('nf-code-ok').onclick=function(){
+    post('/api/me/phone/verify',{code:document.getElementById('nf-code').value}).then(function(d){
+      if(!d.ok){ say(d.error); return; }
+      me.user.notify.phone_verified=true; show('nf-code-row',false); show('nf-ph-new',false); show('nf-ph-have',true);
+      document.getElementById('nf-sms-note').textContent='To '+d.phone+'.'; say('Confirmed. Texts will go to '+d.phone+'.',true); }); };
 }
 function nfPeople(){ var q=(document.getElementById('nf-q').value||'').trim().toLowerCase(), el=document.getElementById('nf-people');
   var list=PEOPLE.filter(function(p){ return !q || (p.name+' '+(p.state||'')+' '+(p.party||'')+' '+(p.chamber||'')).toLowerCase().indexOf(q)>=0; });
   var followed=PEOPLE.filter(function(p){ return NF.follows[p.id]; });
   if(!q){ list=followed.concat(list.filter(function(p){ return !NF.follows[p.id]; })).slice(0, Math.max(12, followed.length)); } else list=list.slice(0,24);
-  if(!list.length){ el.innerHTML='<p class="small muted">'+(PEOPLE.length?'No one matches.':'Trade data is still loading. You can follow people later from the Trades page or your account.')+'</p>'; return; }
+  if(!list.length){ el.innerHTML='<p class="small muted">'+(PEOPLE.length?'No one matches.':'Trade data is still loading. You can follow people later from the Politicians &amp; Funds page or your account.')+'</p>'; return; }
   el.innerHTML=list.map(function(p){ var on=!!NF.follows[p.id];
     var ini=(p.name||'?').split(' ').map(function(w){return w[0];}).slice(0,2).join('');
     return '<div class="nf-p">'+(p.photo?'<img src="'+esc(p.photo)+'" alt="" loading="lazy" onerror="this.outerHTML=\'<span class=&quot;ph&quot;>'+esc(ini)+'</span>\'">':'<span class="ph">'+esc(ini)+'</span>')+
@@ -1025,6 +1072,7 @@ function nfBind(me){
     if(NF.follows[id]) delete NF.follows[id]; else NF.follows[id]=b.getAttribute('data-name'); b.classList.toggle('on',!!NF.follows[id]); }; });
   document.getElementById('nf-people').onclick=function(e){ var b=e.target.closest('button[data-pid]'); if(!b) return;
     var id=b.getAttribute('data-pid'); if(NF.follows[id]) delete NF.follows[id]; else NF.follows[id]=b.getAttribute('data-name'); nfPeople(); };
+  nfPhone(me);
   var pc=document.getElementById('nf-push');
   pc.onchange=function(){ if(!pc.checked) return; var note=document.getElementById('nf-push-note'); note.textContent='Asking your browser…';
     enablePush(me.push_key).then(function(){ note.textContent='On in this browser.'; })
@@ -1034,14 +1082,18 @@ function nfBind(me){
 }
 function nfSave(){
   NF.email=document.getElementById('nf-email').checked; NF.push=document.getElementById('nf-push').checked; NF.inapp=document.getElementById('nf-inapp').checked;
+  NF.sms=document.getElementById('nf-sms').checked; NF.events=document.getElementById('nf-events').checked;
+  if(NF.sms && !(NF_ME && NF_ME.user.notify.phone)) return Promise.reject(new Error('Add your mobile number for texts, or untick Text messages.'));
   var add=Object.keys(NF.follows).filter(function(k){ return !NF0[k]; }).map(function(k){ return {pid:k,name:NF.follows[k]}; });
   var rem=Object.keys(NF0).filter(function(k){ return !NF.follows[k]; });
   return post('/api/me/notify',{times:NF.times, groups:Object.keys(NF.groups).filter(function(k){return NF.groups[k];}),
-    email:NF.email, push:NF.push, inapp:NF.inapp}).then(function(d){
+    email:NF.email, push:NF.push, inapp:NF.inapp, sms:NF.sms, events:NF.events}).then(function(d){
       if(!d.ok) throw new Error(d.error);
       return post('/api/me/follows',{add:add, remove:rem}).then(function(){ NF0=Object.assign({},NF.follows); return d; }); });
 }
 """
+
+_NF_JS = _NF_JS.replace("esc(BRAND)", json.dumps(BRAND))
 
 
 # --- forgot / reset password ----------------------------------------------------------------

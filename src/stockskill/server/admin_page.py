@@ -14,7 +14,7 @@ def admin_html() -> str:
             "<header><h1>Admin</h1><span class=\"sub\" style=\"margin:0\">Usage and health</span>"
             "<span class=\"seg ad-seg\" id=\"ad-days\"><button data-d=\"7\">7 days</button><button data-d=\"30\" class=\"on\">30 days</button>"
             "<button data-d=\"90\">90 days</button></span>"
-            "<button class=\"page-x\" onclick=\"location.href='/'\" title=\"Close\" aria-label=\"Close\">" + icon("x", 17) + "</button></header>"
+            "<button class=\"page-x\" onclick=\"return goBack(event)\" title=\"Close\" aria-label=\"Close\">" + icon("x", 17) + "</button></header>"
             "<div id=\"ad\" class=\"muted\">Loading…</div>"
             "<p class=\"ad-note\">First-party counts from this server's own logs. People = signed-in accounts plus anonymous "
             "visitors (a daily hash of IP and browser; the IP isn't stored). Bots and scripts are left out. Data is kept 90 days, as the Privacy Policy says.</p>"
@@ -47,10 +47,14 @@ _EXTRA_CSS = """
 """
 
 _JS = r"""
+function goBack(e){ if(e) e.preventDefault();
+  var r=document.referrer||'';
+  if(history.length>1 && r.indexOf(location.origin+'/')===0 && r!==location.href){ history.back(); return false; }
+  window.close(); setTimeout(function(){ location.href='/'; }, 200); return false; }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
 var DAYS=30;
 var PAGES={'/':'Watchlist board','/analysis/<ticker>':'Stock page','/financials':'Financials','/earnings':'Earnings calendar',
-  '/graph':'Connections graph','/screener':'Screener','/trades':'Politicians and funds','/politician/<pid>':'Politician profile',
+  '/graph':'Connections graph','/screener':'Screener','/trades':'Politicians & Funds','/politician/<pid>':'Politician profile',
   '/fund/<int:cik>':'Hedge-fund profile','/markets':'Markets','/economy':'Economy','/account':'Profile and settings',
   '/welcome':'Sign-up setup','/login':'Sign in','/signup':'Create account','/admin':'Admin','/terms':'Terms','/privacy':'Privacy',
   '/forgot':'Forgot password','/reset':'Reset password','/alerts':'Alerts','/breakouts':'Breakouts','/compare':'Compare',
@@ -110,7 +114,10 @@ function render(d){
     '<div class="ad-card"><h3>Sign-in and notifications</h3>'+table([
       {k:'Google sign-in',v:(d.sign_in||{}).google},{k:'Password',v:(d.sign_in||{}).password},{k:'Passkey',v:(d.sign_in||{}).passkey},
       {k:'2-step verification',v:(d.sign_in||{}).two_step},{k:'Daily summary on',v:(d.notify||{}).summary},{k:'Email (confirmed)',v:(d.notify||{}).email},
-      {k:'Browser notifications',v:(d.notify||{}).push},{k:'Follows (people and funds)',v:(d.notify||{}).follows}],[['k',''],['v','Accounts']])+'</div></div>'+
+      {k:'Browser notifications',v:(d.notify||{}).push},{k:'Text messages (confirmed)',v:(d.notify||{}).sms},
+      {k:'Market-event alerts on',v:(d.notify||{}).events},{k:'Follows (people and funds)',v:(d.notify||{}).follows}],[['k',''],['v','Accounts']])+'</div></div>'+
+    '<div class="ad-card" style="margin-bottom:12px"><h3>Alerts sent, last 14 days (Eastern dates)</h3>'+table(d.alerts,
+      [['kind','Alert'],['n','People'],['day','Day'],['email','Email'],['push','Push'],['sms','Text']])+'</div>'+
     '<div class="ad-grid"><div class="ad-card"><h3>Slowest routes, last 24h (p95)</h3>'+table(d.slow_routes,[['route','Route'],['p95','p95 ms',Math.round],['p50','p50 ms',Math.round],['count','Calls']])+'</div>'+
     '<div class="ad-card"><h3>Recent server errors</h3>'+table((d.recent_errors||[]).map(function(e){ return {when:new Date(e.ts*1000).toLocaleString(),path:e.path,status:e.status}; }),
       [['path','Path'],['status','Status'],['when','When']])+'</div></div>'+

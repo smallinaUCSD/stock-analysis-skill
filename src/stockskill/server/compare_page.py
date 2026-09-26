@@ -148,8 +148,13 @@ _EXTRA_CSS = """
 
 _JS = r"""
 function goBack(e){ if(e) e.preventDefault();
-  if(window.opener && !window.opener.closed){ try{window.opener.focus();}catch(_){}; window.close(); }
-  else location.href='/'; return false; }
+  // came here inside this tab: step back; opened as its own tab: close it
+  var r=document.referrer||'';
+  if(history.length>1 && r.indexOf(location.origin+'/')===0 && r!==location.href){ history.back(); return false; }
+  try{ if(window.opener && !window.opener.closed) window.opener.focus(); }catch(_){}
+  window.close();
+  setTimeout(function(){ location.href='/'; }, 200);          // the browser refused to close it
+  return false; }
 var COLORS=['var(--accent)','#5db8a6','#e8a55a','#8b7fc7'];
 var TICKERS=[], PERIOD='5y', DATA=null, HOLD=null, _req=0;
 var W=900, ML=62, MR=14, MT=12, MB=22;

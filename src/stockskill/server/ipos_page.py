@@ -46,8 +46,13 @@ _EXTRA_CSS = """
 
 _JS = r"""
 function goBack(e){ if(e) e.preventDefault();
-  if(window.opener && !window.opener.closed){ try{window.opener.focus();}catch(_){}; window.close(); }
-  else location.href='/'; return false; }
+  // came here inside this tab: step back; opened as its own tab: close it
+  var r=document.referrer||'';
+  if(history.length>1 && r.indexOf(location.origin+'/')===0 && r!==location.href){ history.back(); return false; }
+  try{ if(window.opener && !window.opener.closed) window.opener.focus(); }catch(_){}
+  window.close();
+  setTimeout(function(){ location.href='/'; }, 200);          // the browser refused to close it
+  return false; }
 var D=null;
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
 function fdate(iso){ if(!iso) return '-'; var p=iso.split('-'); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+p[1]-1]+' '+(+p[2]); }

@@ -41,8 +41,13 @@ _EXTRA_CSS = """
 
 _JS = r"""
 function goBack(e){ if(e) e.preventDefault();
-  if(window.opener && !window.opener.closed){ try{window.opener.focus();}catch(_){}; window.close(); }
-  else location.href='/trades'; return false; }
+  // came here inside this tab: step back; opened as its own tab: close it
+  var r=document.referrer||'';
+  if(history.length>1 && r.indexOf(location.origin+'/')===0 && r!==location.href){ history.back(); return false; }
+  try{ if(window.opener && !window.opener.closed) window.opener.focus(); }catch(_){}
+  window.close();
+  setTimeout(function(){ location.href='/trades'; }, 200);          // the browser refused to close it
+  return false; }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
 function big(v){ var a=Math.abs(v); return (v<0?'-':'')+'$'+(a>=1e12?(a/1e12).toFixed(2)+'T':a>=1e9?(a/1e9).toFixed(1)+'B':a>=1e6?(a/1e6).toFixed(0)+'M':Math.round(a).toLocaleString()); }
 function fdate(iso){ if(!iso) return '-'; var p=iso.split('-'); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+p[1]-1]+' '+(+p[2])+', '+p[0]; }
@@ -65,7 +70,7 @@ function renderHold(d){
   var t='<table class="pp-t"><thead><tr><th>Company</th><th class="r">Value</th><th>Share of portfolio</th><th>Change</th></tr></thead><tbody>'+
     (d.holdings||[]).map(function(r){ var ch=r.change==='Held'?'':'<span class="fd-badge '+(r.change==='Sold out'?'Sold':r.change)+'">'+esc(r.change)+
       (r.share_change!=null&&r.change!=='New'?' '+(r.share_change>0?'+':'')+(r.share_change*100).toFixed(0)+'%':'')+'</span>';
-      return '<tr><td class="wrap">'+(r.ticker?'<a href="/analysis/'+encodeURIComponent(r.ticker)+'" target="_blank" rel="noopener"><b>'+esc(r.ticker)+'</b></a> ':'')+
+      return '<tr><td class="wrap">'+(r.ticker?'<a href="/analysis/'+encodeURIComponent(r.ticker)+'"><b>'+esc(r.ticker)+'</b></a> ':'')+
         '<span class="mu">'+esc(r.name)+(r.put_call?' ('+esc(r.put_call.toLowerCase())+'s)':'')+'</span></td><td class="r">'+big(r.value)+'</td>'+
         '<td><span class="fd-bar" style="width:'+Math.max(2,(r.weight||0)/mx*140).toFixed(0)+'px"></span>'+((r.weight||0)*100).toFixed(1)+'%</td><td>'+ch+'</td></tr>'; }).join('')+'</tbody></table>';
   var el=document.getElementById('hold'); el.className='pp-tw'; el.innerHTML=t;

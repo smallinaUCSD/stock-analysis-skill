@@ -7,8 +7,10 @@ browser push and the in-app Today panel (each user's choice).
   addresses the user has confirmed, with a one-click unsubscribe link.
 * Browser push uses the Web Push standard with this server's own VAPID key
   (generated once, kept in data/.vapid_private.pem).
+* Text messages go through Twilio (sms.py) to numbers confirmed with a texted code.
 * The scheduler runs in the public app when STOCKSKILL_NOTIFY=1: summaries at
-  8:30am and 4:30pm Eastern on weekdays, politician trades every 30 minutes.
+  8:30am and 4:30pm Eastern on weekdays, big moves (market events) every 10
+  minutes while the market is open, politician trades every 30 minutes.
 
 ``compose_summary`` and ``trade_events`` are pure (tested).
 """
@@ -116,7 +118,7 @@ def send_email(to: str, subject: str, text: str, html_body: str | None = None,
 
 
 def send_simple(to: str, subject: str, lines: list[str], url: str | None = None,
-                label: str = "Open SMI Research") -> bool:
+                label: str = "Open SM Investments") -> bool:
     """A transactional email (welcome, codes, security notices): no unsubscribe."""
     plain = "\n\n".join(html.unescape(_strip_tags(ln)) for ln in lines)
     links = __import__("re").findall(r'href="([^"]+)"', " ".join(lines))
@@ -219,6 +221,15 @@ def deliver(u: dict, kind: str, title: str, lines: list[str], url: str, dedupe: 
                                   _email_html(title, lines, full, unsub), unsubscribe=unsub)
     if u.get("notify_push"):
         out["push"] = send_push(u["id"], title, push_body or (plain[0] if plain else ""), url)
+    if u.get("notify_sms") and u.get("phone_verified") and u.get("phone"):
+        from . import sms
+        from .pages import BRAND
+        full = url if url.startswith("http") else public_url() + url
+        out["sms"], _ = sms.send_sms(u["phone"], sms.alert_text(BRAND, title, push_body or (plain[0] if plain else ""), full))
+    try:
+        db.set_delivery(u["id"], dedupe, ",".join(k if v is True else f"{k}:{v}" for k, v in out.items() if v))
+    except Exception:  # noqa: BLE001
+        pass
     return out
 
 
@@ -330,6 +341,53 @@ def trade_message(t: dict, pid: str) -> tuple[str, list[str], str]:
     return title, lines, f"/politician/{pid}"
 
 
+# --- market events ------------------------------------------------------------------
+
+EVENT_STOCK = (0.05, 0.10)          # a watchlist stock moves 5%, then 10%, in a day
+EVENT_MARKET = (0.02, 0.03)         # the S&P 500 moves 2%, then 3%
+
+
+def _crossed(t: str, chg: float, levels: tuple, already: set) -> list[str]:
+    """Keys for the levels this move has reached and hasn't been reported at
+    (a 10% move also marks 5%, so a pull-back to 7% stays quiet)."""
+    d = "up" if chg > 0 else "down"
+    hit = [f"{t}:{d}:{lv:g}" for lv in levels if abs(chg) >= lv]
+    return hit if hit and hit[-1] not in already else []
+
+
+def market_events(watch: list[str], quotes: dict, already: set) -> tuple[list[str], str, list[str], str]:
+    """(new keys, title, lines, link) for one person, or no keys if nothing new.
+    ``quotes`` must be live, today's moves only."""
+    keys, lines, title, url = [], [], "", "/"
+    spy = (quotes.get("SPY") or {}).get("change_pct")
+    if spy is not None:
+        k = _crossed("SPY", spy, EVENT_MARKET, already)
+        if k:
+            keys += k
+            title = f"The S&P 500 is {'up' if spy > 0 else 'down'} {abs(spy) * 100:.1f}% today"
+            lines.append(f"<b>{title}.</b>")
+    movers = []
+    for t in dict.fromkeys(watch):
+        q = quotes.get(t) or {}
+        if q.get("change_pct") is None:
+            continue
+        k = _crossed(t, q["change_pct"], EVENT_STOCK, already)
+        if k:
+            keys += k
+            movers.append((t, q["change_pct"], q.get("price")))
+    movers.sort(key=lambda x: -abs(x[1]))
+    for t, c, p in movers[:6]:
+        lines.append(f"<b>{t}</b> {_pct(c)}" + (f" at ${p:,.2f}" if p else "") + " today")
+    if len(movers) > 6:
+        lines.append(f"{len(movers) - 6} more of your stocks moved 5% or more.")
+    if movers and not title:
+        t, c, _ = movers[0]
+        title = f"{t} is {'up' if c > 0 else 'down'} {abs(c) * 100:.1f}% today" + (
+            f" (and {len(movers) - 1} more)" if len(movers) > 1 else "")
+        url = f"/analysis/{t}" if len(movers) == 1 else "/"
+    return keys, title, lines, url
+
+
 # --- scheduler ------------------------------------------------------------------------
 
 class Scheduler:
@@ -337,6 +395,7 @@ class Scheduler:
         self.app, self.member_id = app, member_id
         self.state_path = os.path.join(os.path.dirname(db.path()) or ".", "notify_state.json")
         self.last_trades = 0.0
+        self.last_events = 0.0
 
     def start(self):
         threading.Thread(target=self._loop, daemon=True).start()
@@ -369,10 +428,32 @@ class Scheduler:
         for slot, (h, m) in SLOTS.items():
             key = f"{et.date().isoformat()}:{slot}"
             due = force_slot == slot or (st.is_weekday and (et.hour, et.minute) >= (h, m) and (et.hour - h) < 3)
-            if due and key not in state:
-                state[key] = time.time()
-                self._save(state)
-                self.run_summaries(slot, et.date())
+            rec = state.get(key)
+            if not due or isinstance(rec, (int, float)) or (rec or {}).get("done"):
+                continue
+            # Marked "done" only after the run finishes. A run cut short (restart,
+            # data error) is retried every 5 minutes, up to 5 tries; users who
+            # already got it are skipped by deliver()'s once-only key.
+            tries = (rec or {}).get("tries", 0)
+            if tries >= 5 or (rec and time.time() - rec.get("last", 0) < 300):
+                continue
+            state[key] = {"tries": tries + 1, "last": time.time()}
+            self._save(state)
+            try:
+                n = self.run_summaries(slot, et.date())
+                state[key] = {"done": time.time(), "sent": n, "tries": tries + 1}
+                _log(f"{slot} summary: sent to {n} people")
+            except Exception as e:  # noqa: BLE001
+                _log(f"{slot} summary failed (try {tries + 1} of 5): {e!r}")
+            cut = (et.date() - timedelta(days=14)).isoformat()
+            state = {k: v for k, v in state.items() if k[:10] >= cut}
+            self._save(state)
+        if st.is_open and time.time() - self.last_events > 600:
+            self.last_events = time.time()
+            try:
+                self.run_events(et.date())
+            except Exception as e:  # noqa: BLE001
+                _log(f"market events failed: {e!r}")
         if time.time() - self.last_trades > 1800:
             self.last_trades = time.time()
             self.run_trades()
@@ -415,10 +496,41 @@ class Scheduler:
                 er = [e for e in cal if e["ticker"] in w and ((e["date"] == today.isoformat() and e.get("timing") == "post")
                                                              or (e["date"] == tomorrow and e.get("timing") != "post"))]
                 ec = [e for e in econ if e["date"] == tomorrow]
-            title, lines, push = compose_summary(slot, u, watch[u["id"]], quotes, groups, er, ec, today)
-            r = deliver(u, "summary", title, lines, "/", f"sum:{today.isoformat()}:{slot}", push)
-            sent += 0 if r.get("duplicate") else 1
+            try:                                   # one person's problem doesn't stop everyone else's
+                title, lines, push = compose_summary(slot, u, watch[u["id"]], quotes, groups, er, ec, today)
+                r = deliver(u, "summary", title, lines, "/", f"sum:{today.isoformat()}:{slot}", push)
+                sent += 0 if r.get("duplicate") else 1
+            except Exception as e:  # noqa: BLE001
+                _log(f"{slot} summary for user {u['id']} failed: {e!r}")
         return sent
+
+    def run_events(self, today: date) -> int:
+        """Big moves in people's watchlists and the market (every 10 minutes while open)."""
+        users = [u for u in db.all_users() if u.get("notify_events")]
+        if not users:
+            return 0
+        watch = {u["id"]: db.watchlist(u["id"]) for u in users}
+        need = sorted({"SPY"} | {t for w in watch.values() for t in w})
+        quotes = _quotes(need, None, live_only=True)
+        state = self._state()
+        skey = f"{today.isoformat()}:events"
+        sent_today = state.get(skey) or {}
+        n = 0
+        for u in users:
+            already = set(sent_today.get(str(u["id"]), []))
+            keys, title, lines, url = market_events(watch[u["id"]], quotes, already)
+            if not keys:
+                continue
+            sent_today[str(u["id"])] = sorted(already | set(keys))
+            try:
+                r = deliver(u, "event", title, lines, url, f"ev:{today.isoformat()}:" + "|".join(keys)[:180], title)
+                n += 0 if r.get("duplicate") else 1
+            except Exception as e:  # noqa: BLE001
+                _log(f"market event for user {u['id']} failed: {e!r}")
+        state = self._state()
+        state[skey] = sent_today
+        self._save(state)
+        return n
 
     def run_funds(self, followers: dict) -> int:
         """A followed fund filed a new 13F: tell its followers once."""
@@ -478,15 +590,27 @@ class Scheduler:
         return n
 
 
-def _quotes(tickers: list[str], cache_dir) -> dict:
-    """Latest-session moves: live quotes when available, else cached closes."""
-    out = {}
+def _log(msg: str) -> None:
+    import sys
+    print(f"notify: {msg}", file=sys.stderr, flush=True)
+
+
+def _quotes(tickers: list[str], cache_dir, live_only: bool = False) -> dict:
+    """Latest-session moves: the board's live feed (last 20 min) first, then
+    live quotes for the rest, else (unless ``live_only``) cached closes."""
+    from ..watchlist import build as B
+    now = time.time()
+    out = {t: q for t in tickers for ts, q in [B._QUOTES.get(t, (0, None))]
+           if q and now - ts < 1200 and q.get("change_pct") is not None}
     try:
         from ..data import finnhub
-        if finnhub.has_finnhub():
-            out = finnhub.batch_quotes(tickers)
+        rest = [t for t in tickers if t not in out]
+        if rest and finnhub.has_finnhub():
+            out.update(finnhub.batch_quotes(rest) or {})
     except Exception:  # noqa: BLE001
-        out = {}
+        pass
+    if live_only:
+        return out
     from ..watchlist.pipeline import _load_cached
     for t in tickers:
         if t in out:

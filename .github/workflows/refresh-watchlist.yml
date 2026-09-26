@@ -6,8 +6,7 @@ name: Refresh smart watchlist
 # Runs on the default branch; needs contents:write to commit.
 
 on:
-  schedule:
-    - cron: "0 12 * * 1-5"   # ~08:00 ET (12:00 UTC), weekday mornings
+  # No schedule: the Mac mini refreshes the site itself. Run by hand from the Actions tab if needed.
   workflow_dispatch:
 
 permissions:

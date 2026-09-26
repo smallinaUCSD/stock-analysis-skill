@@ -167,8 +167,12 @@ not recorded with a price. Net gain needs a cost basis.</p>
 <script>
 // Return to the watchlist tab this was opened from (don't spawn a 2nd watchlist).
 function goBack(e){{ if(e) e.preventDefault();
-  if(window.opener && !window.opener.closed){{ try{{ window.opener.focus(); }}catch(_){{}} window.close(); }}
-  else {{ location.href='/'; }}
+  // came here inside this tab: step back; opened as its own tab: close it
+  var r=document.referrer||'';
+  if(history.length>1 && r.indexOf(location.origin+'/')===0 && r!==location.href){{ history.back(); return false; }}
+  try{{ if(window.opener && !window.opener.closed) window.opener.focus(); }}catch(_){{}}
+  window.close();
+  setTimeout(function(){{ location.href='/'; }}, 200);          // the browser refused to close it
   return false; }}
 function _v(id){{ return (document.getElementById(id).value||'').trim(); }}
 function _msg(id,t,ok){{ const m=document.getElementById(id); m.textContent=t; m.className='h-msg '+(ok?'ok':'bad'); }}

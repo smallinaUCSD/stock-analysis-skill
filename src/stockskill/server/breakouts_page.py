@@ -55,8 +55,13 @@ _EXTRA_CSS = """
 
 _JS = r"""
 function goBack(e){ if(e) e.preventDefault();
-  if(window.opener && !window.opener.closed){ try{window.opener.focus();}catch(_){}; window.close(); }
-  else location.href='/'; return false; }
+  // came here inside this tab: step back; opened as its own tab: close it
+  var r=document.referrer||'';
+  if(history.length>1 && r.indexOf(location.origin+'/')===0 && r!==location.href){ history.back(); return false; }
+  try{ if(window.opener && !window.opener.closed) window.opener.focus(); }catch(_){}
+  window.close();
+  setTimeout(function(){ location.href='/'; }, 200);          // the browser refused to close it
+  return false; }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
 function pct(v,dp){ if(v==null) return '<span class="mu">-</span>'; return '<span class="'+(v>=0?'up':'down')+'">'+(v>=0?'+':'')+(v*100).toFixed(dp==null?1:dp)+'%</span>'; }
 var LABELS={near_52w_high:'52w high',volume:'volume',trend:'trend',relative_strength:'beats S&P',squeeze:'squeeze'};

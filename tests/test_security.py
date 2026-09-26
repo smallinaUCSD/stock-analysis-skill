@@ -86,7 +86,7 @@ def test_welcome_email_with_confirm_link(app, outbox):
     c = app.test_client()
     _signup(c)
     mail = outbox[-1]
-    assert mail["to"] == "a@example.com" and mail["subject"] == "Welcome to SMI Research"
+    assert mail["to"] == "a@example.com" and mail["subject"] == "Welcome to SM Investments"
     tok = _link(mail["text"], "/notifications/verify")
     assert c.get("/notifications/verify?t=" + tok).status_code == 200
     from stockskill.accounts import db

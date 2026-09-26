@@ -1,6 +1,6 @@
 # Sourced by the launch scripts: load .env into the environment.
 # read .env as KEY=VALUE settings, not as a shell script: a value with spaces
-# (STOCKSKILL_OPERATOR=SMI Investments) must not be run as a command
+# (STOCKSKILL_OPERATOR=SM Investments) must not be run as a command
 load_env() {
   local line key val
   while IFS= read -r line || [ -n "$line" ]; do

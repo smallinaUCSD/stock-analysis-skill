@@ -414,7 +414,9 @@ def _public_user(u: dict) -> dict:
                      "groups": [x for x in (u.get("summary_groups") or u.get("groups") or "").split(",") if x],
                      "email": bool(u.get("notify_email")), "push": bool(u.get("notify_push")),
                      "inapp": bool(u.get("notify_inapp")), "email_verified": bool(u.get("email_verified")),
-                     "set": bool(u.get("notify_set"))}
+                     "set": bool(u.get("notify_set")), "sms": bool(u.get("notify_sms")),
+                     "events": bool(u.get("notify_events")), "phone": _sms().mask(u.get("phone")),
+                     "phone_verified": bool(u.get("phone_verified"))}
     return out
 
 
@@ -426,7 +428,7 @@ def me():
     return jsonify({"ok": True, "user": _public_user(u), "watchlist": db.watchlist(u["id"]),
                     "passkeys": db.passkeys(u["id"]), "follows": db.follows(u["id"]),
                     "push_key": notify.vapid_public_key(), "email_ready": notify.email_ready(),
-                    "push_count": len(db.push_subs(u["id"])),
+                    "push_count": len(db.push_subs(u["id"])), "sms_ready": _sms().sms_ready(),
                     "funds": [[f"fund:{cik}", name, mgr] for name, mgr, cik in _funds()],
                     # ordered [key, label] pairs (a JSON object would be re-sorted alphabetically)
                     "options": {k: [[a, b] for a, b in m.items()] for k, m in (
@@ -610,15 +612,72 @@ def save_notify():
     valid = {g_["key"] for g_ in all_groups(c["tickers_path"], c["cache_dir"])}
     groups = [k for k in (b.get("groups") or []) if k in valid]
     want_email, want_push, want_inapp = bool(b.get("email")), bool(b.get("push")), bool(b.get("inapp"))
-    if times != "none" and not (want_email or want_push or want_inapp):
+    want_sms = bool(b.get("sms")) and bool(u.get("phone"))
+    if times != "none" and not (want_email or want_push or want_inapp or want_sms):
         return jsonify({"ok": False, "error": "Pick at least one way to get your summary."}), 400
     db.update_user(u["id"], summary_times=times, summary_groups=",".join(groups), notify_email=int(want_email),
-                   notify_push=int(want_push), notify_inapp=int(want_inapp), notify_set=1)
+                   notify_push=int(want_push), notify_inapp=int(want_inapp), notify_sms=int(want_sms),
+                   notify_events=int(bool(b.get("events"))), notify_set=1)
     sent, err = False, None
     if want_email and not u.get("email_verified"):
         sent, err = _send_verification(u)
     return jsonify({"ok": True, "verification_sent": sent, "email_error": err,
                     "email_pending": want_email and not u.get("email_verified")})
+
+
+def _sms():
+    from . import sms
+    return sms
+
+
+@bp.post("/api/me/phone")
+@login_required
+def set_phone():
+    """Save a mobile number (with consent to texts) and text it a 6-digit code."""
+    S = _sms()
+    b = _body()
+    u = current_user()
+    phone = S.normalize_phone(b.get("phone"))
+    if not phone:
+        return jsonify({"ok": False, "error": "Enter a mobile number, like (555) 123-4567."}), 400
+    if not b.get("consent"):
+        return jsonify({"ok": False, "error": "Please agree to receive text messages first."}), 400
+    same = phone == u.get("phone") and u.get("phone_verified")
+    db.update_user(u["id"], phone=phone, sms_consent_at=time.time(), **({} if same else {"phone_verified": 0}))
+    if same:
+        return jsonify({"ok": True, "verified": True, "phone": S.mask(phone)})
+    if not S.sms_ready():
+        return jsonify({"ok": True, "verified": False, "phone": S.mask(phone), "pending": True,
+                        "message": "Saved. Texts aren't switched on yet; we'll ask you to confirm this number when they are."})
+    if _limited("sms:" + str(u["id"]), 4, 3600) or _limited("sms-to:" + phone, 4, 3600):
+        return jsonify({"ok": False, "error": "Several codes were already sent. Try again in an hour."}), 429
+    from .pages import BRAND
+    ok, err = S.send_sms(phone, f"{BRAND}: your code is {S.new_code(u['id'], phone)}. It expires in 10 minutes. "
+                                "Reply STOP to opt out.")
+    if not ok:
+        return jsonify({"ok": False, "error": err}), 502
+    return jsonify({"ok": True, "verified": False, "phone": S.mask(phone), "code_sent": True})
+
+
+@bp.post("/api/me/phone/verify")
+@login_required
+def verify_phone():
+    S = _sms()
+    u = current_user()
+    if _limited("smscheck:" + str(u["id"]), 10, 900):
+        return jsonify({"ok": False, "error": "Too many tries. Wait a few minutes."}), 429
+    phone = S.check_code(u["id"], str(_body().get("code") or ""))
+    if not phone or phone != u.get("phone"):
+        return jsonify({"ok": False, "error": "That code didn't match or has expired. Send a new one."}), 400
+    db.update_user(u["id"], phone_verified=1, notify_sms=1)
+    return jsonify({"ok": True, "verified": True, "phone": S.mask(phone)})
+
+
+@bp.post("/api/me/phone/remove")
+@login_required
+def remove_phone():
+    db.update_user(current_user()["id"], phone=None, phone_verified=0, notify_sms=0, sms_consent_at=None)
+    return jsonify({"ok": True})
 
 
 def _send_verification(u: dict) -> tuple[bool, str | None]:

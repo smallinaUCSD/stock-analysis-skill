@@ -82,13 +82,18 @@ _EXTRA_CSS = """
 
 _JS = r"""
 function goBack(e){ if(e) e.preventDefault();
-  if(window.opener && !window.opener.closed){ try{window.opener.focus();}catch(_){}; window.close(); }
-  else location.href='/trades'; return false; }
+  // came here inside this tab: step back; opened as its own tab: close it
+  var r=document.referrer||'';
+  if(history.length>1 && r.indexOf(location.origin+'/')===0 && r!==location.href){ history.back(); return false; }
+  try{ if(window.opener && !window.opener.closed) window.opener.focus(); }catch(_){}
+  window.close();
+  setTimeout(function(){ location.href='/trades'; }, 200);          // the browser refused to close it
+  return false; }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
 function fdate(iso){ if(!iso) return '-'; var p=iso.split('-'); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+p[1]-1]+' '+(+p[2])+', '+p[0]; }
 function big(v){ if(v==null) return '-'; var a=Math.abs(v); return a>=1e9?'$'+(v/1e9).toFixed(1)+'B':(a>=1e6?'$'+(v/1e6).toFixed(1)+'M':(a>=1e3?'$'+(v/1e3).toFixed(0)+'k':'$'+Math.round(v))); }
 function pct(v){ if(v==null) return '<span class="mu">-</span>'; return '<span class="'+(v>=0?'up':'down')+'">'+(v>=0?'+':'')+(v*100).toFixed(1)+'%</span>'; }
-function tk(t){ return t?'<a href="/analysis/'+encodeURIComponent(t)+'" target="_blank" rel="noopener">'+esc(t)+'</a>':'<span class="mu">-</span>'; }
+function tk(t){ return t?'<a href="/analysis/'+encodeURIComponent(t)+'">'+esc(t)+'</a>':'<span class="mu">-</span>'; }
 function yrs(iso){ if(!iso) return ''; var y=(new Date()-new Date(iso))/3.15576e10; return y<1?'less than a year':(Math.floor(y)+' year'+(Math.floor(y)===1?'':'s')); }
 var D=null;
 function renderWho(p){

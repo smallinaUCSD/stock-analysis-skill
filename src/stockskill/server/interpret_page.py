@@ -446,8 +446,8 @@ def interpret_html() -> str:
           "options are rich or cheap versus realized volatility: spreads for a directional view, a cash-secured put "
           "or iron condor when options are rich, and a covered call for holders. Each shows cost, maximum profit and "
           "loss, breakeven and the chance of profit. Ideas, not advice; options can lose their full cost quickly.</p>"),
-         ("Trades and breakouts",
-          "<p><b>Trades</b> lists what members of Congress reported buying and selling (up to 45 days late) and what "
+         ("Politicians & Funds, and breakouts",
+          "<p><b>Politicians &amp; Funds</b> lists what members of Congress reported buying and selling (up to 45 days late) and what "
           "21 well-known hedge funds held last quarter and changed (13F filings, 45+ days old). <b>Breakouts</b> lists "
           "stocks closing above their 20-day high, graded by confirmations, next to how breakouts have done on this "
           "watchlist: about the same as ordinary days so far.</p>"),
@@ -509,11 +509,16 @@ def interpret_html() -> str:
 <p class="disc">This is educational analysis, not investment advice, and not a
 recommendation to buy, sell, or hold any security. Every figure is a model estimate
 built on free, possibly delayed data; the decision is always yours.</p>
-<div class="foot">2026 SMI Investments. All rights reserved.</div>
+<div class="foot">2026 SM Investments. All rights reserved.</div>
 </div>
 <script>
 function goBack(e){{ if(e) e.preventDefault();
-  if(window.opener && !window.opener.closed){{ try{{window.opener.focus();}}catch(_){{}}; window.close(); }}
-  else location.href='/'; return false; }}
+  // came here inside this tab: step back; opened as its own tab: close it
+  var r=document.referrer||'';
+  if(history.length>1 && r.indexOf(location.origin+'/')===0 && r!==location.href){{ history.back(); return false; }}
+  try{{ if(window.opener && !window.opener.closed) window.opener.focus(); }}catch(_){{}}
+  window.close();
+  setTimeout(function(){{ location.href='/'; }}, 200);          // the browser refused to close it
+  return false; }}
 </script>
 </body></html>"""

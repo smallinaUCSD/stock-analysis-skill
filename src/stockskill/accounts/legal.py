@@ -14,13 +14,13 @@ from __future__ import annotations
 import html
 import os
 
-TERMS_VERSION = "2026-09-25"
-PRIVACY_VERSION = "2026-09-25.2"
-EFFECTIVE = "September 25, 2026"
+TERMS_VERSION = "2026-09-26"
+PRIVACY_VERSION = "2026-09-26"
+EFFECTIVE = "September 26, 2026"
 
 
 def operator() -> str:
-    return os.environ.get("STOCKSKILL_OPERATOR") or "SMI Investments"
+    return os.environ.get("STOCKSKILL_OPERATOR") or "SM Investments"
 
 
 def contact() -> str:
@@ -84,6 +84,13 @@ third-party content or websites we link to. Data is provided for your personal, 
 happens under your account. Tell us promptly if you suspect unauthorized use. You may not share your account,
 create accounts by automated means, or impersonate anyone. We may refuse, suspend or close accounts at our
 discretion, including for violations of these Terms.</p>
+<p><b>Text message alerts.</b> If you give us a mobile number and agree to texts, {op} will send the recurring
+alerts you choose (daily market summaries, big market moves, and trades by the politicians and funds you
+follow) and one-time confirmation codes. Message frequency varies, usually 1 to 5 a day. Message and data
+rates may apply. Reply STOP to any message to stop all texts, or HELP for help; you can also turn texts off or
+remove your number in account settings. Agreeing to texts is not a condition of using the Service. Carriers
+are not liable for delayed or undelivered messages. Texts can be delayed and are not a substitute for checking
+prices yourself before you trade.</p>
 
 <h2>6. Acceptable use</h2>
 <p>You agree not to: (a) scrape, crawl, copy, resell, redistribute or build a competing product from the
@@ -192,9 +199,12 @@ use and share it, and the choices and rights you have. It applies together with 
 (we never store or see your actual password).</li>
 <li><b>Profile:</b> first and last name, date of birth (used to confirm you are 18 or older), and optionally
 your gender.</li>
+<li><b>Mobile number (optional):</b> if you ask for text alerts, your phone number, when you agreed to receive
+texts, and whether you confirmed the number with a code we texted.</li>
 <li><b>Preferences:</b> the kind of investor you are, your experience level, how you heard about us, the
 sectors and indices you chose, your watchlist, your notification choices (when to send a daily summary, which
-sectors it covers, and whether by email, browser notification or in the app) and the politicians you follow.</li>
+sectors it covers, whether to alert you to big market moves, and whether by email, text message, browser
+notification or in the app) and the politicians and funds you follow.</li>
 <li><b>Messages</b> you send us, such as support requests.</li>
 </ul>
 <p><b>Information from sign-in providers.</b> If you choose "Sign in with Google", Google shares your name,
@@ -231,8 +241,8 @@ advertising.</b> We share it only:</p>
 <li>with service providers that host or deliver the Service for us (for example our hosting and network
 providers), who may use it only to provide those services;</li>
 <li>with Google, only if you choose to sign in with Google;</li>
-<li>with our email provider, to deliver emails you asked for, and with your browser's push service, to deliver
-browser notifications you turned on;</li>
+<li>with our email provider, to deliver emails you asked for, with our text-message provider (Twilio), to deliver
+texts you asked for, and with your browser's push service, to deliver browser notifications you turned on;</li>
 <li>when required by law, subpoena or court order, or to protect the rights, property or safety of us, our
 users or others;</li>
 <li>in connection with a merger, acquisition or sale of assets, in which case this policy continues to apply
@@ -240,6 +250,9 @@ to your information; and</li>
 <li>with your consent.</li>
 </ul>
 <p>Market data requests we make to data providers do not include your personal information.</p>
+<p><b>Mobile numbers.</b> We use your mobile number only to send the texts you asked for and confirmation codes.
+We do not sell, rent or share mobile numbers, or your consent to receive texts, with anyone for their marketing
+or promotional purposes.</p>
 
 <h2>5. Retention</h2>
 <p>We keep account information while your account is open. When you delete your account we delete your
@@ -250,6 +263,7 @@ that you accepted our Terms.</p>
 <h2>6. Your choices and rights</h2>
 <ul>
 <li>View and edit your profile and watchlist, and remove passkeys, in account settings.</li>
+<li>Stop text messages by replying STOP, or turn them off or remove your number in account settings.</li>
 <li>Delete your account and its data at any time from account settings.</li>
 <li>Ask us for a copy of your information, or ask us to correct or delete it, by contacting {c}.</li>
 </ul>
