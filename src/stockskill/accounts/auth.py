@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import re
 import secrets
+import sqlite3
 import threading
 import time
 from collections import defaultdict, deque
@@ -316,8 +317,11 @@ def signup():
         return jsonify({"ok": False, "error": "Please accept the Terms of Service and Privacy Policy."}), 400
     if db.by_email(email):
         return jsonify({"ok": False, "error": "An account with this email already exists. Sign in instead."}), 409
-    uid = db.create_user(email, password_hash=generate_password_hash(pw),
-                         terms_version=legal.TERMS_VERSION, privacy_version=legal.PRIVACY_VERSION)
+    try:
+        uid = db.create_user(email, password_hash=generate_password_hash(pw),
+                             terms_version=legal.TERMS_VERSION, privacy_version=legal.PRIVACY_VERSION)
+    except sqlite3.IntegrityError:           # the same inbox signed up a moment ago
+        return jsonify({"ok": False, "error": "An account with this email already exists. Sign in instead."}), 409
     _login(uid, "password (new account)")
     u = db.get_user(uid)
     if needs_email_code(u):                     # the first email is the code to confirm the address
@@ -398,8 +402,11 @@ def google_login():
             db.update_user(u["id"], email_verified=1)      # Google confirmed the address
     else:
         # new account: they accept the Terms on the first onboarding screen
-        uid = db.create_user(email, google_sub=sub, first_name=c.get("given_name"), last_name=c.get("family_name"))
-        db.update_user(uid, email_verified=1)
+        # new account: like an email sign-up, it confirms the address with a code before the app opens
+        try:
+            uid = db.create_user(email, google_sub=sub, first_name=c.get("given_name"), last_name=c.get("family_name"))
+        except sqlite3.IntegrityError:
+            return jsonify({"ok": False, "error": "An account with this email already exists. Sign in instead."}), 409
         u = db.get_user(uid)
         from .security import welcome
         welcome(u, verify=False)

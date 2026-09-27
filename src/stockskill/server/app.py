@@ -105,8 +105,10 @@ def _observe(app, ACCT) -> None:
                   "db_mb": round(os.path.getsize(OBS.db_path()) / 1e6, 1) if os.path.exists(OBS.db_path()) else 0}
         from .. import geoip
         health["geo_db"] = os.path.exists(geoip.db_path())
-        from ..accounts import sms as _S
+        from ..accounts import sms as _S, notify as _N, db as _DB
         health["texts"] = _S.provider()
+        health["email"] = _N.email_ready()
+        health["duplicates"] = _DB.duplicate_accounts()
         from ..data import market_crawl
         health["crawl"] = market_crawl.status(app.config["ACCT"].get("cache_dir"))
         return jsonify({"ok": True, **OBS.report(days), "retention": OBS.retention(), "health": health,

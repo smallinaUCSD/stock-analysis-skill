@@ -119,7 +119,7 @@ function render(d){
     kpi('Board age',ago(b.age),(b.session||'')+(b.building?' · rebuilding':''),b.session==='open'&&b.age>2700)+
     kpi('Failed sign-ins, 24h',d.failures_24h||0,'wrong passwords and codes',(d.failures_24h||0)>20)+
     kpi('Unusual sign-ins, 7d',d.unusual_7d||0,'new device, country or travel',(d.unusual_7d||0)>0)+kpi('Live prices',(h.quotes||{}).count||0,'median age '+ago((h.quotes||{}).median_age))+kpi('Analytics data',(h.db_mb||0)+' MB','')+kpi('Whole-market cache',h.crawl?Math.round(h.crawl.done/Math.max(1,h.crawl.total)*100)+'%':'off',
-      h.crawl?(h.crawl.done+' of '+h.crawl.total+' stocks · '+h.crawl.state+(h.crawl.failed?' · '+h.crawl.failed+' failed':'')):'STOCKSKILL_CRAWL=1')+kpi('Text messages',h.texts==='imessage'?'iMessage':h.texts==='twilio'?'Twilio':'Off',
+      h.crawl?(h.crawl.done+' of '+h.crawl.total+' stocks · '+h.crawl.state+(h.crawl.failed?' · '+h.crawl.failed+' failed':'')):'STOCKSKILL_CRAWL=1')+kpi('Email',h.email?'On':'Off',h.email?'codes, alerts and summaries go out':'SMTP settings missing: no codes or emails')+kpi('Text messages',h.texts==='imessage'?'iMessage':h.texts==='twilio'?'Twilio':'Off',
       h.texts==='imessage'?'sent from the Mac mini':h.texts?'SMS':'run imessage_setup.sh on the Mac mini')+'</div>'+
     '<div class="ad-grid"><div class="ad-card"><h3>People per day</h3>'+lines(d.daily||[],['users','visitors'],['var(--accent)','var(--axis)'])+
       '<div class="ad-leg"><span><i style="background:var(--accent)"></i>Signed in</span><span><i style="background:var(--axis)"></i>Anonymous</span></div></div>'+
@@ -139,6 +139,8 @@ function render(d){
       {k:'2-step verification',v:(d.sign_in||{}).two_step},{k:'Daily summary on',v:(d.notify||{}).summary},{k:'Email (confirmed)',v:(d.notify||{}).email},
       {k:'Browser notifications',v:(d.notify||{}).push},{k:'Text messages (confirmed)',v:(d.notify||{}).sms},
       {k:'Market-event alerts on',v:(d.notify||{}).events},{k:'Follows (people and funds)',v:(d.notify||{}).follows}],[['k',''],['v','Accounts']])+'</div></div>'+
+    ((h.duplicates||[]).length?'<div class="ad-card" style="margin-bottom:12px"><h3>Accounts sharing one inbox (made before emails were normalized)</h3>'+
+      table(h.duplicates,[['inbox','Inbox'],['n','Accounts'],['emails','Emails']])+'</div>':'')+
     '<div class="ad-card" style="margin-bottom:12px"><h3>Alerts sent, last 14 days (Eastern dates)</h3>'+table(d.alerts,
       [['kind','Alert'],['n','People'],['day','Day'],['email','Email'],['push','Push'],['sms','Text']])+'</div>'+
     '<div class="ad-grid"><div class="ad-card"><h3>Slowest routes, last 24h (p95)</h3>'+table(d.slow_routes,[['route','Route'],['p95','p95 ms',Math.round],['p50','p50 ms',Math.round],['count','Calls']])+'</div>'+

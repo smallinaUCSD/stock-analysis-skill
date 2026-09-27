@@ -202,3 +202,30 @@ def test_change_email(app, outbox):
     assert u and u["email_verified"] == 1 and db.by_email("a@example.com") is None
     assert outbox[-1]["to"] == "a@example.com" and "changed" in outbox[-1]["subject"]      # old address told
     assert app.test_client().get("/account/email/confirm?t=" + tok).status_code == 400    # single use
+
+
+def test_one_account_per_inbox(app, outbox):
+    from stockskill.accounts import db
+    assert db.canonical_email(" J.Smith+stocks@GoogleMail.com ") == "jsmith@gmail.com"
+    assert db.canonical_email("ann+x@outlook.com") == "ann@outlook.com"
+    assert db.canonical_email("a.b@company.com") == "a.b@company.com"          # dots only ignored by Gmail
+    _signup(app.test_client(), email="jsmith@gmail.com")
+    for twin in ("J.Smith@gmail.com", "jsmith+stocks@gmail.com", "j.s.m.i.t.h@googlemail.com"):
+        r = app.test_client().post("/auth/signup", json={"email": twin, "password": "a-long-password-1", "accept": True})
+        assert r.status_code == 409, twin
+    c = app.test_client()                                                    # the same inbox signs in to it
+    assert c.post("/auth/login", json={"email": "J.Smith@gmail.com", "password": "a-long-password-1"}).get_json()["ok"]
+    assert db.duplicate_accounts() == []
+
+
+def test_new_google_account_confirms_email_with_a_code(app, outbox, monkeypatch):
+    from stockskill.accounts import auth, db
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "cid")
+    monkeypatch.setattr(auth, "verify_google_token", lambda t, cid: {"sub": "g-9", "email": "g@example.com",
+                                                                     "given_name": "Gee", "family_name": "Oh"})
+    c = app.test_client()
+    r = c.post("/auth/google", json={"credential": "x"}).get_json()
+    assert r["ok"] and r["next"] == "/verify-email" and db.by_email("g@example.com")["email_verified"] == 0
+    assert c.post("/api/me/verify-email/send", json={"auto": True}).get_json()["sent"]
+    code = re.search(r"(\d{6})", outbox[-1]["text"]).group(1)
+    assert c.post("/api/me/verify-email", json={"code": code}).get_json()["ok"]

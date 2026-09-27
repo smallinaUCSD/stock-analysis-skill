@@ -78,7 +78,8 @@ NOTIFY_COLUMNS = {"email_verified": "INTEGER NOT NULL DEFAULT 0", "notify_email"
                   "mfa_method": "TEXT", "mfa_secret": "TEXT", "mfa_recovery": "TEXT", "theme": "TEXT",
                   # text-message alerts: E.164 number, confirmed by a texted code, with the consent time
                   "phone": "TEXT", "phone_verified": "INTEGER NOT NULL DEFAULT 0", "notify_sms": "INTEGER NOT NULL DEFAULT 0",
-                  "sms_consent_at": "REAL", "notify_events": "INTEGER NOT NULL DEFAULT 0"}
+                  "sms_consent_at": "REAL", "notify_events": "INTEGER NOT NULL DEFAULT 0",
+                  "email_canon": "TEXT"}
 
 
 def path() -> str:
@@ -118,6 +119,12 @@ def _migrate(c) -> None:
         c.execute("ALTER TABLE notifications ADD COLUMN channels TEXT")
     if "risk" not in {r["name"] for r in c.execute("PRAGMA table_info(sessions)")}:
         c.execute("ALTER TABLE sessions ADD COLUMN risk TEXT")
+    for uid, email in c.execute("SELECT id, email FROM users WHERE email_canon IS NULL").fetchall():
+        c.execute("UPDATE users SET email_canon=? WHERE id=?", (canonical_email(email), uid))
+    try:                                   # one account per inbox, enforced by the database
+        c.execute("CREATE UNIQUE INDEX IF NOT EXISTS users_email_canon ON users (email_canon)")
+    except sqlite3.IntegrityError:         # older duplicates exist: still look them up fast (admin lists them)
+        c.execute("CREATE INDEX IF NOT EXISTS users_email_canon_dup ON users (email_canon)")
 
 
 def _row(r) -> dict | None:
@@ -126,15 +133,31 @@ def _row(r) -> dict | None:
 
 # --- users ------------------------------------------------------------------
 
+_GMAIL = ("gmail.com", "googlemail.com")
+
+
+def canonical_email(email: str) -> str:
+    """One form per real inbox, so the same person can't open several accounts:
+    lower case, anything after "+" dropped, and (Gmail ignores them) no dots."""
+    e = (email or "").strip().lower()
+    local, _, domain = e.rpartition("@")
+    if not local:
+        return e
+    local = local.split("+", 1)[0]
+    if domain in _GMAIL:
+        local, domain = local.replace(".", ""), "gmail.com"
+    return f"{local}@{domain}"
+
+
 def create_user(email: str, password_hash: str | None = None, google_sub: str | None = None,
                 first_name: str | None = None, last_name: str | None = None,
                 terms_version: str | None = None, privacy_version: str | None = None) -> int:
     now = time.time()
     with conn() as c:
         cur = c.execute(
-            "INSERT INTO users (email, password_hash, google_sub, first_name, last_name, "
-            "terms_version, privacy_version, accepted_at, created_at, last_login) VALUES (?,?,?,?,?,?,?,?,?,?)",
-            (email.strip().lower(), password_hash, google_sub, first_name, last_name,
+            "INSERT INTO users (email, email_canon, password_hash, google_sub, first_name, last_name, "
+            "terms_version, privacy_version, accepted_at, created_at, last_login) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (email.strip().lower(), canonical_email(email), password_hash, google_sub, first_name, last_name,
              terms_version, privacy_version, now if terms_version else None, now, now))
         return int(cur.lastrowid)
 
@@ -145,8 +168,20 @@ def get_user(uid: int) -> dict | None:
 
 
 def by_email(email: str) -> dict | None:
+    """The account for this inbox: the exact address first, else the same
+    inbox written another way (J.Smith+x@gmail.com is jsmith@gmail.com)."""
+    e = (email or "").strip().lower()
     with conn() as c:
-        return _row(c.execute("SELECT * FROM users WHERE email=?", (email.strip().lower(),)).fetchone())
+        return _row(c.execute("SELECT * FROM users WHERE email=? OR email_canon=? ORDER BY email=? DESC LIMIT 1",
+                              (e, canonical_email(e), e)).fetchone())
+
+
+def duplicate_accounts() -> list[dict]:
+    """Accounts that share an inbox (made before addresses were normalized)."""
+    with conn() as c:
+        return [dict(r) for r in c.execute(
+            "SELECT email_canon AS inbox, GROUP_CONCAT(email, ', ') AS emails, COUNT(*) AS n FROM users "
+            "GROUP BY email_canon HAVING COUNT(*) > 1")]
 
 
 def by_google(sub: str) -> dict | None:
@@ -159,6 +194,9 @@ def update_user(uid: int, **fields) -> None:
                                                            "last_login", "terms_version", "privacy_version",
                                                            "accepted_at", "email"}
     fields = {k: v for k, v in fields.items() if k in allowed}
+    if "email" in fields:
+        fields["email"] = fields["email"].strip().lower()
+        fields["email_canon"] = canonical_email(fields["email"])
     if not fields:
         return
     with conn() as c:
@@ -409,4 +447,5 @@ def prune_notifications(days: int = 90) -> None:
 
 def update_user_email(uid: int, email: str) -> None:
     with conn() as c:
-        c.execute("UPDATE users SET email=?, email_verified=1 WHERE id=?", (email.strip().lower(), uid))
+        c.execute("UPDATE users SET email=?, email_canon=?, email_verified=1 WHERE id=?",
+                  (email.strip().lower(), canonical_email(email), uid))
