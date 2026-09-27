@@ -298,9 +298,13 @@ table.wl th:nth-child(15),table.wl td:nth-child(15){text-align:left}
 .mc-bar{height:8px;background:var(--surface-2);border-radius:4px;overflow:hidden}
 .mc-fill{height:8px;border-radius:4px} .mc-fill.up{background:var(--up)} .mc-fill.down{background:var(--down)}
 /* ---- panels ------------------------------------------------------------------------ */
-.panels{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px}
-@media (max-width:980px){.panels{grid-template-columns:1fr 1fr}}
-@media (max-width:640px){.panels{grid-template-columns:1fr}}
+/* Markets across the top; sector performance and macro side by side below */
+.panels{display:grid;grid-template-columns:minmax(280px,1fr) minmax(0,1.6fr);gap:12px;margin-bottom:12px}
+.panels>.p-markets{grid-column:1/-1;order:-1}
+.mk-cols{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:2px 28px;align-items:start}
+.macro-cols{columns:2 280px;column-gap:28px}
+.macro-cols>*{break-inside:avoid} .macro-cols .mkgroup{break-after:avoid}
+@media (max-width:760px){.panels{grid-template-columns:1fr}}
 .panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:12px 16px 14px}
 .panel-h{display:flex;align-items:baseline;justify-content:space-between;gap:8px;
   font-size:16px;font-weight:500;color:var(--ink);margin-bottom:10px}
@@ -360,7 +364,7 @@ a.macro-ev:hover{color:var(--link)}
 .tfb.on{background:var(--surface-3);border-color:var(--border-strong);color:var(--ink)}
 .pricechart{position:relative;width:100%;touch-action:none}
 .pricechart svg{display:block;width:100%;height:auto;overflow:visible}
-.pricechart .axl{fill:var(--muted);font-size:9px;font-family:inherit}
+.pricechart .axl{fill:var(--muted);font-size:12px;font-family:inherit}
 .chart-box{position:absolute;pointer-events:none;z-index:5;background:var(--surface);
   border:1px solid var(--border);border-radius:var(--r);padding:4px 8px;font-size:13px;
   line-height:1.35;box-shadow:var(--shadow-pop);white-space:nowrap}
@@ -1137,13 +1141,15 @@ def _points(last, chg):
 def _markets_html(markets):
     quotes = [q for q in (markets or []) if q.last is not None]
     if not quotes:
-        return '<section class="panel"><div class="panel-h">Markets</div>' \
+        return '<section class="panel p-markets"><div class="panel-h">Markets</div>' \
                '<div class="muted" style="font-size:13px">unavailable</div></section>'
     rows = []
     last_group = None
     for q in quotes:
         if q.group != last_group:
-            rows.append(f'<div class="mkgroup">{_MKT_GROUP_LABEL.get(q.group, q.group)}</div>')
+            if last_group is not None:
+                rows.append('</div>')
+            rows.append(f'<div class="mkcol"><div class="mkgroup">{_MKT_GROUP_LABEL.get(q.group, q.group)}</div>')
             last_group = q.group
         chg = q.change
         ccls = "up" if (chg or 0) >= 0 else "down"
@@ -1162,10 +1168,11 @@ def _markets_html(markets):
             f'<span class="mkpx">{px}</span>'
             f'<span class="mkpts {ccls}">{_points(q.last, chg)}</span>'
             f'<span class="mkchg {ccls}">{chg_txt}</span></div>')
-    return ('<section class="panel"><div class="panel-h">Markets'
+    rows.append('</div>')
+    return ('<section class="panel p-markets"><div class="panel-h">Markets'
             '<a class="site-help" style="font-size:12px;margin-left:auto" href="/markets" '
             'onclick="openTab(this.href);return false">All markets</a></div>'
-            '<div class="panel-body">' + "".join(rows) + '</div></section>')
+            '<div class="panel-body mk-cols">' + "".join(rows) + '</div></section>')
 
 
 def _macro_html(macro):
@@ -1229,8 +1236,8 @@ def _macro_html(macro):
 
     if not body:
         body = '<div class="muted" style="font-size:13px">no macro data</div>'
-    return ('<section class="panel"><div class="panel-h">Macro</div>'
-            '<div class="panel-body">' + body + '</div></section>')
+    return ('<section class="panel p-macro"><div class="panel-h">Macro</div>'
+            '<div class="panel-body macro-cols">' + body + '</div></section>')
 
 
 _SERVED_JS = r"""
@@ -1469,6 +1476,29 @@ function _mcCone(p){ const keys=['p95','p75','p50','p25','p5']; const vals=keys.
 """
 
 
+# Board tools, in the default order. The first five show as buttons and the
+# rest sit under "More tools"; a signed-in person's own most-used tools move
+# forward (ME_CFG.tools, from their page views).
+TOOLS = [("breakouts", "Breakouts", "openTab('/breakouts')"), ("screener", "Screener", "openTab('/screener')"),
+         ("compare", "Compare", "openTab('/compare')"), ("indicators", "Indicators", "openTab('/indicators')"),
+         ("trades", "Politicians &amp; Funds", "openTab('/trades')"), ("calendar", "Calendar", "openTab('/calendar')"),
+         ("markets", "Markets", "openTab('/markets')"), ("earnings", "Earnings", "openTab('/earnings')"),
+         ("financials", "Financials", "openTab('/financials')"), ("economy", "Economy and rates", "openTab('/economy')"),
+         ("evaluate", "Evaluate a trade", "openTool('evaluate')"),
+         ("lookthrough", "Look-through (fund holdings)", "openTool('lookthrough')"),
+         ("montecarlo", "Monte Carlo", "openTool('montecarlo')"), ("interpret", "How to read this", "openTab('/interpret')")]
+PRIVATE_TOOLS = [("holdings", "Holdings", "openTab('/holdings')"), ("alerts", "Alerts", "openTab('/alerts')")]
+TOOLS_SHOWN = 5
+
+
+def _tools_html(public: bool) -> str:
+    tools = TOOLS + ([] if public else PRIVATE_TOOLS)
+    btn = lambda t, cls: (f'<button{cls} data-tool="{t[0]}" onclick="{t[2]}">{t[1]}</button>')
+    return ('<span class="toolsbar">' + "".join(btn(t, ' class="tool-b"') for t in tools[:TOOLS_SHOWN])
+            + '<details class="tool-more"><summary class="tool-b">More tools</summary><div class="tool-menu">'
+            + "".join(btn(t, "") for t in tools[TOOLS_SHOWN:]) + '</div></details></span>')
+
+
 def render_watchlist(rows, title="Watchlist", updated="", status_badge="", status_label="",
                      alerts=None, sectors=None, markets=None, refresh_seconds=1800,
                      served=False, updated_ts=None, macro=None, public=False, bmc_url=None):
@@ -1484,26 +1514,7 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
         'autocomplete="off" oninput="addSearch()" onkeydown="addKey(event)">'
         '<div id="addsug" class="addsug"></div></div>'
         f'<button class="tbtn add" onclick="addTicker()">{icon("plus", 15)}Add</button>')
-    _holdings_btn = "" if public else ('<button class="tool-b" onclick="openTab(\'/holdings\')">Holdings</button>'
-                                       '<button class="tool-b" onclick="openTab(\'/alerts\')">Alerts</button>')
-    tools_html = (
-        '<span class="toolsbar">'
-        '<button class="tool-b" onclick="openTab(\'/screener\')">Screener</button>'
-        '<button class="tool-b" onclick="openTab(\'/markets\')">Markets</button>'
-        '<button class="tool-b" onclick="openTab(\'/earnings\')">Earnings</button>'
-        '<button class="tool-b" onclick="openTab(\'/trades\')">Politicians &amp; Funds</button>'
-        '<button class="tool-b" onclick="openTab(\'/compare\')">Compare</button>'
-        '<details class="tool-more"><summary class="tool-b">More tools</summary><div class="tool-menu">'
-        '<button onclick="openTab(\'/financials\')">Financials</button>'
-        '<button onclick="openTab(\'/economy\')">Economy and rates</button>'
-        '<button onclick="openTab(\'/breakouts\')">Breakouts</button>'
-        '<button onclick="openTool(\'evaluate\')">Evaluate a trade</button>'
-        '<button onclick="openTool(\'lookthrough\')">Look-through (fund holdings)</button>'
-        '<button onclick="openTool(\'montecarlo\')">Monte Carlo</button>'
-        '<button onclick="openTab(\'/indicators\')">Indicators</button>'
-        '<button onclick="openTab(\'/interpret\')">How to read this</button>'
-        + _holdings_btn.replace('class="tool-b" ', '') + '</div></details></span>'
-    ) if served else ""
+    tools_html = _tools_html(public) if served else ""
     add_html = (
         '<div class="addbar">' + _add_box + '<span id="addmsg" class="muted"></span></div>'
     ) if served else ""
@@ -1778,7 +1789,7 @@ function renderChart(el, tf){{
   if(start>n-2) start=Math.max(0,n-2);
   const c=s.c.slice(start), d=s.d.slice(start);
   const W=Math.max(280, Math.round(el.clientWidth||340)), H=el._h||176;
-  const ML=48, MR=10, MT=8, MB=22, x0=ML, x1=W-MR, y0=H-MB, y1=MT;
+  const ML=58, MR=12, MT=10, MB=26, x0=ML, x1=W-MR, y0=H-MB, y1=MT;
   let lo=Math.min.apply(null,c), hi=Math.max.apply(null,c);
   const dataLo=lo, pad=(hi-lo)*0.06||1; lo-=pad; hi+=pad; if(dataLo>=0 && lo<0) lo=0;
   const rng=(hi-lo)||1;
@@ -1792,10 +1803,10 @@ function renderChart(el, tf){{
   const step=niceStep(hi-lo,Math.max(4,Math.round(H/55))); let grid='', ylab='';
   for(let v=Math.ceil(lo/step)*step; v<=hi+1e-9; v+=step){{ const yy=Y(v).toFixed(1);
     grid+='<line x1="'+x0+'" y1="'+yy+'" x2="'+x1+'" y2="'+yy+'" stroke="var(--border)" stroke-width="0.6" opacity="0.55"/>';
-    ylab+='<text x="'+(x0-5)+'" y="'+(parseFloat(yy)+3)+'" text-anchor="end" class="axl">'+fmtAxisPrice(v)+'</text>'; }}
+    ylab+='<text x="'+(x0-6)+'" y="'+(parseFloat(yy)+4)+'" text-anchor="end" class="axl">'+fmtAxisPrice(v)+'</text>'; }}
   // x labels: start / mid / end
   let xlab=''; [[0,'start'],[Math.floor((c.length-1)/2),'middle'],[c.length-1,'end']].forEach(([idx,anc])=>{{
-    xlab+='<text x="'+X(idx).toFixed(1)+'" y="'+(H-7)+'" text-anchor="'+anc+'" class="axl">'+fmtDate(d[idx])+'</text>'; }});
+    xlab+='<text x="'+X(idx).toFixed(1)+'" y="'+(H-6)+'" text-anchor="'+anc+'" class="axl">'+fmtDate(d[idx])+'</text>'; }});
   const axes='<line x1="'+x0+'" y1="'+y1+'" x2="'+x0+'" y2="'+y0+'" stroke="var(--muted)" stroke-width="1"/>'
             +'<line x1="'+x0+'" y1="'+y0+'" x2="'+x1+'" y2="'+y0+'" stroke="var(--muted)" stroke-width="1"/>';
   el.innerHTML=

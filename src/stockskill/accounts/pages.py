@@ -59,9 +59,34 @@ select.inp{appearance:auto}
 .divider:before,.divider:after{content:"";flex:1;height:1px;background:var(--border)}
 .au-accept{display:flex;gap:10px;align-items:flex-start;font-size:13px;line-height:1.5;color:var(--muted);margin:4px 0 6px}
 .au-accept input{margin-top:3px;flex:none;width:16px;height:16px;accent-color:var(--accent)}
+.au-accept input:disabled{opacity:.45;cursor:not-allowed}
+.lg-need{display:block;font-size:12px;color:var(--accent);margin-top:2px}
+.lg-seen{text-decoration-style:solid} .lg-seen:after{content:" ✓";color:var(--up)}
+.lg-modal{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px}
+.lg-box{background:var(--bg);border:1px solid var(--border);border-radius:16px;width:min(760px,100%);height:min(86vh,900px);
+  display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 60px -20px rgba(0,0,0,.5)}
+.lg-bar{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border)}
+.lg-box iframe{flex:1;border:0;width:100%;background:var(--bg)}
+.lg-foot{padding:10px 14px;border-top:1px solid var(--border);display:flex;justify-content:flex-end}
 """
 
 _COMMON_JS = r"""
+// Terms / Privacy: open over the page; the "I agree" box unlocks once both were opened
+(function(){ var seen={};
+  function gate(){ var ok=seen.terms&&seen.privacy;
+    document.querySelectorAll('[data-legal-gate]').forEach(function(cb){ cb.disabled=!ok;
+      var need=cb.parentNode.querySelector('.lg-need'); if(need) need.hidden=ok; }); }
+  function open(kind, a){ seen[kind]=true; document.querySelectorAll('[data-legal="'+kind+'"]').forEach(function(x){ x.classList.add('lg-seen'); });
+    var m=document.createElement('div'); m.className='lg-modal';
+    m.innerHTML='<div class="lg-box" role="dialog" aria-modal="true"><div class="lg-bar"><b>'+(kind==='terms'?'Terms of Service':'Privacy Policy')+
+      '</b><button type="button" class="btn ghost" data-x>Close</button></div><iframe src="/'+kind+'?embed=1" title="'+kind+'"></iframe>'+
+      '<div class="lg-foot"><button type="button" class="btn primary" data-x>Done reading</button></div></div>';
+    m.addEventListener('click',function(e){ if(e.target===m||e.target.closest('[data-x]')){ m.remove(); gate(); } });
+    document.body.appendChild(m); }
+  document.addEventListener('click',function(e){ var a=e.target.closest('a[data-legal]'); if(!a) return;
+    e.preventDefault(); e.stopPropagation(); open(a.getAttribute('data-legal'), a); }, true);
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape'){ var m=document.querySelector('.lg-modal'); if(m){ m.remove(); gate(); } } });
+})();
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
 function post(url, body){ return fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',
   body:JSON.stringify(body||{})}).then(function(r){ return r.json().catch(function(){ return {ok:false,error:'Something went wrong.'}; }); }); }
@@ -347,9 +372,9 @@ def login_html(mode: str = "login", google_client_id: str | None = None, nxt: st
     <div class="field"><label for="pw">Password</label><input class="inp" id="pw" type="password" autocomplete="current-password" required>
       <span class="small muted" id="pw-hint" hidden>At least 10 characters.</span>
       <a class="small au-forgot" id="forgot" href="/forgot">Forgot password?</a></div>
-    <label class="au-accept" id="acc-wrap" hidden><input type="checkbox" id="acc"> <span>I am 18 or older and agree to the
-      <a href="/terms" target="_blank">Terms of Service</a> (including binding arbitration and a class-action waiver) and the
-      <a href="/privacy" target="_blank">Privacy Policy</a>.</span></label>
+    <label class="au-accept" id="acc-wrap" hidden><input type="checkbox" id="acc" disabled data-legal-gate> <span>I am 18 or older and agree to the
+      <a href="/terms" data-legal="terms">Terms of Service</a> (including binding arbitration and a class-action waiver) and the
+      <a href="/privacy" data-legal="privacy">Privacy Policy</a>.<small class="lg-need">Open both to agree.</small></span></label>
     <div class="err" id="au-err" role="alert"></div>
     <button class="btn primary block" id="au-go" type="submit"></button>
   </form>
@@ -503,9 +528,9 @@ function stTerms(){
    'investment adviser, and nothing here tells you what to buy or sell.</li><li>Models and data can be wrong or delayed. You are responsible '+
    'for your own decisions.</li><li>Disputes are resolved by individual arbitration, not class actions or jury trials (you can opt out '+
    'within 30 days).</li><li>We use your information to run your account and never sell it.</li></ul></div>'+
-   '<label class="au-accept" style="margin-top:16px;font-size:14px"><input type="checkbox" id="t-acc" style="accent-color:var(--accent)"> '+
-   '<span>I am 18 or older and agree to the <a href="/terms" target="_blank">Terms of Service</a> and '+
-   '<a href="/privacy" target="_blank">Privacy Policy</a>.</span></label><div class="err" id="err"></div>'+
+   '<label class="au-accept" style="margin-top:16px;font-size:14px"><input type="checkbox" id="t-acc" disabled data-legal-gate style="accent-color:var(--accent)"> '+
+   '<span>I am 18 or older and agree to the <a href="/terms" data-legal="terms">Terms of Service</a> and '+
+   '<a href="/privacy" data-legal="privacy">Privacy Policy</a>.<small class="lg-need">Open both to agree.</small></span></label><div class="err" id="err"></div>'+
    '<div class="wz-foot"><span></span><button class="btn primary" id="go">Continue</button></div>';
   document.getElementById('go').onclick=function(){ post('/api/me/terms',{accept:document.getElementById('t-acc').checked}).then(function(d){
     if(d.ok) next(); else document.getElementById('err').textContent=d.error; }); };
@@ -531,14 +556,13 @@ function selOpts(list, key, ph){ return '<option value="">'+ph+'</option>'+list.
 function stAbout(){
   var o=ME.options, u=ME.user;
   ['first_name','last_name','dob','gender','investor_type','experience','referral'].forEach(function(k){ if(PROF[k]===undefined) PROF[k]=u[k]||''; });
-  var max=new Date(); max.setFullYear(max.getFullYear()-18);
   el().innerHTML='<h1>Tell us about you</h1><p class="lead">This tailors explanations and defaults. It\'s never shared or sold.</p>'+
    '<div class="wz-h">What kind of investor are you?</div><div class="opt-grid">'+opts(o.investor_types,'investor_type','opt')+'</div>'+
    '<div class="wz-h">How much investing experience do you have?</div><div class="seg3">'+opts(o.experience,'experience','')+'</div>'+
    '<div class="wz-h">Your details</div><div class="row2">'+
    '<div class="field"><label for="fn">First name</label><input class="inp" id="fn" autocomplete="given-name" value="'+esc(PROF.first_name)+'"></div>'+
    '<div class="field"><label for="ln">Last name</label><input class="inp" id="ln" autocomplete="family-name" value="'+esc(PROF.last_name)+'"></div>'+
-   '<div class="field"><label for="dob">Date of birth</label><input class="inp" id="dob" type="date" autocomplete="bday" min="1900-01-01" max="'+max.toISOString().slice(0,10)+'" value="'+esc(PROF.dob)+'"></div>'+
+   '<div class="field"><label for="dob-m">Date of birth</label>'+dobHTML(PROF.dob)+'</div>'+
    '<div class="field"><label for="gd">Gender (optional)</label><select class="inp" id="gd">'+selOpts(o.genders,'gender','Choose…')+'</select></div>'+
    '<div class="field"><label for="rf">How did you hear about us? (optional)</label><select class="inp" id="rf">'+selOpts(o.referrals,'referral','Choose…')+'</select></div></div>'+
    '<p class="small muted">We ask for your date of birth to confirm you are 18 or older.</p><div class="err" id="err"></div>'+
@@ -548,7 +572,7 @@ function stAbout(){
   document.getElementById('back').onclick=function(){ I--; show(); };
   document.getElementById('go').onclick=function(){
     PROF.first_name=document.getElementById('fn').value; PROF.last_name=document.getElementById('ln').value;
-    PROF.dob=document.getElementById('dob').value; PROF.gender=document.getElementById('gd').value||null; PROF.referral=document.getElementById('rf').value||null;
+    PROF.dob=dobVal(); PROF.gender=document.getElementById('gd').value||null; PROF.referral=document.getElementById('rf').value||null;
     post('/api/me/profile',PROF).then(function(d){ if(d.ok) next(); else document.getElementById('err').textContent=d.error; }); };
 }
 function stPasskey(){
@@ -615,13 +639,13 @@ function prof(){ var o=ME.options,u=ME.user;
   return '<div class="ac-sec"><h2>Profile</h2><div class="row2">'+
    '<div class="field"><label>First name</label><input class="inp" id="fn" value="'+esc(u.first_name)+'"></div>'+
    '<div class="field"><label>Last name</label><input class="inp" id="ln" value="'+esc(u.last_name)+'"></div>'+
-   '<div class="field"><label>Date of birth</label><input class="inp" id="dob" type="date" min="1900-01-01" value="'+esc(u.dob)+'"></div>'+
+   '<div class="field"><label for="dob-m">Date of birth</label>'+dobHTML(u.dob)+'</div>'+
    '<div class="field"><label>Gender (optional)</label><select class="inp" id="gd">'+sel(o.genders,'gender','Not specified')+'</select></div>'+
    '<div class="field"><label>Kind of investor</label><select class="inp" id="it">'+sel(o.investor_types,'investor_type','Choose…')+'</select></div>'+
    '<div class="field"><label>Experience</label><select class="inp" id="ex">'+sel(o.experience,'experience','Choose…')+'</select></div></div>'+
    '<div class="wz-foot" style="margin-top:4px"><span class="small" id="p-msg"></span><button class="btn primary" onclick="saveProf()">Save profile</button></div></div>';
 }
-function saveProf(){ var b={first_name:v('fn'),last_name:v('ln'),dob:v('dob'),gender:v('gd')||null,investor_type:v('it'),experience:v('ex'),referral:ME.user.referral};
+function saveProf(){ var b={first_name:v('fn'),last_name:v('ln'),dob:dobVal(),gender:v('gd')||null,investor_type:v('it'),experience:v('ex'),referral:ME.user.referral};
   post('/api/me/profile',b).then(function(d){ var m=document.getElementById('p-msg'); m.className='small '+(d.ok?'ok-msg':'err'); m.textContent=d.ok?'Saved.':d.error; }); }
 function v(id){ return document.getElementById(id).value; }
 function wl(){ return '<div class="ac-sec"><h2>Your watchlist · '+ME.watchlist.length+' stocks</h2><div class="tk-list">'+
@@ -668,7 +692,11 @@ function resendV(){ var m=document.getElementById('nf-msg'); m.className='small 
     m.textContent=d.already?'Your email is already confirmed.':d.ok?'Sent. Check your inbox and spam folder.':'Not sent: '+(d.error||'unknown error'); }); }
 function testNf(){ var m=document.getElementById('nf-msg'); post('/api/me/notify/test').then(function(d){
   m.className='small '+(d.ok?'ok-msg':'err');
-  m.textContent=d.ok?('Sent'+(d.email?' by email':'')+(d.push?' to '+d.push+' browser'+(d.push>1?'s':''):'')+(d.inapp?' to your Today panel':'')+'.'):d.error; }); }
+  if(!d.ok){ m.textContent=d.error; return; }
+  var got=[]; if(d.inapp) got.push('your Today panel'); if(d.email) got.push('email'); if(d.sms) got.push('text message');
+  if(d.push) got.push(d.push+' browser'+(d.push>1?'s':''));
+  var miss={email:'Email',sms:'Text',push:'Browser'}, why=d.not_sent||{};
+  m.innerHTML='Sent to '+esc(got.join(', '))+'.'+Object.keys(why).map(function(k){ return '<br><span class="muted">'+miss[k]+': not sent, '+esc(why[k])+'.</span>'; }).join(''); }); }
 function secu(){ var u=ME.user, pwf=function(id){ return u.has_password?'<div class="field"><label>Current password</label><input class="inp" id="'+id+'" type="password" autocomplete="current-password"></div>':''; };
   var mfa=u.mfa?'<p style="margin:0 0 10px"><b>On</b> · '+(u.mfa==='totp'?'authenticator app':'codes emailed to you')+' · '+u.recovery_left+' backup codes left</p>'+
       '<div class="row2">'+pwf('mfp')+'</div><div class="wz-foot" style="margin-top:0"><span class="small" id="mf-msg"></span><span style="display:flex;gap:8px">'+
@@ -745,9 +773,12 @@ load();
 
 # --- legal ------------------------------------------------------------------------
 
-def legal_html(kind: str) -> str:
+def legal_html(kind: str, embed: bool = False) -> str:
     title = "Terms of Service" if kind == "terms" else "Privacy Policy"
     doc = legal.terms_body() if kind == "terms" else legal.privacy_body()
+    if embed:                                   # shown inside the sign-up reader
+        return _shell(f"{title} · {BRAND}", f'<div class="lg-wrap"><article class="lg"><h1>{title}</h1>{doc}</article></div>',
+                      _WZ_CSS + _LG_CSS)
     body = f"""<div class="lg-wrap"><div class="wz-top">{_brand_link()}<a class="small" href="/">Home</a></div>
 <article class="lg"><h1>{title}</h1>{doc}</article>
 <p class="small muted"><a href="/terms">Terms of Service</a> · <a href="/privacy">Privacy Policy</a></p></div>"""
@@ -767,17 +798,20 @@ _LG_CSS = """
 
 # --- the board, personalised --------------------------------------------------------
 
-def personalize_board(board_html: str, user: dict, tickers: list[str], admin: bool = False) -> str:
+def personalize_board(board_html: str, user: dict, tickers: list[str], admin: bool = False,
+                      tools: list[str] | None = None) -> str:
     """Make the shared board this user's: only their watchlist (with a way to
     remove stocks), their name, their theme and a profile menu."""
     first = (user.get("first_name") or user.get("email") or "?").strip()
-    initials = "".join(p[0] for p in first.split()[:2]).upper() or "?"
+    last = (user.get("last_name") or "").strip()
+    initials = ((first[:1] + last[:1]) if last else "".join(p[0] for p in first.split()[:2])).upper() or "?"
     theme = user.get("theme") if user.get("theme") in ("light", "dark") else ""
     density = ("detailed" if (user.get("experience") == "advanced" or user.get("investor_type") in
                               ("active", "options", "professional", "advisor")) else "simple")
     cfg = {"tickers": tickers, "initials": initials, "title": f"{first.split()[0]}'s watchlist",
            "name": " ".join(x for x in (user.get("first_name"), user.get("last_name")) if x) or user.get("email"),
-           "email": user.get("email"), "theme": theme, "density": density, "admin": bool(admin)}
+           "email": user.get("email"), "theme": theme, "density": density, "admin": bool(admin),
+           "tools": tools or []}
     inject = "<script>var ME_CFG=" + json.dumps(cfg) + ";</script>" + _MINE_INJECT + _TODAY_INJECT
     h = board_html.find("</head>")
     if h >= 0:
@@ -809,6 +843,14 @@ _MINE_INJECT = r"""<style>
 <script>(function(){
 var C=window.ME_CFG||{};
 window.MYWL=new Set(C.tickers||[]); window.MYWL_ON=true;
+// the toolbar: your most-used tools first (then the default order); five as buttons, the rest under More tools
+(function(){ var bar=document.querySelector('.toolsbar'), menu=bar&&bar.querySelector('.tool-menu'), more=bar&&bar.querySelector('.tool-more');
+  if(!bar||!menu||!(C.tools||[]).length) return;
+  var all=[].slice.call(bar.querySelectorAll('[data-tool]')), orig=all.slice(), rank={};
+  (C.tools||[]).forEach(function(k,i){ rank[k]=i; });
+  all.sort(function(a,b){ var ra=rank[a.dataset.tool], rb=rank[b.dataset.tool];
+    if(ra!=null||rb!=null) return (ra==null?999:ra)-(rb==null?999:rb); return orig.indexOf(a)-orig.indexOf(b); });
+  all.forEach(function(el,i){ if(i<5){ el.className='tool-b'; bar.insertBefore(el,more); } else { el.className=''; menu.appendChild(el); } }); })();
 document.body.classList.add('mine');
 if(C.theme){ try{ localStorage.setItem('wl_theme',C.theme); }catch(_){} document.documentElement.setAttribute('data-theme',C.theme); }
 try{ if(!localStorage.getItem('wl_density')&&typeof setDensity==='function') setDensity(C.density); }catch(_){}
@@ -1012,6 +1054,7 @@ def icon_png(size: int) -> bytes:
 # --- notification settings form (sign-up step + account page) ------------------------
 
 _NF_CSS = """
+.dob3{display:grid;grid-template-columns:1.6fr .8fr 1fr;gap:8px}
 .nf-seg{display:flex;flex-wrap:wrap;gap:8px}
 .nf-chipset{display:flex;flex-wrap:wrap;gap:6px}
 .nf-chip{height:32px;padding:0 12px;border-radius:16px;border:1px solid var(--border-strong);background:var(--bg);color:var(--ink);font:13px var(--font);cursor:pointer}
@@ -1034,6 +1077,16 @@ _NF_CSS = """
 """
 
 _NF_JS = r"""
+// date of birth as Month / Day / Year (a browser date picker is hard to type a birth year into)
+var MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+function dobHTML(v){ var p=(v||'').split('-');
+  return '<div class="dob3"><select class="inp" id="dob-m" autocomplete="bday-month" aria-label="Month"><option value="">Month</option>'+
+    MONTHS.map(function(m,i){ var n=('0'+(i+1)).slice(-2); return '<option value="'+n+'"'+(p[1]===n?' selected':'')+'>'+m+'</option>'; }).join('')+'</select>'+
+    '<input class="inp" id="dob-d" inputmode="numeric" autocomplete="bday-day" maxlength="2" placeholder="Day" aria-label="Day" value="'+(p[2]?+p[2]:'')+'">'+
+    '<input class="inp" id="dob-y" inputmode="numeric" autocomplete="bday-year" maxlength="4" placeholder="Year" aria-label="Year" value="'+(p[0]||'')+'"></div>'; }
+function dobVal(){ var m=document.getElementById('dob-m').value, d=(document.getElementById('dob-d').value||'').replace(/\D/g,''),
+  y=(document.getElementById('dob-y').value||'').replace(/\D/g,'');
+  if(!m||!d||y.length!==4) return ''; return y+'-'+m+'-'+('0'+d).slice(-2); }
 var NF=null, NF0={}, PEOPLE=[], NF_ME=null;
 var TIMES=[['pre','Before the open','8:30am ET'],['post','After the close','4:30pm ET'],['both','Both',''],['none','No daily summary','']];
 function nfInit(me){ var n=me.user.notify; NF_ME=me;

@@ -21,7 +21,7 @@ from ..regime import tsmom, dzz_rule, stop_study, voc_timing
 
 _ANALYSIS_CSS = """
 body{font-size:14px}
-.wrap{max-width:min(1080px,100%);padding:22px clamp(16px,3vw,40px) 28px}
+.wrap{max-width:min(1400px,100%);padding:22px clamp(16px,3vw,40px) 28px}
 .a-tk{font-family:var(--font-mono);font-size:14px;font-weight:500;color:var(--ink-2)}
 .a-head{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;padding-bottom:18px;
   border-bottom:1px solid var(--border)}
@@ -42,6 +42,9 @@ body{font-size:14px}
   line-height:1.15;margin:0 0 14px}
 .agroup>h2 small{font-family:var(--font);font-size:14px;font-weight:400;color:var(--muted);margin-left:10px}
 .agrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(440px,100%),1fr));gap:14px;align-items:start}
+.acols{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
+.acol{display:flex;flex-direction:column;gap:14px;min-width:0}
+@media (max-width:920px){.acols{grid-template-columns:1fr}}
 .asec{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:20px 22px}
 .a-h{font-size:16px;font-weight:500;margin:0 0 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .a-h .stance{margin-left:0}
@@ -480,18 +483,24 @@ def analysis_html(row, closes=None, refresh_seconds: int = 900) -> str:
         sub = f"<small>{note}</small>" if note else ""
         return f'<section class="agroup"><h2>{title}{sub}</h2><div class="agrid">{inner}</div></section>'
 
-    # Grouped by the question each answers, most decision-relevant first, so the
-    # experimental model no longer carries the same weight as the valuation.
+    def group2(title, note, left, right):
+        """Two stacked columns, so short boxes sit under each other instead of
+        leaving gaps beside tall ones (less scrolling)."""
+        col = lambda bs: '<div class="acol">' + "".join(b for b in bs if b) + "</div>"
+        sub = f"<small>{note}</small>" if note else ""
+        return f'<section class="agroup"><h2>{title}{sub}</h2><div class="acols">{col(left)}{col(right)}</div></section>'
+
+    # Grouped by the question each answers, most decision-relevant first.
     sections = (
-        group("Valuation", "what the business is worth", _valuation_box(row), _mc_box(row), _ANALYST_BOX, _DIV_BOX)
+        group2("Valuation", "what the business is worth", [_valuation_box(row)],
+               [_mc_box(row), _ANALYST_BOX, _DIV_BOX])
         + group("Forecast and option ideas", "a range, not a target", _FORECAST_BOX, _IDEAS_BOX)
         + group("Risk", "how it moves with the market", _risk_box(row))
         + group("Filings and positioning", "insiders, short sellers, the accounts", *_SIGNAL_BOXES)
-        + group("Trade plan", "entry, exits and size", _trade_box(row), _sizing_box(row),
-                _OPTIONS_BOX)
-        + group("Trend and flow", "is the move backed?", _momentum_box(closes),
-                _volume_box(row), _regime_box(closes), _stops_box(closes))
-        + group("Experimental", "", _voc_box(closes))
+        + group2("Trade plan", "entry, exits and size", [_trade_box(row), _OPTIONS_BOX],
+                 [_sizing_box(row), _voc_box(closes)])
+        + group2("Trend and flow", "is the move backed?", [_momentum_box(closes), _regime_box(closes)],
+                 [_volume_box(row), _stops_box(closes)])
     )
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">

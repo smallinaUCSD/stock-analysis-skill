@@ -293,12 +293,12 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
     @app.get("/terms")
     def terms_page():
         from ..accounts.pages import legal_html
-        return legal_html("terms")
+        return legal_html("terms", embed=request.args.get("embed") == "1")
 
     @app.get("/privacy")
     def privacy_page():
         from ..accounts.pages import legal_html
-        return legal_html("privacy")
+        return legal_html("privacy", embed=request.args.get("embed") == "1")
 
     @app.get("/")
     def index():
@@ -312,7 +312,9 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
                 return redirect("/welcome")
             is_admin = app.config.get("IS_ADMIN")
             mine = ADB.watchlist(u["id"])
-            return personalize_board(board.html_for(mine), u, mine, admin=bool(is_admin and is_admin()))
+            from .. import observability as OBS
+            return personalize_board(board.html_for(mine), u, mine, admin=bool(is_admin and is_admin()),
+                                     tools=OBS.tool_usage(u["id"]))
         return board.html()
 
     @app.get("/analyze")

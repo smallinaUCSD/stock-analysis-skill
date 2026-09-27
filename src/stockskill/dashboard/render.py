@@ -151,7 +151,7 @@ b,strong{font-weight:500}
 .page-x:hover{border-color:var(--border-strong)} .page-x:active{transform:scale(.97)}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;
   animation-iteration-count:1!important;transition-duration:.01ms!important}}
-.wrap{max-width:1180px;margin:0 auto;padding:20px}
+.wrap{max-width:1480px;margin:0 auto;padding:20px}
 header{display:flex;flex-wrap:wrap;align-items:baseline;gap:12px;margin-bottom:4px}
 header:has(.page-x){margin-bottom:18px}
 h1,h2.display{font-family:var(--font-display);font-weight:500;letter-spacing:-.02em;line-height:1.1}

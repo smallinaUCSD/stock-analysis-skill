@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS hits (
   uid INTEGER, visitor TEXT, device TEXT, browser TEXT, os TEXT, referrer TEXT, ticker TEXT, page INTEGER
 );
 CREATE INDEX IF NOT EXISTS hits_day ON hits(day);
+CREATE INDEX IF NOT EXISTS hits_uid ON hits(uid, ts);
 CREATE TABLE IF NOT EXISTS events (
   ts REAL NOT NULL, day TEXT NOT NULL, name TEXT NOT NULL, detail TEXT, uid INTEGER, visitor TEXT, device TEXT
 );
@@ -241,6 +242,29 @@ def report(days: int = 30, users_db: str | None = None) -> dict:
     for p in out.get("people") or []:
         p["minutes_7d"] = round(on_site.get(p["id"], 0) / 60)
     return out
+
+
+TOOL_ROUTES = {"/breakouts": "breakouts", "/screener": "screener", "/compare": "compare", "/indicators": "indicators",
+               "/trades": "trades", "/politician/<pid>": "trades", "/fund/<int:cik>": "trades", "/calendar": "calendar",
+               "/markets": "markets", "/earnings": "earnings", "/financials": "financials", "/economy": "economy",
+               "/interpret": "interpret", "/holdings": "holdings", "/alerts": "alerts"}
+
+
+def tool_usage(uid: int, days: int = 30, min_uses: int = 2) -> list[str]:
+    """This person's board tools, most used first (only ones used a few times)."""
+    try:
+        c = _conn()
+        rows = c.execute("SELECT route, COUNT(*) FROM hits WHERE uid = ? AND ts > ? AND page = 1 GROUP BY route",
+                         (uid, time.time() - days * 86400)).fetchall()
+        c.close()
+    except sqlite3.Error:
+        return []
+    n: dict[str, int] = {}
+    for route, k in rows:
+        t = TOOL_ROUTES.get(route)
+        if t:
+            n[t] = n.get(t, 0) + k
+    return [t for t, k in sorted(n.items(), key=lambda x: -x[1]) if k >= min_uses]
 
 
 def time_on_site(c, since_ts: float, gap: float = 1800.0) -> dict[int, float]:

@@ -875,10 +875,25 @@ def test_notify():
     if _limited("test:" + str(current_user()["id"]), 5, 3600):
         return jsonify({"ok": False, "error": "Try again later."}), 429
     u = db.get_user(current_user()["id"])
+    # a test goes to every way you've set up, even ones not ticked for alerts yet
+    u = dict(u, notify_inapp=1, notify_push=1, notify_email=1 if u.get("email_verified") else u.get("notify_email"),
+             notify_sms=1 if u.get("phone_verified") else u.get("notify_sms"))
     r = notify.deliver(u, "test", "Test notification", ["Notifications are working. Your summaries and alerts will "
                                                           "arrive the same way."], "/account", f"test:{time.time()}",
                        "Notifications are working.")
-    return jsonify({"ok": True, **r})
+    S = _sms()
+    why = {}
+    if not r.get("email"):
+        why["email"] = ("email isn't set up on this server" if not notify.email_ready() else
+                        "confirm your email address first" if not u.get("email_verified") else "the email couldn't be sent")
+    if not r.get("sms"):
+        why["sms"] = ("add your mobile number under Text messages" if not u.get("phone") else
+                      "texts aren't switched on for the site yet" if not S.sms_ready() else
+                      "confirm your mobile number with the code first" if not u.get("phone_verified") else
+                      "the text couldn't be sent")
+    if not r.get("push"):
+        why["push"] = "turn on browser notifications on this device"
+    return jsonify({"ok": True, **r, "not_sent": why})
 
 
 @bp.route("/notifications/verify")
