@@ -4,6 +4,7 @@ Data from /api/funds/<cik> and /api/fund/<cik>/history."""
 
 from __future__ import annotations
 
+from .charts import DONUT_CSS, DONUT_JS
 from ..dashboard.render import _CSS, _THEME_BOOT, icon
 from .politician_page import _EXTRA_CSS as _PP_CSS
 
@@ -11,12 +12,14 @@ from .politician_page import _EXTRA_CSS as _PP_CSS
 def fund_html(cik: int) -> str:
     return ("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
             "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
-            "<title>Fund</title>" + _THEME_BOOT + "<style>" + _CSS + _PP_CSS + _EXTRA_CSS +
+            "<title>Fund</title>" + _THEME_BOOT + "<style>" + _CSS + _PP_CSS + _EXTRA_CSS + DONUT_CSS +
             "</style></head><body><div class=\"wrap\">"
             "<header class=\"pp-head\"><div id=\"who\" class=\"pp-who\"><span class=\"muted\">Loading…</span></div>"
             "<button class=\"page-x\" onclick=\"return goBack(event)\" title=\"Close\" aria-label=\"Close\">"
             + icon("x", 17) + "</button></header>"
             "<div id=\"tiles\" class=\"pp-tiles\"></div>"
+            "<section class=\"pp-sec\" id=\"mix-sec\"><h2>Portfolio mix</h2><div class=\"dn-row\">"
+            "<div class=\"dn\" id=\"dn-top\"></div><div class=\"dn\" id=\"dn-sec\"></div></div></section>"
             "<section class=\"pp-sec\"><h2>Performance if you copied their portfolio</h2>"
             "<div id=\"perf\" class=\"pp-box muted\">Reading their past filings and pricing them (the first load takes a minute)…</div></section>"
             "<section class=\"pp-sec\"><h2>Reported portfolio by quarter</h2><div id=\"val\" class=\"pp-box muted\">Loading…</div></section>"
@@ -26,10 +29,12 @@ def fund_html(cik: int) -> str:
             "<p class=\"pp-note\">From SEC Form 13F, which large managers file within 45 days after each quarter. It lists US-listed "
             "stocks, some funds and options they held on the last day of the quarter; it leaves out short positions, bonds, "
             "cash and foreign shares, so it is not their whole portfolio or their actual returns.</p>"
-            "</div><script>var CIK=" + str(int(cik)) + ";\n" + _JS + "</script></body></html>")
+            "</div><script>var CIK=" + str(int(cik)) + ";\n" + DONUT_JS + _JS + "</script></body></html>")
 
 
 _EXTRA_CSS = """
+.fd-ph{margin:0;flex:none;width:96px} .fd-ph img{width:96px;height:118px;border-radius:14px;object-fit:cover;object-position:top;display:block;background:var(--surface-2)}
+.fd-ph figcaption{font-size:10.5px;line-height:1.3;margin-top:4px} .fd-ph figcaption a{color:var(--muted)}
 .fd-mono{width:96px;height:96px;border-radius:18px;background:var(--surface-3);display:flex;align-items:center;justify-content:center;
   font-family:var(--font-display);font-size:34px;flex:0 0 auto}
 .fd-bar{display:inline-block;height:8px;border-radius:4px;background:var(--accent);vertical-align:middle;margin-right:8px}
@@ -56,7 +61,10 @@ var REP=null;
 function renderWho(d){
   var ini=(d.fund||'?').split(' ').map(function(w){return w[0];}).slice(0,2).join('');
   document.title=d.fund;
-  document.getElementById('who').innerHTML='<span class="fd-mono">'+esc(ini)+'</span><div><h1>'+esc(d.fund)+'</h1>'+
+  var ph=d.photo, face=ph?'<figure class="fd-ph"><img src="'+esc(ph.img)+'" alt="'+esc(d.manager||'')+'"><figcaption>'+
+      '<a href="'+esc(ph.file_page)+'" target="_blank" rel="noopener">Photo: '+esc(ph.credit)+', '+esc(ph.license)+'</a></figcaption></figure>'
+      :'<span class="fd-mono">'+esc(ini)+'</span>';
+  document.getElementById('who').innerHTML=face+'<div><h1>'+esc(d.fund)+'</h1>'+
     '<p class="sub muted">'+esc(d.manager||d.filer)+' · latest filing covers '+qlabel(d.period)+' (filed '+fdate(d.filed)+')</p></div>';
   followBtn(d); }
 function renderTiles(d){ var h=(d.holdings||[]), top10=h.slice(0,10).reduce(function(a,r){return a+(r.weight||0);},0), c=d.counts||{};
@@ -130,9 +138,15 @@ function followBtn(d){
     b.onclick=function(){ fetch('/api/me/follows',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify(on?{remove:[pid]}:{add:[{pid:pid,name:d.fund}]})}).then(function(r){return r.json();}).then(function(x){ if(x.ok){ on=!on; paint(); } }); };
     document.querySelector('#who > div').appendChild(b); }).catch(function(){}); }
+function renderMix(d){ var hs=(d.holdings||[]).filter(function(h){ return !h.put_call; })
+    .sort(function(a,b){ return (b.weight||0)-(a.weight||0); });
+  var top=hs.slice(0,8).map(function(h){ return {name:(h.ticker||h.name), value:h.weight||0}; });
+  var rest=hs.slice(8).reduce(function(a,h){ return a+(h.weight||0); },0); if(rest>0) top.push({name:'Everything else', value:rest});
+  donut(document.getElementById('dn-top'), top, {title:'Largest holdings', center:hs.length, sub:'positions'});
+  donut(document.getElementById('dn-sec'), d.sectors||[], {title:'By sector', center:(d.sectors||[]).length, sub:'sectors'}); }
 fetch('/api/funds/'+CIK).then(function(r){return r.json();}).then(function(d){
   if(!d.ok){ document.getElementById('who').textContent=d.error||'Not found.'; return; }
-  REP=d; renderWho(d); renderTiles(d); renderHold(d); }).catch(function(){ document.getElementById('who').textContent='Could not load this fund.'; });
+  REP=d; renderWho(d); renderTiles(d); renderHold(d); renderMix(d); }).catch(function(){ document.getElementById('who').textContent='Could not load this fund.'; });
 fetch('/api/fund/'+CIK+'/history').then(function(r){return r.json();}).then(function(h){
   if(!h.ok){ ['perf','val','tl'].forEach(function(id){ document.getElementById(id).textContent=h.error||'History unavailable.'; }); return; }
   renderPerf(h); renderVal(h); renderTl(h); }).catch(function(){ document.getElementById('perf').textContent='History unavailable.'; });

@@ -240,3 +240,31 @@ def _json_default(o):
 
 def dumps(obj) -> str:
     return json.dumps(obj, default=_json_default, separators=(",", ":"))
+
+
+def sectors_for(tickers, cache_dir=None) -> dict:
+    """{ticker: sector} from the market table when it's built, else each stock's cached snapshot."""
+    rows = _STATE.get("rows") or []
+    known = {r.get("ticker"): r.get("sector") for r in rows if r.get("sector")}
+    out = {}
+    for t in {t for t in tickers if t}:
+        s = known.get(t)
+        if not s and cache_dir:
+            from ..watchlist.pipeline import _load_cached
+            td = _load_cached(cache_dir, t)
+            s = getattr(getattr(td, "snapshot", None), "sector", None) if td else None
+        out[t] = s
+    return out
+
+
+def mix(weights: dict, sectors: dict, top: int = 9) -> list[dict]:
+    """[{name, value}] summed by sector, largest first; small ones folded into Other."""
+    agg: dict = {}
+    for t, w in weights.items():
+        k = sectors.get(t) or "Other or unknown"
+        agg[k] = agg.get(k, 0.0) + (w or 0.0)
+    items = sorted(({"name": k, "value": v} for k, v in agg.items() if v > 0), key=lambda x: -x["value"])
+    if len(items) > top:
+        rest = sum(x["value"] for x in items[top - 1:])
+        items = items[:top - 1] + [{"name": "Everything else", "value": rest}]
+    return items

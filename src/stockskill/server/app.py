@@ -259,6 +259,8 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
                     for _name, _mgr, _cik in _F.FUNDS:        # may fetch new filings (slower)
                         _F.fund_report(_cik, cache_dir)       # refreshes itself once 12 hours old
                         _F.fund_history(_cik, cache_dir)
+                    from ..data import manager_photos as _MP
+                    _MP.refresh([m for _n, m, _c in _F.FUNDS], cache_dir)   # managers' photos, monthly
                 except Exception as _e:  # noqa: BLE001
                     import sys as _sys
                     print(f"profile warm-up: {_e!r}", file=_sys.stderr, flush=True)
@@ -1237,6 +1239,12 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
                 from ..data.politicians import trump_coverage
                 extra["coverage"] = trump_coverage(cache_dir)
             import json as _json
+            from ..data.market_screen import mix, sectors_for
+            n = {}
+            for t in tr:                                   # how many trades in each sector (for the pie chart)
+                if t.get("ticker"):
+                    n[t["ticker"]] = n.get(t["ticker"], 0) + 1
+            extra["sectors"] = mix(n, sectors_for(list(n), cache_dir))
             return _json.dumps({"ok": True, "person": p, "stats": stats(tr), "positions": positions(tr)[:40],
                                 "trades": tr[:1500], "total": len(tr), **extra}, default=str)
         return _memo(("pol", pid), _mtime(trades_path(cache_dir)), build)      # ready-made JSON
@@ -1621,10 +1629,21 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
     @app.get("/api/funds/<int:cik>")
     def fund_detail(cik: int):
         from ..data import funds13f as F
-        rep = _memo(("fundrep", cik), _mtime(os.path.join(F._dir(cache_dir), f"report_{cik}.json")),
-                    lambda: F.fund_report(cik, cache_dir))
+        ver = _mtime(os.path.join(F._dir(cache_dir), f"report_{cik}.json"))
+        rep = _memo(("fundrep", cik), ver, lambda: F.fund_report(cik, cache_dir))
         if not rep:
             return jsonify({"ok": False, "error": "no 13F filings found for that filer"}), 404
+
+        def sectors():                                   # the portfolio by sector (for the pie chart)
+            from ..data.market_screen import mix, sectors_for
+            w = {}
+            for h in rep.get("holdings") or []:
+                if h.get("ticker") and not h.get("put_call"):
+                    w[h["ticker"]] = w.get(h["ticker"], 0.0) + (h.get("weight") or 0.0)
+            return mix(w, sectors_for(list(w), cache_dir))
+        from ..data.manager_photos import load as _photos
+        mgr = next((m for _n, m, c in F.FUNDS if c == cik), None)
+        rep = dict(rep, sectors=_memo(("fundsec", cik), ver, sectors), photo=_photos(cache_dir).get(mgr))
         return jsonify({"ok": True, **rep})
 
     @app.get("/api/holders/<ticker>")

@@ -344,6 +344,8 @@ def warm_all(cache_dir=None) -> None:
 
 def summaries(cache_dir=None) -> list[dict]:
     """Tracked funds with their cached report's headline numbers (None = not built yet)."""
+    from .manager_photos import load as _photos
+    photos = _photos(cache_dir)
     out = []
     for name, mgr, cik in FUNDS:
         rep = None
@@ -351,7 +353,7 @@ def summaries(cache_dir=None) -> list[dict]:
             rep = json.load(open(os.path.join(_dir(cache_dir), f"report_{cik}.json")))
         except Exception:  # noqa: BLE001
             rep = None
-        out.append({"cik": cik, "fund": name, "manager": mgr,
+        out.append({"cik": cik, "fund": name, "manager": mgr, "photo": photos.get(mgr),
                     "period": (rep or {}).get("period"), "total_value": (rep or {}).get("total_value"),
                     "positions": (rep or {}).get("positions"), "counts": (rep or {}).get("counts"),
                     "top": [h.get("ticker") or h.get("name") for h in (rep or {}).get("holdings", [])[:5]]})

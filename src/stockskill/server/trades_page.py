@@ -100,6 +100,9 @@ _EXTRA_CSS = """
   font:14px var(--font);color:var(--ink)}
 .fund-card:hover{background:var(--surface-2)} .fund-card.on{border-color:var(--accent)}
 .fund-card b{font-weight:500;font-size:15px;display:block} .fund-card .m{color:var(--muted);font-size:13px}
+.fc-top{display:flex;gap:10px;align-items:center}
+.fc-ph{width:44px;height:52px;border-radius:8px;object-fit:cover;object-position:top;flex:none;background:var(--surface-2)}
+.fc-mono{display:flex;align-items:center;justify-content:center;font:500 15px var(--font);color:var(--muted)}
 .fund-card .n{font-size:13px;margin-top:6px}
 .fd-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px;margin:6px 0 10px}
 .fd-h h2{font-family:var(--font-display);font-weight:500;font-size:28px;margin:0}
@@ -210,7 +213,10 @@ function loadFunds(){ fetch('/api/funds').then(function(r){return r.json();}).th
     if(d.warming) setTimeout(loadFunds,10000); }); }
 function renderFunds(){ var g=document.getElementById('fund-grid');
   g.innerHTML=(FUNDS.funds||[]).map(function(f){ var c=f.counts||{};
-    return '<button class="fund-card'+(CUR===f.cik?' on':'')+'" onclick="openFund('+f.cik+')"><b>'+esc(f.fund)+'</b><span class="m">'+esc(f.manager)+'</span>'+
+    var ini=(f.manager||f.fund||'?').split(' ').map(function(w){return w[0];}).slice(0,2).join('');
+    return '<button class="fund-card'+(CUR===f.cik?' on':'')+'" onclick="openFund('+f.cik+')"><span class="fc-top">'+
+      (f.photo?'<img class="fc-ph" src="'+esc(f.photo.img)+'" alt="" loading="lazy">':'<span class="fc-ph fc-mono">'+esc(ini)+'</span>')+
+      '<span><b>'+esc(f.fund)+'</b><span class="m">'+esc(f.manager)+'</span></span></span>'+
       '<div class="n">'+(f.period?big(f.total_value)+' · '+f.positions+' positions · '+fdate(f.period):'<span class="m">Loading filings…</span>')+'</div>'+
       (f.period?'<div class="n m">'+(c.New||0)+' new, '+(c.Added||0)+' added, '+(c.Trimmed||0)+' trimmed, '+(c['Sold out']||0)+' sold</div>':'')+'</button>'; }).join(''); }
 function openFund(cik){ CUR=cik; if(FUNDS) renderFunds();       // full profile, like politicians

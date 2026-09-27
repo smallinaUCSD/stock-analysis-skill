@@ -9,18 +9,21 @@ from __future__ import annotations
 import html
 import json
 
+from .charts import DONUT_CSS, DONUT_JS
 from ..dashboard.render import _CSS, _THEME_BOOT, icon
 
 
 def politician_html(pid: str) -> str:
     return ("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
             "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
-            "<title>Politician</title>" + _THEME_BOOT + "<style>" + _CSS + _EXTRA_CSS +
+            "<title>Politician</title>" + _THEME_BOOT + "<style>" + _CSS + _EXTRA_CSS + DONUT_CSS +
             "</style></head><body><div class=\"wrap\">"
             "<header class=\"pp-head\"><div id=\"who\" class=\"pp-who\"><span class=\"muted\">Loading…</span></div>"
             "<button class=\"page-x\" onclick=\"return goBack(event)\" title=\"Close\" aria-label=\"Close\">"
             + icon("x", 17) + "</button></header>"
             "<div id=\"tiles\" class=\"pp-tiles\"></div>"
+            "<section class=\"pp-sec\" id=\"mix-sec\"><h2>What they trade</h2><div class=\"dn-row\">"
+            "<div class=\"dn\" id=\"dn-side\"></div><div class=\"dn\" id=\"dn-sec\"></div><div class=\"dn\" id=\"dn-tk\"></div></div></section>"
             "<section class=\"pp-sec\"><h2>Performance if you copied their trades</h2>"
             "<div id=\"perf\" class=\"pp-box muted\">Pricing their trades…</div></section>"
             "<section class=\"pp-sec\"><h2>Timeline</h2><div id=\"tl\" class=\"pp-box muted\">Loading…</div></section>"
@@ -31,7 +34,7 @@ def politician_html(pid: str) -> str:
             "<div id=\"comm\" class=\"pp-tw\"></div></section>"
             "<section class=\"pp-sec\"><h2>All reported trades</h2><div id=\"trades\" class=\"pp-tw muted\">Loading…</div></section>"
             "<p class=\"pp-note\" id=\"src-note\"></p>"
-            "</div><script>var PID=" + json.dumps(html.escape(pid)) + ";\n" + _JS + "</script></body></html>")
+            "</div><script>var PID=" + json.dumps(html.escape(pid)) + ";\n" + DONUT_JS + _JS + "</script></body></html>")
 
 
 _EXTRA_CSS = """
@@ -105,6 +108,16 @@ function renderWho(p){
     '</p><p class="sub muted">In office since '+fdate(p.since)+' ('+yrs(p.since)+(p.since_note?'; '+esc(p.since_note):'')+')</p>'+(comms?'<div class="comms">'+comms+'</div>':'')+'</div>';
   document.title=p.name;
 }
+function renderMix(d){ var tr=d.trades||[], buy=0, sell=0, other=0, by={};
+  tr.forEach(function(t){ var ty=(t.type||''); if(ty.indexOf('Buy')===0) buy++; else if(ty.indexOf('Sell')===0) sell++; else other++;
+    if(t.ticker) by[t.ticker]=(by[t.ticker]||0)+1; });
+  donut(document.getElementById('dn-side'), [{name:'Buys',value:buy},{name:'Sells',value:sell},{name:'Other',value:other}],
+    {title:'Buys and sells', center:tr.length, sub:'trades'});
+  donut(document.getElementById('dn-sec'), d.sectors||[], {title:'By sector (number of trades)', center:(d.sectors||[]).length, sub:'sectors'});
+  var tks=Object.keys(by).sort(function(a,b){ return by[b]-by[a]; }), top=tks.slice(0,8).map(function(t){ return {name:t,value:by[t]}; });
+  var rest=tks.slice(8).reduce(function(a,t){ return a+by[t]; },0); if(rest) top.push({name:'Everything else',value:rest});
+  donut(document.getElementById('dn-tk'), top, {title:'Most traded stocks', center:tks.length, sub:'stocks'});
+  if(!tr.length) document.getElementById('mix-sec').style.display='none'; }
 function renderTiles(s){
   var t=[['Trades',s.trades,s.first?fdate(s.first)+' to '+fdate(s.last):''],['Bought (est.)',big(s.bought),s.buys+' buys'],
     ['Sold (est.)',big(s.sold),s.sells+' sells'],['Reported after',s.avg_lag!=null?Math.round(s.avg_lag)+' days':'-','on average'],
@@ -181,7 +194,7 @@ function loadPerf(){ fetch('/api/politician/'+encodeURIComponent(PID)+'/performa
   .catch(function(){ document.getElementById('perf').textContent='Performance unavailable right now.'; }); }
 fetch('/api/politician/'+encodeURIComponent(PID)).then(function(r){return r.json();}).then(function(d){
   if(!d.ok){ document.getElementById('who').textContent=d.error||'Not found.'; return; }
-  D=d; renderWho(d.person); renderTiles(d.stats); renderPos(d.positions); renderTimeline(d.trades); renderTrades(d.trades);
+  D=d; renderWho(d.person); renderTiles(d.stats); renderMix(d); renderPos(d.positions); renderTimeline(d.trades); renderTrades(d.trades);
   document.getElementById('src-note').textContent=d.person.chamber==='President'?
     'From the President\'s OGE Form 278-T reports (scanned filings read by OCR'+(d.coverage?': '+d.coverage.read+' of '+d.coverage.filings+' listed filings were legible enough to read':'')+
     '; within those, about 9 in 10 rows are read). The accounts are trustee-managed. Research on officials\' trades finds no reliable market-beating edge.':
