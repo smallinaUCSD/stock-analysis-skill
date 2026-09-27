@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import pickle
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
@@ -104,7 +105,7 @@ def fetch_one(ticker: str, period: str = "1y",
             # write-then-rename: another process (a second server, the daily
             # refresh) may be reading this file at the same moment
             path = _cache_path(cache_dir, ticker)
-            tmp = f"{path}.{os.getpid()}.tmp"
+            tmp = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"   # two threads may write one ticker
             with open(tmp, "wb") as f:
                 pickle.dump(td, f)
             os.replace(tmp, path)

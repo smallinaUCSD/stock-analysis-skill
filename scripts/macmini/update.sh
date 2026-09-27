@@ -6,9 +6,8 @@ REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 APP_USER="$(stat -f %Su "$REPO")"
 as_app() { sudo -u "$APP_USER" -H bash -lc "cd '$REPO' && export PATH=\$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:\$PATH && $1"; }
 echo ">> Pulling as $APP_USER ..."
-# the daily refresh rewrites the committed price snapshot; drop those local
-# copies so the pull can't conflict (the next refresh recreates them)
-as_app "git restore data/cache 2>/dev/null || git checkout -- data/cache; git pull --ff-only"
+# the local price cache (daily refresh, market crawl) must not block the pull
+as_app "bash scripts/macmini/pull.sh"
 as_app "uv sync --frozen --group deploy -q || uv sync --group deploy -q"
 echo ">> Restarting ..."
 for s in public private; do launchctl kickstart -k "system/com.stockskill.$s"; done

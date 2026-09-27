@@ -107,6 +107,8 @@ def _observe(app, ACCT) -> None:
         health["geo_db"] = os.path.exists(geoip.db_path())
         from ..accounts import sms as _S
         health["texts"] = _S.provider()
+        from ..data import market_crawl
+        health["crawl"] = market_crawl.status(app.config["ACCT"].get("cache_dir"))
         return jsonify({"ok": True, **OBS.report(days), "retention": OBS.retention(), "health": health,
                         "geo_attr": geoip.ATTRIBUTION})
 
@@ -217,6 +219,9 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
                     pass
                 _t.sleep(5 * 3600)
         _th.Thread(target=_warm_calendar, daemon=True).start()
+    if os.environ.get("STOCKSKILL_CRAWL") == "1" and cache_dir:
+        from ..data import market_crawl
+        market_crawl.run_forever(cache_dir, period)      # slowly cache the whole market, biggest first
         board.keep_fresh()    # rebuild whenever stale, not only when someone visits
         board.quote_feed()    # and keep live prices a few minutes fresh in between
 
