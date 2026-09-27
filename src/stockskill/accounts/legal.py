@@ -15,7 +15,7 @@ import html
 import os
 
 TERMS_VERSION = "2026-09-26.2"
-PRIVACY_VERSION = "2026-09-26.3"
+PRIVACY_VERSION = "2026-09-26.4"
 EFFECTIVE = "September 26, 2026"
 
 
@@ -198,7 +198,8 @@ use and share it, and the choices and rights you have. It applies together with 
 <li><b>Account details:</b> your email address and, if you create a password, a salted one-way hash of it
 (we never store or see your actual password).</li>
 <li><b>Profile:</b> first and last name, date of birth (used to confirm you are 18 or older), and optionally
-your gender.</li>
+your gender, your occupation and where you live (city and state or country; we suggest the place your
+sign-in comes from, and you can change or clear it).</li>
 <li><b>Mobile number (optional):</b> if you ask for text alerts, your phone number, when you agreed to receive
 texts, and whether you confirmed the number with a code we texted.</li>
 <li><b>Preferences:</b> the kind of investor you are, your experience level, how you heard about us, the
@@ -233,7 +234,8 @@ purposes.</p>
 <li>To create and secure your account, sign you in, and prevent fraud and abuse.</li>
 <li>To personalize the Service, such as building your watchlist from the sectors you pick.</li>
 <li>To operate, maintain, debug and improve the Service, including aggregated statistics that do not
-identify you.</li>
+identify you, such as which features people of different age groups, occupations and cities use, to
+decide what to build.</li>
 <li>To send the summaries and alerts you choose, and service messages such as security notices or changes
 to our terms. We will ask before sending marketing email, and every email has an unsubscribe link.</li>
 <li>To comply with law and enforce our Terms.</li>

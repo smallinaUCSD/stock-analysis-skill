@@ -79,7 +79,9 @@ NOTIFY_COLUMNS = {"email_verified": "INTEGER NOT NULL DEFAULT 0", "notify_email"
                   # text-message alerts: E.164 number, confirmed by a texted code, with the consent time
                   "phone": "TEXT", "phone_verified": "INTEGER NOT NULL DEFAULT 0", "notify_sms": "INTEGER NOT NULL DEFAULT 0",
                   "sms_consent_at": "REAL", "notify_events": "INTEGER NOT NULL DEFAULT 0",
-                  "email_canon": "TEXT"}
+                  "email_canon": "TEXT",
+                  # optional demographics (what to build for whom)
+                  "occupation": "TEXT", "home_city": "TEXT", "home_region": "TEXT"}
 
 
 def path() -> str:

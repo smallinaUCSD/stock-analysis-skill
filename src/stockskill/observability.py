@@ -239,6 +239,7 @@ def report(days: int = 30, users_db: str | None = None) -> dict:
     on_site = time_on_site(c, now - 7 * 86400)
     c.close()
     out.update(_account_stats(users_db, since))
+    out["demographics"] = demographics(users_db, days)
     for p in out.get("people") or []:
         p["minutes_7d"] = round(on_site.get(p["id"], 0) / 60)
     return out
@@ -360,6 +361,119 @@ def _n(c, sql: str) -> int:
         return c.execute(sql).fetchone()[0]
     except sqlite3.OperationalError:                   # an older database without the column
         return 0
+
+
+# --- who uses the app --------------------------------------------------------------
+
+_METROS = {
+    "New York": ["new york", "brooklyn", "queens", "bronx", "staten island", "manhattan", "jersey city", "hoboken",
+                 "newark", "yonkers", "long island city", "white plains", "stamford"],
+    "San Francisco Bay Area": ["san francisco", "oakland", "san jose", "palo alto", "mountain view", "sunnyvale",
+                               "santa clara", "berkeley", "fremont", "menlo park", "redwood city", "cupertino",
+                               "san mateo", "hayward", "daly city", "milpitas"],
+    "Los Angeles": ["los angeles", "santa monica", "pasadena", "long beach", "irvine", "anaheim", "glendale",
+                    "burbank", "culver city", "torrance", "santa ana", "beverly hills"],
+    "Boston": ["boston", "cambridge", "somerville", "brookline", "newton", "quincy", "waltham", "medford"],
+    "Chicago": ["chicago", "evanston", "naperville", "oak park", "schaumburg"],
+    "Seattle": ["seattle", "bellevue", "redmond", "kirkland", "tacoma"],
+    "Washington DC": ["washington", "arlington", "alexandria", "bethesda", "silver spring", "reston", "mclean"],
+    "Dallas–Fort Worth": ["dallas", "fort worth", "plano", "irving", "frisco", "arlington tx"],
+    "Houston": ["houston", "sugar land", "the woodlands", "katy"], "Austin": ["austin", "round rock"],
+    "Atlanta": ["atlanta", "marietta", "alpharetta", "decatur"], "Miami": ["miami", "miami beach", "fort lauderdale", "boca raton"],
+    "Denver": ["denver", "boulder", "aurora"], "Philadelphia": ["philadelphia"], "San Diego": ["san diego", "la jolla"],
+    "Phoenix": ["phoenix", "scottsdale", "tempe", "mesa"], "Minneapolis": ["minneapolis", "saint paul", "st. paul"],
+}
+_CITY_METRO = {c: m for m, cs in _METROS.items() for c in cs}
+AGE_GROUPS = [(18, 24), (25, 34), (35, 44), (45, 54), (55, 64), (65, 200)]
+
+
+def metro(city: str | None, region: str | None) -> str | None:
+    """'New York' for Brooklyn, 'San Francisco Bay Area' for Palo Alto; else 'City, Region'."""
+    c = (city or "").strip()
+    if not c:
+        return region.strip() if region else None
+    m = _CITY_METRO.get(c.lower())
+    if m == "Washington DC" and c.lower() == "washington" and region and region.lower() in ("washington", "wa"):
+        m = None                                           # Washington state, not DC
+    return m or (f"{c}, {region.strip()}" if region else c)
+
+
+def age_group(dob: str | None, today=None) -> str | None:
+    from datetime import date as _d
+    try:
+        b = _d.fromisoformat(dob or "")
+    except ValueError:
+        return None
+    t = today or _d.today()
+    age = t.year - b.year - ((t.month, t.day) < (b.month, b.day))
+    for lo, hi in AGE_GROUPS:
+        if lo <= age <= hi:
+            return f"{lo}+" if hi >= 200 else f"{lo}–{hi}"
+    return None
+
+
+def demographics(users_db: str | None = None, days: int = 30) -> dict:
+    """Who signs up (age, occupation, place, investor type) and which tools each
+    group uses, so it's clear what to build for whom. Counts only."""
+    p = users_db or os.environ.get("STOCKSKILL_DB") or "data/users.db"
+    if not os.path.exists(p):
+        return {}
+    from collections import Counter, defaultdict
+    u = sqlite3.connect(p)
+    u.row_factory = sqlite3.Row
+    cols = {r[1] for r in u.execute("PRAGMA table_info(users)")}
+    want = [c for c in ("id", "dob", "gender", "investor_type", "experience", "occupation", "home_city",
+                        "home_region") if c in cols]
+    people = [dict(r) for r in u.execute(f"SELECT {', '.join(want)} FROM users")]
+    try:                                               # the latest sign-in place, when they didn't say
+        seen = {r[0]: (r[1], r[2]) for r in u.execute(
+            "SELECT user_id, city, region FROM sessions WHERE city IS NOT NULL ORDER BY created_at")}
+    except sqlite3.Error:
+        seen = {}
+    u.close()
+    for x in people:
+        x["age"] = age_group(x.get("dob"))
+        city, region = x.get("home_city"), x.get("home_region")
+        if not city and not region and x["id"] in seen:
+            city, region = seen[x["id"]]
+        x["place"] = metro(city, region)
+        x["region"] = (region or "").strip() or None
+    c = _conn()
+    use = defaultdict(Counter)
+    for uid, route, n in c.execute("SELECT uid, route, COUNT(*) FROM hits WHERE uid IS NOT NULL AND page = 1 AND ts > ? "
+                                   "GROUP BY uid, route", (time.time() - days * 86400,)):
+        t = TOOL_ROUTES.get(route) or {"/": "board", "/analysis/<ticker>": "stock pages"}.get(route)
+        if t:
+            use[uid][t] += n
+    c.close()
+
+    try:
+        from .accounts.auth import OCCUPATIONS
+    except Exception:  # noqa: BLE001
+        OCCUPATIONS = {}
+    for x in people:
+        if x.get("occupation"):
+            x["occupation"] = OCCUPATIONS.get(x["occupation"], x["occupation"])
+
+    def count(key):
+        k = Counter(x.get(key) or "not given" for x in people)
+        return [{"name": n, "people": v} for n, v in k.most_common(12)]
+
+    def tools_by(key):
+        groups = defaultdict(Counter)
+        members = Counter()
+        for x in people:
+            g = x.get(key)
+            if not g:
+                continue
+            members[g] += 1
+            groups[g].update(use.get(x["id"], {}))
+        return [{"group": g, "people": members[g],
+                 "top": ", ".join(f"{t} ({n})" for t, n in groups[g].most_common(4)) or "no visits yet"}
+                for g, _ in members.most_common(10)]
+    return {"age": sorted(count("age"), key=lambda r: r["name"]), "occupation": count("occupation"),
+            "place": count("place"), "region": count("region"), "tools_by_age": tools_by("age"),
+            "tools_by_occupation": tools_by("occupation"), "tools_by_place": tools_by("place")}
 
 
 def retention(users_db: str | None = None, weeks: int = 6) -> list[dict]:

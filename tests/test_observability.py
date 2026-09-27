@@ -78,3 +78,27 @@ def test_admin_is_hidden_from_everyone_else(app, monkeypatch):
     assert c.get("/admin").status_code == 200
     r = c.get("/api/admin/report?days=7").get_json()
     assert r["ok"] and r["accounts"] == 1 and "health" in r and "retention" in r
+
+
+def test_demographics_groups_and_tools(tmp_path, monkeypatch):
+    import sqlite3
+    monkeypatch.setenv("STOCKSKILL_DB", str(tmp_path / "users.db"))
+    from stockskill.accounts import db
+    db.init()
+    a = db.create_user("a@example.com")
+    b = db.create_user("b@example.com")
+    db.update_user(a, dob="1998-05-01", occupation="tech", home_city="Brooklyn", home_region="NY")
+    db.update_user(b, dob="1970-01-01")
+    db.add_session("s1", b, city="Palo Alto", region="California", browser="Chrome", os="macOS", device="desktop")
+    col = OBS.Collector("s")
+    for _ in range(3):
+        col.record("/screener", "/screener", "GET", 200, 5.0, a, "1.1.1.1", CHROME_MAC, "", None, True)
+    col.record("/calendar", "/calendar", "GET", 200, 5.0, b, "2.2.2.2", CHROME_MAC, "", None, True)
+    col.flush()
+    g = OBS.demographics(days=7)
+    assert {r["name"] for r in g["age"]} == {"25–34", "55–64"}
+    assert {r["name"] for r in g["place"]} == {"New York", "San Francisco Bay Area"}
+    assert g["occupation"][0]["name"] in ("Tech or software", "not given")
+    by_age = {r["group"]: r["top"] for r in g["tools_by_age"]}
+    assert by_age["25–34"] == "screener (3)" and by_age["55–64"] == "calendar (1)"
+    assert OBS.metro("Seattle", "WA") == "Seattle" and OBS.metro("Boise", "Idaho") == "Boise, Idaho"

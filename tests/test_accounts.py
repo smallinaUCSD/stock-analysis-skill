@@ -182,3 +182,15 @@ def test_passkey_options_need_sign_in(app):
     assert a["rpId"] == "localhost" and len(a["challenge"]) > 20
     bad = c.post("/auth/passkey/login/verify", json={"credential": {"id": "nope"}})
     assert bad.status_code == 401
+
+
+def test_optional_occupation_and_home(app):
+    c = app.test_client()
+    _signup(c)
+    assert c.post("/api/me/profile", json=dict(PROFILE, occupation="astronaut")).status_code == 400
+    assert c.post("/api/me/profile", json=dict(PROFILE, occupation="tech", home_city=" Brooklyn ",
+                                                home_region="NY")).get_json()["ok"]
+    assert c.post("/api/me/profile", json=PROFILE).get_json()["ok"]            # not sent: left alone
+    u = c.get("/api/me").get_json()
+    assert u["user"]["occupation"] == "tech" and u["user"]["home_city"] == "Brooklyn"
+    assert ["tech", "Tech or software"] in u["options"]["occupations"] and "place_guess" in u

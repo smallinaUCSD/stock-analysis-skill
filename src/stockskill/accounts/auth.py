@@ -42,6 +42,12 @@ INVESTOR_TYPES = {
 EXPERIENCE = {"beginner": "Just starting", "intermediate": "A few years", "advanced": "Very experienced"}
 GENDERS = {"female": "Female", "male": "Male", "nonbinary": "Non-binary", "self": "Prefer to self-describe",
            "na": "Prefer not to say"}
+OCCUPATIONS = {"student": "Student", "tech": "Tech or software", "finance": "Finance or banking",
+               "healthcare": "Healthcare", "engineering": "Engineering or science", "law": "Law",
+               "education": "Education", "government": "Government or military",
+               "business": "Business, sales or marketing", "trades": "Trades or manufacturing",
+               "owner": "Own a business or self-employed", "creative": "Arts, media or design",
+               "retired": "Retired", "other": "Something else", "na": "Prefer not to say"}
 REFERRALS = {"friend": "A friend or colleague", "search": "Search engine", "social": "Social media",
              "reddit": "Reddit or a forum", "news": "News or a blog", "other": "Other"}
 _PUBLIC_PATHS = {"/", "/login", "/signup", "/terms", "/privacy", "/healthz", "/favicon.ico", "/logout",
@@ -516,6 +522,7 @@ def _cfg() -> dict:
 
 def _public_user(u: dict) -> dict:
     keep = ("email", "first_name", "last_name", "dob", "gender", "investor_type", "experience", "referral",
+            "occupation", "home_city", "home_region",
             "onboarded", "created_at")
     out = {k: u.get(k) for k in keep}
     out["groups"] = [x for x in (u.get("groups") or "").split(",") if x]
@@ -536,6 +543,12 @@ def _public_user(u: dict) -> dict:
     return out
 
 
+def _place_guess() -> dict:
+    """Where this sign-in seems to be (city, region, country), to pre-fill 'where do you live'."""
+    row = db.get_session(session.get("sid") or "") if session.get("sid") else None
+    return {k: (row or {}).get(k) for k in ("city", "region", "country")}
+
+
 @bp.get("/api/me")
 @login_required
 def me():
@@ -549,7 +562,8 @@ def me():
                     # ordered [key, label] pairs (a JSON object would be re-sorted alphabetically)
                     "options": {k: [[a, b] for a, b in m.items()] for k, m in (
                         ("investor_types", INVESTOR_TYPES), ("experience", EXPERIENCE), ("genders", GENDERS),
-                        ("referrals", REFERRALS))},
+                        ("referrals", REFERRALS), ("occupations", OCCUPATIONS))},
+                    "place_guess": _place_guess(),
                     "terms_version": legal.TERMS_VERSION, "google": bool(google_client_id())})
 
 
@@ -637,6 +651,16 @@ def validate_profile(b: dict) -> tuple[dict, str | None]:
             return {}, {"investor_type": "Tell us what kind of investor you are.",
                         "experience": "Choose your experience level."}.get(k, "Please check your answers.")
         out[k] = v
+    # optional, and only when sent (screens that don't ask for them leave them alone)
+    if "occupation" in b:
+        v = b.get("occupation") or None
+        if v is not None and v not in OCCUPATIONS:
+            return {}, "Please check your answers."
+        out["occupation"] = v
+    for k in ("home_city", "home_region"):
+        if k in b:
+            v = re.sub(r"\s+", " ", str(b.get(k) or "")).strip()[:60]
+            out[k] = v or None
     return out, None
 
 

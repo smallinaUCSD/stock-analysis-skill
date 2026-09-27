@@ -50,6 +50,7 @@ _EXTRA_CSS = """
 .ad-bar{display:inline-block;height:7px;border-radius:4px;background:var(--accent);vertical-align:middle;margin-right:6px}
 .ad-leg{display:flex;gap:14px;font-size:12px;color:var(--muted);margin-top:4px} .ad-leg i{display:inline-block;width:12px;height:3px;margin-right:5px;vertical-align:3px}
 .ad-note{font-size:13px;color:var(--muted);line-height:1.55}
+.ad-sec-h{font-family:var(--font-display);font-weight:500;font-size:24px;margin:18px 0 10px}
 .ad-who{margin-bottom:12px}
 .ad-who-h{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:6px}
 .ad-who-h h3{margin:0}
@@ -133,6 +134,17 @@ function render(d){
       '<h3 style="margin-top:12px">Browsers</h3>'+table(d.browsers,[['name','Browser'],['people','People']])+'</div>'+
     '<div class="ad-card"><h3>Operating systems</h3>'+table(d.os,[['name','System'],['people','People']])+
       '<h3 style="margin-top:12px">Where visitors came from</h3>'+table(d.referrers,[['name','Site'],['visits','Visits']])+'</div></div>'+
+    (function(){ var g=d.demographics||{}; if(!g.age) return '';
+      var by=function(rows,label){ return table(rows,[['group',label],['people','People'],['top','Most used (page views)']]); };
+      return '<h2 class="ad-sec-h">Who\'s using it</h2>'+
+      '<div class="ad-grid"><div class="ad-card"><h3>Age</h3>'+table(g.age,[['name','Age'],['people','People']])+
+        '<h3 style="margin-top:12px">Occupation</h3>'+table(g.occupation,[['name','Occupation'],['people','People']])+'</div>'+
+      '<div class="ad-card"><h3>Where they live</h3>'+table(g.place,[['name','Metro or city'],['people','People']])+
+        '<h3 style="margin-top:12px">State or region</h3>'+table(g.region,[['name','State or region'],['people','People']])+'</div></div>'+
+      '<div class="ad-card" style="margin-bottom:12px"><h3>What each age group uses, last '+d.days+' days</h3>'+by(g.tools_by_age,'Age')+
+        '<h3 style="margin-top:12px">By occupation</h3>'+by(g.tools_by_occupation,'Occupation')+
+        '<h3 style="margin-top:12px">By place</h3>'+by(g.tools_by_place,'Metro or city')+
+        '<p class="ad-note">Places come from what people entered, or else their sign-in city. Groups with few people are anecdotes, not trends.</p></div>'; })()+
     '<div class="ad-grid"><div class="ad-card"><h3>Kinds of investor</h3>'+table(d.investor_types,[['name','Type'],['n','Accounts']])+'</div>'+
     '<div class="ad-card"><h3>Sign-in and notifications</h3>'+table([
       {k:'Google sign-in',v:(d.sign_in||{}).google},{k:'Password',v:(d.sign_in||{}).password},{k:'Passkey',v:(d.sign_in||{}).passkey},

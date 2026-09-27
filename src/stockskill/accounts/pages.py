@@ -555,7 +555,8 @@ function opts(list, key, cls){ return list.map(function(p){ return '<button type
 function selOpts(list, key, ph){ return '<option value="">'+ph+'</option>'+list.map(function(p){ return '<option value="'+p[0]+'"'+(PROF[key]===p[0]?' selected':'')+'>'+esc(p[1])+'</option>'; }).join(''); }
 function stAbout(){
   var o=ME.options, u=ME.user;
-  ['first_name','last_name','dob','gender','investor_type','experience','referral'].forEach(function(k){ if(PROF[k]===undefined) PROF[k]=u[k]||''; });
+  ['first_name','last_name','dob','gender','investor_type','experience','referral','occupation','home_city','home_region'].forEach(function(k){ if(PROF[k]===undefined) PROF[k]=u[k]||''; });
+  var g=ME.place_guess||{}; if(!PROF.home_city&&!PROF.home_region&&g.city){ PROF.home_city=g.city; PROF.home_region=g.region||g.country||''; }
   el().innerHTML='<h1>Tell us about you</h1><p class="lead">This tailors explanations and defaults. It\'s never shared or sold.</p>'+
    '<div class="wz-h">What kind of investor are you?</div><div class="opt-grid">'+opts(o.investor_types,'investor_type','opt')+'</div>'+
    '<div class="wz-h">How much investing experience do you have?</div><div class="seg3">'+opts(o.experience,'experience','')+'</div>'+
@@ -564,7 +565,10 @@ function stAbout(){
    '<div class="field"><label for="ln">Last name</label><input class="inp" id="ln" autocomplete="family-name" value="'+esc(PROF.last_name)+'"></div>'+
    '<div class="field"><label for="dob-m">Date of birth</label>'+dobHTML(PROF.dob)+'</div>'+
    '<div class="field"><label for="gd">Gender (optional)</label><select class="inp" id="gd">'+selOpts(o.genders,'gender','Choose…')+'</select></div>'+
-   '<div class="field"><label for="rf">How did you hear about us? (optional)</label><select class="inp" id="rf">'+selOpts(o.referrals,'referral','Choose…')+'</select></div></div>'+
+   '<div class="field"><label for="rf">How did you hear about us? (optional)</label><select class="inp" id="rf">'+selOpts(o.referrals,'referral','Choose…')+'</select></div>'+
+   '<div class="field"><label for="oc">What do you do? (optional)</label><select class="inp" id="oc">'+selOpts(o.occupations,'occupation','Choose…')+'</select></div>'+
+   '<div class="field"><label for="hc">Where do you live? (optional)</label><div class="home2"><input class="inp" id="hc" placeholder="City" autocomplete="address-level2" value="'+esc(PROF.home_city)+'">'+
+   '<input class="inp" id="hr" placeholder="State or country" autocomplete="address-level1" value="'+esc(PROF.home_region)+'"></div></div></div>'+
    '<p class="small muted">We ask for your date of birth to confirm you are 18 or older.</p><div class="err" id="err"></div>'+
    '<div class="wz-foot"><button class="btn ghost" id="back">Back</button><button class="btn primary" id="go">Continue</button></div>';
   el().querySelectorAll('[data-f]').forEach(function(b){ b.onclick=function(){ var f=b.getAttribute('data-f');
@@ -573,6 +577,7 @@ function stAbout(){
   document.getElementById('go').onclick=function(){
     PROF.first_name=document.getElementById('fn').value; PROF.last_name=document.getElementById('ln').value;
     PROF.dob=dobVal(); PROF.gender=document.getElementById('gd').value||null; PROF.referral=document.getElementById('rf').value||null;
+    PROF.occupation=document.getElementById('oc').value||null; PROF.home_city=document.getElementById('hc').value; PROF.home_region=document.getElementById('hr').value;
     post('/api/me/profile',PROF).then(function(d){ if(d.ok) next(); else document.getElementById('err').textContent=d.error; }); };
 }
 function stPasskey(){
@@ -644,10 +649,14 @@ function prof(){ var o=ME.options,u=ME.user;
    '<div class="field"><label for="dob-m">Date of birth</label>'+dobHTML(u.dob)+'</div>'+
    '<div class="field"><label>Gender (optional)</label><select class="inp" id="gd">'+sel(o.genders,'gender','Not specified')+'</select></div>'+
    '<div class="field"><label>Kind of investor</label><select class="inp" id="it">'+sel(o.investor_types,'investor_type','Choose…')+'</select></div>'+
-   '<div class="field"><label>Experience</label><select class="inp" id="ex">'+sel(o.experience,'experience','Choose…')+'</select></div></div>'+
+   '<div class="field"><label>Experience</label><select class="inp" id="ex">'+sel(o.experience,'experience','Choose…')+'</select></div>'+
+   '<div class="field"><label>Occupation (optional)</label><select class="inp" id="oc">'+sel(o.occupations,'occupation','Not specified')+'</select></div>'+
+   '<div class="field"><label>Where you live (optional)</label><div class="home2"><input class="inp" id="hc" placeholder="City" value="'+esc(u.home_city)+'">'+
+   '<input class="inp" id="hr" placeholder="State or country" value="'+esc(u.home_region)+'"></div></div></div>'+
    '<div class="wz-foot" style="margin-top:4px"><span class="small" id="p-msg"></span><button class="btn primary" onclick="saveProf()">Save profile</button></div></div>';
 }
-function saveProf(){ var b={first_name:v('fn'),last_name:v('ln'),dob:dobVal(),gender:v('gd')||null,investor_type:v('it'),experience:v('ex'),referral:ME.user.referral};
+function saveProf(){ var b={first_name:v('fn'),last_name:v('ln'),dob:dobVal(),gender:v('gd')||null,investor_type:v('it'),experience:v('ex'),referral:ME.user.referral,
+    occupation:v('oc')||null,home_city:v('hc'),home_region:v('hr')};
   post('/api/me/profile',b).then(function(d){ var m=document.getElementById('p-msg'); m.className='small '+(d.ok?'ok-msg':'err'); m.textContent=d.ok?'Saved.':d.error; }); }
 function v(id){ return document.getElementById(id).value; }
 function wl(){ return '<div class="ac-sec"><h2>Your watchlist · '+ME.watchlist.length+' stocks</h2><div class="tk-list">'+
@@ -1090,6 +1099,7 @@ def icon_png(size: int) -> bytes:
 
 _NF_CSS = """
 .dob3{display:grid;grid-template-columns:1.6fr .8fr 1fr;gap:8px}
+.home2{display:grid;grid-template-columns:1.3fr 1fr;gap:8px}
 .nf-seg{display:flex;flex-wrap:wrap;gap:8px}
 .nf-chipset{display:flex;flex-wrap:wrap;gap:6px}
 .nf-chip{height:32px;padding:0 12px;border-radius:16px;border:1px solid var(--border-strong);background:var(--bg);color:var(--ink);font:13px var(--font);cursor:pointer}
