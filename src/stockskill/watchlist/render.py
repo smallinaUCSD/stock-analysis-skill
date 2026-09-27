@@ -99,7 +99,9 @@ _CSS_EXTRA = """
   background:transparent;color:var(--muted);cursor:pointer}
 .seg button:hover{color:var(--ink)}
 .seg button.on{background:var(--surface-2);color:var(--ink)}
-.toolsbar{display:flex;flex-wrap:wrap;gap:6px;flex:1 1 320px;justify-content:flex-start;margin-left:8px}
+/* the five tools and More tools stay on one line; the group moves down as a whole if the row is full */
+.toolsbar{display:flex;flex-wrap:nowrap;gap:6px;flex:0 0 auto;justify-content:flex-start;margin-left:auto}
+.toolsbar .tool-b{padding:0 13px;white-space:nowrap}
 @media (max-width:640px){
   .search{flex:1 1 100%}
   .toolsbar{margin-left:0;width:100%;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;
@@ -298,13 +300,18 @@ table.wl th:nth-child(15),table.wl td:nth-child(15){text-align:left}
 .mc-bar{height:8px;background:var(--surface-2);border-radius:4px;overflow:hidden}
 .mc-fill{height:8px;border-radius:4px} .mc-fill.up{background:var(--up)} .mc-fill.down{background:var(--down)}
 /* ---- panels ------------------------------------------------------------------------ */
-/* Markets across the top; sector performance and macro side by side below */
-.panels{display:grid;grid-template-columns:minmax(280px,1fr) minmax(0,1.6fr);gap:12px;margin-bottom:12px}
-.panels>.p-markets{grid-column:1/-1;order:-1}
-.mk-cols{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:2px 28px;align-items:start}
-.macro-cols{columns:2 280px;column-gap:28px}
-.macro-cols>*{break-inside:avoid} .macro-cols .mkgroup{break-after:avoid}
-@media (max-width:760px){.panels{grid-template-columns:1fr}}
+/* three columns, each a stack: sector + your movers | markets | macro + coming up */
+.panels{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:12px;align-items:start}
+.pcol{display:flex;flex-direction:column;gap:12px;min-width:0}
+.mk-cols{display:block}
+.mv-row{display:grid;grid-template-columns:62px 1fr auto;gap:8px;align-items:baseline;padding:4px 0;font-size:14px;cursor:pointer}
+.mv-row .tk{font-weight:500} .mv-row .nm{color:var(--muted);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.up-row{display:grid;grid-template-columns:62px 1fr;gap:8px;padding:5px 0;font-size:13.5px;border-top:1px solid var(--border)}
+.up-row:first-child{border-top:none} .up-row time{color:var(--muted);font-size:12.5px}
+.up-row small{display:block;color:var(--muted);font-size:12px}
+.up-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:1px}
+@media (max-width:980px){.panels{grid-template-columns:1fr 1fr}}
+@media (max-width:640px){.panels{grid-template-columns:1fr}}
 .panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:12px 16px 14px}
 .panel-h{display:flex;align-items:baseline;justify-content:space-between;gap:8px;
   font-size:16px;font-weight:500;color:var(--ink);margin-bottom:10px}
@@ -1105,6 +1112,31 @@ def _banner(alerts):
     return banner, sig
 
 
+def _movers_html(rows) -> str:
+    """Your watchlist's biggest moves today (fills the column under sectors)."""
+    moved = sorted((r for r in rows if r.changes.get("1d") is not None), key=lambda r: -r.changes["1d"])
+    if len(moved) < 2:
+        return ""
+    k = min(4, len(moved) // 2)
+    pick = moved[:k] + moved[-k:]
+
+    def row(r):
+        c = r.changes["1d"]
+        return (f'<div class="mv-row" data-go-card="{html.escape(r.ticker)}"><span class="tk">{html.escape(r.ticker)}</span>'
+                f'<span class="nm">{html.escape((r.name or "")[:34])}</span>'
+                f'<span class="{"up" if c >= 0 else "down"}">{c * 100:+.2f}%</span></div>')
+    return ('<section class="panel p-movers"><div class="panel-h">Your movers<span class="ph-tag">today</span></div>'
+            '<div class="panel-body"><div class="mkgroup">Up the most</div>' + "".join(row(r) for r in pick[:k])
+            + '<div class="mkgroup">Down the most</div>' + "".join(row(r) for r in reversed(pick[k:])) + '</div></section>')
+
+
+# filled in the browser from /api/calendar (your earnings, economic data, the Fed)
+_UPCOMING_PANEL = ('<section class="panel p-upcoming"><div class="panel-h">Coming up'
+                   '<a class="site-help" style="font-size:12px;margin-left:auto" href="/calendar" '
+                   'onclick="openTab(this.href);return false">Calendar</a></div>'
+                   '<div class="panel-body" id="up-body"><div class="muted" style="font-size:13px">Loading…</div></div></section>')
+
+
 def _sector_html(sectors):
     present = [(n, t, r) for (n, t, r) in (sectors or []) if r is not None]
     if not present:
@@ -1356,7 +1388,7 @@ function refreshData(){
     const swap=(sel)=>{ const n=doc.querySelector(sel), o=document.querySelector(sel);
       if(n&&o && o.innerHTML!==n.innerHTML) o.innerHTML=n.innerHTML; };
     swap('#wl tbody'); swap('#view-card .cards'); swap('#view-heatmap');
-    swap('.panels'); swap('.banner-vp');
+    swap('.panels'); swap('.banner-vp'); fillUpcoming();
     const nc=doc.querySelector('.chips'), oc=document.querySelector('.chips');
     if(nc&&oc&&oc.innerHTML!==nc.innerHTML){ oc.innerHTML=nc.innerHTML;   // new sections -> new chips
       if(typeof active!=='undefined') oc.querySelectorAll('.chip-f[data-group]').forEach(b=>{
@@ -1373,6 +1405,25 @@ function refreshData(){
 // Open a page in a new, SCRIPT-opened tab so it can close itself (window.close)
 // and return here. Falls back to same-tab nav only if a popup blocker intervenes.
 function openTab(url){ var w=window.open(url,'_blank'); if(!w) location.href=url; }
+// ---- "Coming up" (next dates from the calendar) and "Your movers" (open the card) ----
+let _upHTML=null;
+const _UPC={earnings:'var(--accent)',economy:'#4f86d9',fed:'#a45fd0',market:'var(--down)',options:'#c99a2e',ipo:'var(--up)'};
+function fillUpcoming(){
+  const el=document.getElementById('up-body'); if(!el) return;
+  if(_upHTML!==null){ el.innerHTML=_upHTML; return; }
+  fetch('/api/calendar',{cache:'no-store'}).then(r=>r.json()).then(d=>{
+    const t=new Date(), today=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+    const ev=(d.events||[]).filter(e=>e.date>=today && e.kind!=='ipo' && (e.kind!=='options'||e.importance>1)).slice(0,8);
+    const day=s=>new Date(s+'T12:00:00').toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});
+    _upHTML=ev.length?ev.map(e=>'<div class="up-row"><time>'+day(e.date).replace(/,.*/,'')+'<br>'+day(e.date).split(', ').slice(1).join(', ')+'</time>'+
+      '<span><span class="up-dot" style="background:'+(_UPC[e.kind]||'var(--muted)')+'"></span>'+_esc(e.title)+(e.detail?'<small>'+_esc(e.detail)+'</small>':'')+'</span></div>').join('')
+      :'<div class="muted" style="font-size:13px">Nothing in the next few weeks.</div>';
+    el.innerHTML=_upHTML;
+  }).catch(()=>{ el.innerHTML='<div class="muted" style="font-size:13px">Calendar unavailable.</div>'; });
+}
+document.addEventListener('click',e=>{ const m=e.target.closest('[data-go-card]'); if(!m) return;
+  const card=document.querySelector('.card-item[data-ticker="'+m.dataset.goCard+'"]'); if(card) openCard(card); });
+document.addEventListener('DOMContentLoaded',fillUpcoming);
 // ---- recent news in the expanded card (served) ----
 function _esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function _newsSec(inner){ return '<div class="det-sec"><div class="det-h">Recent news</div>'+inner+'</div>'; }
@@ -1503,9 +1554,9 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
                      alerts=None, sectors=None, markets=None, refresh_seconds=1800,
                      served=False, updated_ts=None, macro=None, public=False, bmc_url=None):
     banner, _sig = _banner(alerts or [])
-    sector_html = _sector_html(sectors)
+    sector_html = _sector_html(sectors) + (_movers_html(rows) if served else "")
     markets_html = _markets_html(markets)
-    macro_html = _macro_html(macro)
+    macro_html = _macro_html(macro) + (_UPCOMING_PANEL if served else "")
     # Public mode hides only the Holdings button (personal data). Add-ticker and
     # the read-only tools stay.
     _add_box = (
@@ -1571,7 +1622,7 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
   {tools_html}
 </div>
 {add_html}
-<div class="panels">{sector_html}{markets_html}{macro_html}</div>
+<div class="panels"><div class="pcol">{sector_html}</div><div class="pcol">{markets_html}</div><div class="pcol">{macro_html}</div></div>
 <div class="chips">{chips}<div class="cgroup cclear"><button class="chip-f clear" onclick="clearChips()">Clear filters</button></div></div>
 <div id="view-table" class="view active"><div class="tablewrap"><table class="wl" id="wl">
 <thead><tr>{heads}</tr></thead><tbody>{table}</tbody></table></div></div>

@@ -613,7 +613,9 @@ def account_html() -> str:
 
 
 _AC_CSS = """
-.ac-wrap{max-width:860px;margin:0 auto;padding:24px 16px 60px}
+.ac-wrap{max-width:1440px;margin:0 auto;padding:24px clamp(16px,3vw,40px) 60px}
+/* sections flow into two balanced columns on wide screens */
+#ac{columns:2 540px;column-gap:14px} #ac .ac-sec{break-inside:avoid;display:inline-block;width:100%}
 .ac-h{font-family:var(--font-display);font-weight:500;font-size:36px;margin:0 0 18px}
 .ac-sec{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:22px;margin-bottom:14px}
 .ss-row{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border)}
