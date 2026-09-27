@@ -355,7 +355,7 @@ def interpret_html() -> str:
         "compare", "Compare and candlesticks", "Putting two to four tickers side by side, "
         "and reading a candle chart.",
         [("Compare",
-          "<p>Open <b>Compare</b> from the board (or a card) and add up to four tickers. "
+          "<p>Open <b>Compare</b> from the board (or a card) and add up to ten tickers. "
           "Every line starts at $10,000 on the first day they all traded, so the "
           "growth chart is fair even when one fund is newer. The <b>drawdown</b> chart shows "
           "how far each sat below its previous high: the pain you would have sat through. "
