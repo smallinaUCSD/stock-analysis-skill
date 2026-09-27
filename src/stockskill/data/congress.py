@@ -282,6 +282,10 @@ def _refresh(days: int, cache_dir) -> None:
         _STATE["loading"] = False
 
 
+def trades_path(cache_dir=None) -> str:
+    return os.path.join(_dir(cache_dir), "trades.json")
+
+
 _PARSED: dict[str, tuple[float, dict]] = {}     # trades.json is several MB: parse once per change
 
 

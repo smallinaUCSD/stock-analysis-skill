@@ -135,6 +135,28 @@ def _fast_local_time() -> None:
         pass
 
 
+_MEMO: dict = {}
+
+
+def _memo(key, version, build):
+    """Keep a computed answer in memory until its data changes (``version``:
+    e.g. the trades file's time, or a fund's saved report), trading memory for speed."""
+    hit = _MEMO.get(key)
+    if hit is not None and hit[0] == version:
+        return hit[1]
+    val = build()
+    if val is not None:
+        _MEMO[key] = (version, val)
+    return val
+
+
+def _mtime(path: str) -> float:
+    try:
+        return os.path.getmtime(path)
+    except OSError:
+        return 0.0
+
+
 _GZIP_TYPES = ("text/html", "application/json", "text/css", "application/javascript", "text/javascript",
                "image/svg+xml", "text/plain", "application/manifest+json")
 
@@ -221,6 +243,27 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
                     pass
                 _t.sleep(5 * 3600)
         _th.Thread(target=_warm_calendar, daemon=True).start()
+
+        def _warm_profiles():                                # funds and politicians ready before anyone opens them
+            import time as _t
+            _t.sleep(30)
+            while True:
+                try:
+                    from ..data.congress import recent_trades as _rt
+                    _ids = {_member_id(t) for t in (_rt(cache_dir).get("trades") or [])} - {None}
+                    for _pid in sorted(_ids):                 # everyone with trades on file (local, quick)
+                        _pp = _person(_pid)
+                        if _pp:
+                            _politician_profile(_pid, _pp)
+                    from ..data import funds13f as _F
+                    for _name, _mgr, _cik in _F.FUNDS:        # may fetch new filings (slower)
+                        _F.fund_report(_cik, cache_dir)       # refreshes itself once 12 hours old
+                        _F.fund_history(_cik, cache_dir)
+                except Exception as _e:  # noqa: BLE001
+                    import sys as _sys
+                    print(f"profile warm-up: {_e!r}", file=_sys.stderr, flush=True)
+                _t.sleep(6 * 3600)
+        _th.Thread(target=_warm_profiles, daemon=True).start()
     if os.environ.get("STOCKSKILL_CRAWL") == "1" and cache_dir:
         from ..data import market_crawl
         market_crawl.run_forever(cache_dir, period)      # slowly cache the whole market, biggest first
@@ -1179,14 +1222,24 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
         p = _person(pid)
         if not p:
             return jsonify({"ok": False, "error": "unknown politician"}), 404
-        tr = [t for t in (recent_trades(cache_dir).get("trades") or []) if _member_id(t) == pid]
-        tr.sort(key=lambda t: (t.get("traded") or "", t.get("filed") or ""), reverse=True)
-        extra = {}
-        if pid == "trump":
-            from ..data.politicians import trump_coverage
-            extra["coverage"] = trump_coverage(cache_dir)
-        return jsonify({"ok": True, "person": p, "stats": stats(tr), "positions": positions(tr)[:40],
-                        "trades": tr[:1500], "total": len(tr), **extra})
+        return app.response_class(_politician_profile(pid, p), mimetype="application/json")
+
+    def _politician_profile(pid: str, p: dict) -> dict:
+        """A politician's profile, kept until new trades are filed (the trades file changes)."""
+        from ..data.congress import recent_trades, trades_path
+        from ..signals.politician import positions, stats
+
+        def build():
+            tr = [t for t in (recent_trades(cache_dir).get("trades") or []) if _member_id(t) == pid]
+            tr.sort(key=lambda t: (t.get("traded") or "", t.get("filed") or ""), reverse=True)
+            extra = {}
+            if pid == "trump":
+                from ..data.politicians import trump_coverage
+                extra["coverage"] = trump_coverage(cache_dir)
+            import json as _json
+            return _json.dumps({"ok": True, "person": p, "stats": stats(tr), "positions": positions(tr)[:40],
+                                "trades": tr[:1500], "total": len(tr), **extra}, default=str)
+        return _memo(("pol", pid), _mtime(trades_path(cache_dir)), build)      # ready-made JSON
 
     _PERF: dict = {}
 
@@ -1559,7 +1612,8 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
     def fund_history_api(cik: int):
         """Quarterly value, buy/sell timeline and copy-the-portfolio performance."""
         from ..data import funds13f as F
-        h = F.fund_history(cik, cache_dir)
+        h = _memo(("fundhist", cik), _mtime(os.path.join(F._dir(cache_dir), f"history_{cik}.json")),
+                  lambda: F.fund_history(cik, cache_dir))
         if not h:
             return jsonify({"ok": False, "error": "No 13F history found for this filer."})
         return jsonify({"ok": True, **h})
@@ -1567,7 +1621,8 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
     @app.get("/api/funds/<int:cik>")
     def fund_detail(cik: int):
         from ..data import funds13f as F
-        rep = F.fund_report(cik, cache_dir)
+        rep = _memo(("fundrep", cik), _mtime(os.path.join(F._dir(cache_dir), f"report_{cik}.json")),
+                    lambda: F.fund_report(cik, cache_dir))
         if not rep:
             return jsonify({"ok": False, "error": "no 13F filings found for that filer"}), 404
         return jsonify({"ok": True, **rep})
