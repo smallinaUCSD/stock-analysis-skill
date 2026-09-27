@@ -174,6 +174,19 @@ def _check_sign_in(uid: int, new: dict) -> list[str]:
     return reasons
 
 
+def needs_email_code(u: dict) -> bool:
+    """Signed up with email and hasn't confirmed it yet (only when this server
+    can send email; Google has already confirmed its accounts' addresses)."""
+    if u.get("email_verified"):
+        return False
+    from . import notify
+    return notify.email_ready()
+
+
+_VERIFY_OK = {"/verify-email", "/logout", "/terms", "/privacy", "/api/me/verify-email",
+              "/api/me/verify-email/send", "/api/me/verify-email/change"}
+
+
 def needs_terms(u: dict) -> bool:
     return u.get("terms_version") != legal.TERMS_VERSION or u.get("privacy_version") != legal.PRIVACY_VERSION
 
@@ -201,6 +214,8 @@ def _failed(u: dict | None, reason: str) -> None:
 
 
 def _next_for(u: dict, want: str | None = None) -> str:
+    if needs_email_code(u):
+        return "/verify-email"
     if not u.get("onboarded") or needs_terms(u):
         return "/welcome"
     if want and want.startswith("/") and not want.startswith("//") and not want.startswith("/\\"):
@@ -221,6 +236,12 @@ def _gate():
         if p.startswith("/api/"):
             return jsonify({"ok": False, "error": "Please sign in."}), 401
         return redirect("/login?next=" + quote(request.full_path.rstrip("?"), safe="/?=&"))
+    if needs_email_code(u):
+        if p in _VERIFY_OK:
+            return None
+        if p.startswith("/api/"):
+            return jsonify({"ok": False, "error": "Confirm your email first.", "next": "/verify-email"}), 403
+        return redirect("/verify-email")
     if not u.get("onboarded") or needs_terms(u):
         if p in _ONBOARD_OK or p.startswith("/api/me") or p in ("/api/groups", "/api/politicians"):
             return None
@@ -298,8 +319,11 @@ def signup():
     uid = db.create_user(email, password_hash=generate_password_hash(pw),
                          terms_version=legal.TERMS_VERSION, privacy_version=legal.PRIVACY_VERSION)
     _login(uid, "password (new account)")
-    from .security import welcome
-    welcome(db.get_user(uid), verify=True)
+    u = db.get_user(uid)
+    if needs_email_code(u):                     # the first email is the code to confirm the address
+        from .security import send_code
+        threading.Thread(target=send_code, args=(u, "verify"), daemon=True).start()
+        return jsonify({"ok": True, "next": "/verify-email"})
     return jsonify({"ok": True, "next": "/welcome"})
 
 

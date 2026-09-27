@@ -103,10 +103,25 @@ def send_code(u: dict, purpose: str) -> bool:
     code = f"{secrets.randbelow(10 ** 6):06d}"
     with _CODES_LOCK:
         _CODES[(u["id"], purpose)] = (generate_password_hash(code), time.time() + 600, 0)
+    big = f'<b style="font-size:22px;letter-spacing:3px">{code}</b>'
+    if purpose == "verify":
+        from .pages import BRAND
+        return notify.send_simple(u["email"], "Confirm your email",
+                                  [f"Welcome to {html.escape(BRAND)}. Enter this code to confirm your email address "
+                                   f"and open your account: {big}",
+                                   "It expires in 10 minutes. If you didn't create an account, ignore this email."],
+                                  notify.public_url() + "/verify-email", "Enter the code")
     what = "sign in" if purpose == "login" else "turn on 2-step verification"
     return notify.send_simple(u["email"], f"Your code: {code}",
-                              [f"Your code to {what} is <b style=\"font-size:22px;letter-spacing:3px\">{code}</b>.",
+                              [f"Your code to {what} is {big}.",
                                "It expires in 10 minutes. If you didn't try to sign in, change your password."])
+
+
+def has_code(uid: int, purpose: str) -> bool:
+    """A code for this is out and still good (don't send another on every page load)."""
+    with _CODES_LOCK:
+        rec = _CODES.get((uid, purpose))
+        return bool(rec and rec[1] > time.time() and rec[2] < 5)
 
 
 def check_code(uid: int, purpose: str, code: str) -> bool:
@@ -462,6 +477,79 @@ def confirm_email_change():
 
 
 # --- welcome ----------------------------------------------------------------------------------
+
+# --- confirming the email address with a code, before the app opens ----------------------
+
+@bp.get("/verify-email")
+def verify_email_page():
+    from flask import redirect
+    from .auth import current_user as _cu, _next_for
+    from .pages import verify_email_html
+    u = _cu()
+    if not u:
+        return redirect("/login")
+    if u.get("email_verified"):
+        return redirect(_next_for(u))
+    return verify_email_html(_mask(u["email"]))
+
+
+@bp.post("/api/me/verify-email/send")
+def verify_email_send():
+    from .auth import current_user as _cu
+    u = _cu()
+    if not u:
+        return jsonify({"ok": False, "error": "Please sign in."}), 401
+    if u.get("email_verified"):
+        return jsonify({"ok": True, "verified": True})
+    if _body().get("auto") and has_code(u["id"], "verify"):
+        return jsonify({"ok": True, "sent": False})            # the one already sent is still good
+    if _limited(f"verify-send:{u['id']}", 5, 3600):
+        return jsonify({"ok": False, "error": "Several codes were sent already. Try again in an hour."}), 429
+    if not send_code(u, "verify"):
+        from . import notify
+        why = notify.LAST_ERROR.get("msg")
+        return jsonify({"ok": False, "error": "We couldn't send the email" + (f": {why}" if why else ". Try again in a minute.")}), 502
+    return jsonify({"ok": True, "sent": True, "to": _mask(u["email"])})
+
+
+@bp.post("/api/me/verify-email")
+def verify_email_code():
+    from .auth import current_user as _cu, _next_for
+    u = _cu()
+    if not u:
+        return jsonify({"ok": False, "error": "Please sign in."}), 401
+    if _limited(f"verify-try:{u['id']}", 10, 900):
+        return jsonify({"ok": False, "error": "Too many tries. Wait 15 minutes."}), 429
+    if not u.get("email_verified"):
+        if not check_code(u["id"], "verify", _body().get("code") or ""):
+            return jsonify({"ok": False, "error": "That code didn't match or has expired. Send a new one."}), 400
+        db.update_user(u["id"], email_verified=1)
+        u = db.get_user(u["id"])
+        welcome(u, verify=False)
+    return jsonify({"ok": True, "next": _next_for(u)})
+
+
+@bp.post("/api/me/verify-email/change")
+def verify_email_change():
+    """Typed the wrong address at sign-up: fix it and send the code there."""
+    from .auth import current_user as _cu
+    u = _cu()
+    if not u or u.get("email_verified"):
+        return jsonify({"ok": False, "error": "Not available."}), 400
+    email = (_body().get("email") or "").strip().lower()
+    if not _EMAIL_RE.match(email):
+        return jsonify({"ok": False, "error": "Enter a valid email address."}), 400
+    other = db.by_email(email)
+    if other and other["id"] != u["id"]:
+        return jsonify({"ok": False, "error": "That email already has an account. Sign in to it instead."}), 409
+    if _limited(f"verify-send:{u['id']}", 5, 3600):
+        return jsonify({"ok": False, "error": "Several codes were sent already. Try again in an hour."}), 429
+    db.update_user(u["id"], email=email)
+    u = db.get_user(u["id"])
+    if not send_code(u, "verify"):
+        return jsonify({"ok": False, "error": "We couldn't send the email. Check the address."}), 502
+    return jsonify({"ok": True, "to": _mask(email)})
+
 
 def welcome(u: dict, verify: bool) -> None:
     from . import notify

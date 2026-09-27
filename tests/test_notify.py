@@ -201,5 +201,6 @@ def test_confirmation_email_failure_is_explained(app, monkeypatch):
             assert " " not in pw                          # spaces in an app password are dropped
             raise smtplib.SMTPAuthenticationError(535, b"bad credentials")
     monkeypatch.setattr(smtplib, "SMTP", Boom)
-    r = c.post("/api/me/verify/resend").get_json()
+    assert c.get("/api/me").status_code == 403                      # email on: the address must be confirmed first
+    r = c.post("/api/me/verify-email/send").get_json()
     assert not r["ok"] and "rejected u@test" in r["error"] and "535" in r["error"]

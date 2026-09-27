@@ -157,7 +157,7 @@ def by_google(sub: str) -> dict | None:
 def update_user(uid: int, **fields) -> None:
     allowed = set(PROFILE_FIELDS) | set(NOTIFY_COLUMNS) | {"groups", "onboarded", "google_sub", "password_hash",
                                                            "last_login", "terms_version", "privacy_version",
-                                                           "accepted_at"}
+                                                           "accepted_at", "email"}
     fields = {k: v for k, v in fields.items() if k in allowed}
     if not fields:
         return

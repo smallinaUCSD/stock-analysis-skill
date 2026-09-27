@@ -397,7 +397,7 @@ def login_html(mode: str = "login", google_client_id: str | None = None, nxt: st
 
 _AUTH_CSS = """
 .au-wrap{min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:28px 16px}
-.au-top{width:100%;max-width:420px;margin-bottom:28px}
+.au-top{width:100%;max-width:420px;margin-bottom:28px;display:flex;align-items:center;justify-content:space-between;gap:12px}
 .au-card{width:100%;max-width:420px;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:26px 26px 20px}
 .au-tabs{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:22px}
 .au-tabs button{height:38px;border:none;background:var(--bg);color:var(--muted);font:500 14px var(--font);cursor:pointer}
@@ -966,6 +966,39 @@ def message_html(title: str, text: str) -> str:
             f'<div class="wz-card"><h1>{html.escape(title)}</h1><p class="lead" style="color:var(--muted)">{html.escape(text)}</p>'
             f'<a class="btn primary" href="/">Go to your watchlist</a></div></div>')
     return _shell(f"{title} · {BRAND}", body, _WZ_CSS + _LG_CSS)
+
+
+def verify_email_html(masked: str) -> str:
+    """After signing up with email: enter the code we emailed before the app opens."""
+    body = f"""<div class="au-wrap"><div class="au-top">{_brand_link()}<a class="small muted" href="/logout">Sign out</a></div>
+<div class="au-card" id="ve"><h1>Confirm your email</h1>
+<p class="muted">We sent a 6-digit code to <b id="ve-to">{html.escape(masked)}</b>. Enter it to open your account.</p>
+<form id="f" novalidate><div class="field"><label for="code">Code</label>
+<input class="inp ve-code" id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" autofocus></div>
+<div class="err" id="err" role="alert"></div><p class="small ok-msg" id="msg"></p>
+<button class="btn primary block" type="submit">Confirm</button></form>
+<p class="small muted" style="margin-top:14px">No email? Check your spam folder, or <a id="again" href="#">send a new code</a>.
+<br>Wrong address? <a id="chg" href="#">Change it</a>.</p>
+<form id="cf" hidden novalidate><div class="field"><label for="em">Email</label><input class="inp" id="em" type="email" autocomplete="email"></div>
+<button class="btn ghost" type="submit">Send the code there</button></form></div></div>"""
+    js = r"""
+var err=document.getElementById('err'), msg=document.getElementById('msg');
+function say(e,m){ err.textContent=e||''; msg.textContent=m||''; }
+post('/api/me/verify-email/send',{auto:true}).then(function(d){ if(d.verified) location.href='/'; });
+document.getElementById('f').onsubmit=function(ev){ ev.preventDefault();
+  post('/api/me/verify-email',{code:document.getElementById('code').value}).then(function(d){
+    if(d.ok) location.href=d.next||'/'; else say(d.error); }); };
+document.getElementById('code').oninput=function(){ var v=this.value.replace(/\D/g,''); this.value=v;
+  if(v.length===6) document.getElementById('f').requestSubmit(); };
+document.getElementById('again').onclick=function(e){ e.preventDefault(); say('','Sending…');
+  post('/api/me/verify-email/send').then(function(d){ d.ok?say('','We sent a new code. It expires in 10 minutes.'):say(d.error); }); };
+document.getElementById('chg').onclick=function(e){ e.preventDefault(); document.getElementById('cf').hidden=false; document.getElementById('em').focus(); };
+document.getElementById('cf').onsubmit=function(ev){ ev.preventDefault();
+  post('/api/me/verify-email/change',{email:document.getElementById('em').value}).then(function(d){
+    if(!d.ok){ say(d.error); return; } document.getElementById('ve-to').textContent=d.to; document.getElementById('cf').hidden=true;
+    say('','We sent a code to '+d.to+'.'); }); };
+"""
+    return _shell(f"Confirm your email · {BRAND}", body, _AUTH_CSS + ".ve-code{font-size:24px;letter-spacing:6px;text-align:center}", js)
 
 
 def not_me_html(tok: str | None) -> str:

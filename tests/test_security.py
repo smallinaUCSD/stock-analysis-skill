@@ -74,23 +74,53 @@ def outbox(monkeypatch):
     return sent
 
 
-def _signup(c, email="a@example.com", pw="a-long-password-1"):
-    return c.post("/auth/signup", json={"email": email, "password": pw, "accept": True})
+def _signup(c, email="a@example.com", pw="a-long-password-1", confirm=True):
+    r = c.post("/auth/signup", json={"email": email, "password": pw, "accept": True})
+    if confirm:                                  # the emailed code confirms the address first
+        from stockskill.accounts import db
+        u = db.by_email(email)
+        S._CODES.pop((u["id"], "verify"), None)
+        code = "424242"
+        S._CODES[(u["id"], "verify")] = (S.generate_password_hash(code), time.time() + 600, 0)
+        assert c.post("/api/me/verify-email", json={"code": code}).get_json()["ok"]
+    return r
 
 
 def _link(text, path):
     return re.search(re.escape(path) + r"\?t=([\w.\-]+)", text).group(1)
 
 
-def test_welcome_email_with_confirm_link(app, outbox):
-    c = app.test_client()
-    _signup(c)
-    mail = outbox[-1]
-    assert mail["to"] == "a@example.com" and mail["subject"] == "Welcome to SM Investments"
-    tok = _link(mail["text"], "/notifications/verify")
-    assert c.get("/notifications/verify?t=" + tok).status_code == 200
+def test_signup_confirms_email_with_a_code_first(app, outbox):
     from stockskill.accounts import db
+    c = app.test_client()
+    r = _signup(c, confirm=False).get_json()
+    assert r["next"] == "/verify-email"
+    first = outbox[0]
+    assert first["to"] == "a@example.com" and first["subject"] == "Confirm your email"
+    code = re.search(r"(\d{6})", first["text"]).group(1)
+    assert c.get("/").headers["Location"].endswith("/verify-email")              # the app waits for the code
+    assert c.get("/api/me").status_code == 403
+    assert c.get("/verify-email").status_code == 200
+    assert c.post("/api/me/verify-email/send", json={"auto": True}).get_json()["sent"] is False   # one is out
+    assert c.post("/api/me/verify-email", json={"code": "000000" if code != "000000" else "111111"}).status_code == 400
+    ok = c.post("/api/me/verify-email", json={"code": code}).get_json()
+    assert ok["ok"] and ok["next"] == "/welcome"
     assert db.by_email("a@example.com")["email_verified"] == 1
+    assert outbox[-1]["subject"] == "Welcome to SM Investments" and "/notifications/verify" not in outbox[-1]["text"]
+    assert c.get("/api/me").status_code == 200
+
+
+def test_wrong_address_can_be_fixed_before_confirming(app, outbox):
+    from stockskill.accounts import db
+    c = app.test_client()
+    _signup(c, confirm=False)
+    _signup(app.test_client(), email="taken@example.com")
+    assert c.post("/api/me/verify-email/change", json={"email": "taken@example.com"}).status_code == 409
+    r = c.post("/api/me/verify-email/change", json={"email": "b@example.com"}).get_json()
+    assert r["ok"] and outbox[-1]["to"] == "b@example.com" and outbox[-1]["subject"] == "Confirm your email"
+    code = re.search(r"(\d{6})", outbox[-1]["text"]).group(1)
+    assert c.post("/api/me/verify-email", json={"code": code}).get_json()["ok"]
+    assert db.by_email("b@example.com")["email_verified"] == 1 and db.by_email("a@example.com") is None
 
 
 def test_authenticator_sign_in(app, outbox):

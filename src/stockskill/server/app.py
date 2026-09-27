@@ -308,6 +308,8 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
             u = ACCT.current_user()
             if not u:
                 return landing_html()
+            if ACCT.needs_email_code(u):
+                return redirect("/verify-email")
             if not u.get("onboarded") or ACCT.needs_terms(u):
                 return redirect("/welcome")
             is_admin = app.config.get("IS_ADMIN")
