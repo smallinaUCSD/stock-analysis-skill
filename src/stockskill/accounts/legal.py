@@ -198,8 +198,7 @@ use and share it, and the choices and rights you have. It applies together with 
 <li><b>Account details:</b> your email address and, if you create a password, a salted one-way hash of it
 (we never store or see your actual password).</li>
 <li><b>Profile:</b> first and last name, date of birth (used to confirm you are 18 or older), and optionally
-your gender, your occupation and where you live (city and state or country; we suggest the place your
-sign-in comes from, and you can change or clear it).</li>
+your gender and your occupation.</li>
 <li><b>Mobile number (optional):</b> if you ask for text alerts, your phone number, when you agreed to receive
 texts, and whether you confirmed the number with a code we texted.</li>
 <li><b>Preferences:</b> the kind of investor you are, your experience level, how you heard about us, the

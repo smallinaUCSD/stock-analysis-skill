@@ -69,9 +69,19 @@ _EXTRA_CSS = """
 
 _JS = r"""
 function goBack(e){ if(e) e.preventDefault();
-  var r=document.referrer||'';
-  if(history.length>1 && r.indexOf(location.origin+'/')===0 && r!==location.href){ history.back(); return false; }
-  window.close(); setTimeout(function(){ location.href='/'; }, 200); return false; }
+  // step back if the page before this one (in this tab) is ours; otherwise close the tab, or go /
+  var here=location.href, back=false, nav=window.navigation;
+  if(nav && nav.currentEntry && typeof nav.entries==='function'){
+    var i=nav.currentEntry.index, en=nav.entries();
+    back=i>0 && !!en[i-1] && en[i-1].url.indexOf(location.origin+'/')===0;
+  } else {                                        // no Navigation API: the referrer, checked after the fact
+    var r=document.referrer||''; back=history.length>1 && r.indexOf(location.origin+'/')===0 && r!==here;
+  }
+  function leave(){ try{ if(window.opener && !window.opener.closed) window.opener.focus(); }catch(_){}
+    window.close(); setTimeout(function(){ location.href='/'; }, 250); }
+  if(back){ history.back(); setTimeout(function(){ if(location.href===here) leave(); }, 450); }
+  else leave();
+  return false; }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
 var DAYS=30;
 var PAGES={'/':'Watchlist board','/analysis/<ticker>':'Stock page','/financials':'Financials','/earnings':'Earnings calendar',
@@ -144,7 +154,7 @@ function render(d){
       '<div class="ad-card" style="margin-bottom:12px"><h3>What each age group uses, last '+d.days+' days</h3>'+by(g.tools_by_age,'Age')+
         '<h3 style="margin-top:12px">By occupation</h3>'+by(g.tools_by_occupation,'Occupation')+
         '<h3 style="margin-top:12px">By place</h3>'+by(g.tools_by_place,'Metro or city')+
-        '<p class="ad-note">Places come from what people entered, or else their sign-in city. Groups with few people are anecdotes, not trends.</p></div>'; })()+
+        '<p class="ad-note">Places are the approximate city people sign in from. Groups with few people are anecdotes, not trends.</p></div>'; })()+
     '<div class="ad-grid"><div class="ad-card"><h3>Kinds of investor</h3>'+table(d.investor_types,[['name','Type'],['n','Accounts']])+'</div>'+
     '<div class="ad-card"><h3>Sign-in and notifications</h3>'+table([
       {k:'Google sign-in',v:(d.sign_in||{}).google},{k:'Password',v:(d.sign_in||{}).password},{k:'Passkey',v:(d.sign_in||{}).passkey},

@@ -3,6 +3,7 @@ competitors and filing mentions. Click any company to recenter on it.
 Data from /api/graph/<ticker>."""
 
 from __future__ import annotations
+from ..safejs import script_json
 
 import html
 import json
@@ -32,7 +33,7 @@ def graph_html(initial: str = "") -> str:
             "supply chain. Customers also include every customer the company's latest 10-K reports at 10% or more of revenue (usually unnamed there). Investments are from the company's own SEC 13F filing (listed stakes it held last quarter). "
             "Competitors share its SEC industry code on this watchlist. A ring around a company means its latest 10-K also "
             "names this one. Click any company to recenter on it.</p>"
-            "</div><script>" + EMBED_JS + "var INIT=" + json.dumps(t) + ";\n" + GRAPH_JS + _JS + "</script></body></html>")
+            "</div><script>" + EMBED_JS + "var INIT=" + script_json(t) + ";\n" + GRAPH_JS + _JS + "</script></body></html>")
 
 
 _EXTRA_CSS = """
@@ -56,12 +57,18 @@ _EXTRA_CSS = """
 
 _JS = r"""
 function goBack(e){ if(e) e.preventDefault();
-  // came here inside this tab: step back; opened as its own tab: close it
-  var r=document.referrer||'';
-  if(history.length>1 && r.indexOf(location.origin+'/')===0 && r!==location.href){ history.back(); return false; }
-  try{ if(window.opener && !window.opener.closed) window.opener.focus(); }catch(_){}
-  window.close();
-  setTimeout(function(){ location.href='/'; }, 200);          // the browser refused to close it
+  // step back if the page before this one (in this tab) is ours; otherwise close the tab, or go /
+  var here=location.href, back=false, nav=window.navigation;
+  if(nav && nav.currentEntry && typeof nav.entries==='function'){
+    var i=nav.currentEntry.index, en=nav.entries();
+    back=i>0 && !!en[i-1] && en[i-1].url.indexOf(location.origin+'/')===0;
+  } else {                                        // no Navigation API: the referrer, checked after the fact
+    var r=document.referrer||''; back=history.length>1 && r.indexOf(location.origin+'/')===0 && r!==here;
+  }
+  function leave(){ try{ if(window.opener && !window.opener.closed) window.opener.focus(); }catch(_){}
+    window.close(); setTimeout(function(){ location.href='/'; }, 250); }
+  if(back){ history.back(); setTimeout(function(){ if(location.href===here) leave(); }, 450); }
+  else leave();
   return false; }
 var TRAIL=[];
 function go(){ var t=(document.getElementById('kt').value||'').trim().toUpperCase(); if(t) load(t); }

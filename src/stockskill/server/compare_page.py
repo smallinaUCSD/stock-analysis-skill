@@ -7,6 +7,7 @@ inside each fund (top holdings + overlap). Data comes from GET /api/compare and
 """
 
 from __future__ import annotations
+from ..safejs import script_json
 
 import json
 import re
@@ -61,7 +62,7 @@ def compare_html(initial: str = "") -> str:
             "<p class=\"muted\" style=\"font-size:13px;margin-top:18px\">"
             "Past performance, not a forecast. Analysis, not advice. Free data may be delayed. "
             "All numbers computed by tested Python.</p>"
-            "</div><script>var INIT=" + json.dumps(tks) + ";\n" + _JS + "</script></body></html>")
+            "</div><script>var INIT=" + script_json(tks) + ";\n" + _JS + "</script></body></html>")
 
 
 _CONTROLS = """
@@ -151,12 +152,18 @@ _EXTRA_CSS = """
 
 _JS = r"""
 function goBack(e){ if(e) e.preventDefault();
-  // came here inside this tab: step back; opened as its own tab: close it
-  var r=document.referrer||'';
-  if(history.length>1 && r.indexOf(location.origin+'/')===0 && r!==location.href){ history.back(); return false; }
-  try{ if(window.opener && !window.opener.closed) window.opener.focus(); }catch(_){}
-  window.close();
-  setTimeout(function(){ location.href='/'; }, 200);          // the browser refused to close it
+  // step back if the page before this one (in this tab) is ours; otherwise close the tab, or go /
+  var here=location.href, back=false, nav=window.navigation;
+  if(nav && nav.currentEntry && typeof nav.entries==='function'){
+    var i=nav.currentEntry.index, en=nav.entries();
+    back=i>0 && !!en[i-1] && en[i-1].url.indexOf(location.origin+'/')===0;
+  } else {                                        // no Navigation API: the referrer, checked after the fact
+    var r=document.referrer||''; back=history.length>1 && r.indexOf(location.origin+'/')===0 && r!==here;
+  }
+  function leave(){ try{ if(window.opener && !window.opener.closed) window.opener.focus(); }catch(_){}
+    window.close(); setTimeout(function(){ location.href='/'; }, 250); }
+  if(back){ history.back(); setTimeout(function(){ if(location.href===here) leave(); }, 450); }
+  else leave();
   return false; }
 var COLORS=['var(--accent)','#5db8a6','#e8a55a','#8b7fc7','#4f86d9','#d96c8f','#9bbf4a','#c99a2e','#6fb1d8','#b07256'];
 var MAXT=10;

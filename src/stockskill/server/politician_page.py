@@ -5,6 +5,7 @@ themselves. Data from /api/politician/<id> and /api/politician/<id>/performance.
 """
 
 from __future__ import annotations
+from ..safejs import script_json
 
 import html
 import json
@@ -34,7 +35,7 @@ def politician_html(pid: str) -> str:
             "<div id=\"comm\" class=\"pp-tw\"></div></section>"
             "<section class=\"pp-sec\"><h2>All reported trades</h2><div id=\"trades\" class=\"pp-tw muted\">Loading…</div></section>"
             "<p class=\"pp-note\" id=\"src-note\"></p>"
-            "</div><script>var PID=" + json.dumps(html.escape(pid)) + ";\n" + DONUT_JS + _JS + "</script></body></html>")
+            "</div><script>var PID=" + script_json(pid) + ";\n" + DONUT_JS + _JS + "</script></body></html>")
 
 
 _EXTRA_CSS = """
@@ -85,12 +86,18 @@ _EXTRA_CSS = """
 
 _JS = r"""
 function goBack(e){ if(e) e.preventDefault();
-  // came here inside this tab: step back; opened as its own tab: close it
-  var r=document.referrer||'';
-  if(history.length>1 && r.indexOf(location.origin+'/')===0 && r!==location.href){ history.back(); return false; }
-  try{ if(window.opener && !window.opener.closed) window.opener.focus(); }catch(_){}
-  window.close();
-  setTimeout(function(){ location.href='/trades'; }, 200);          // the browser refused to close it
+  // step back if the page before this one (in this tab) is ours; otherwise close the tab, or go /trades
+  var here=location.href, back=false, nav=window.navigation;
+  if(nav && nav.currentEntry && typeof nav.entries==='function'){
+    var i=nav.currentEntry.index, en=nav.entries();
+    back=i>0 && !!en[i-1] && en[i-1].url.indexOf(location.origin+'/')===0;
+  } else {                                        // no Navigation API: the referrer, checked after the fact
+    var r=document.referrer||''; back=history.length>1 && r.indexOf(location.origin+'/')===0 && r!==here;
+  }
+  function leave(){ try{ if(window.opener && !window.opener.closed) window.opener.focus(); }catch(_){}
+    window.close(); setTimeout(function(){ location.href='/trades'; }, 250); }
+  if(back){ history.back(); setTimeout(function(){ if(location.href===here) leave(); }, 450); }
+  else leave();
   return false; }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
 function fdate(iso){ if(!iso) return '-'; var p=iso.split('-'); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+p[1]-1]+' '+(+p[2])+', '+p[0]; }

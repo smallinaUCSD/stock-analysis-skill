@@ -176,6 +176,18 @@ def _compress(app) -> None:
         finnhub.foreground(False)
 
     @app.after_request
+    def _security_headers(resp):
+        """Defense in depth: no framing by other sites, no MIME sniffing, no full
+        URLs (with tokens) leaked to other sites, no <base>/<object> tricks."""
+        h = resp.headers
+        h.setdefault("X-Content-Type-Options", "nosniff")
+        h.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        h.setdefault("X-Frame-Options", "SAMEORIGIN")
+        h.setdefault("Content-Security-Policy",
+                     "frame-ancestors 'self'; base-uri 'self'; object-src 'none'; form-action 'self'")
+        return resp
+
+    @app.after_request
     def _gzip(resp):
         try:
             if (resp.status_code < 200 or resp.status_code >= 300 or resp.direct_passthrough or resp.is_streamed
@@ -301,7 +313,10 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
             u = ACCT.current_user()
             if u:
                 return redirect(ACCT._next_for(u))
-            return login_html("login", ACCT.google_client_id(), request.args.get("next", ""))
+            nxt = request.args.get("next", "")
+            if not re.fullmatch(r"/(?![/\\])[\w\-./?=&%+~,:]{0,300}", nxt or ""):   # only a path on this site
+                nxt = ""
+            return login_html("login", ACCT.google_client_id(), nxt)
 
         @app.get("/signup")
         def signup_page():
@@ -317,8 +332,13 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
 
         @app.get("/reset")
         def reset_page():
-            from ..accounts.pages import reset_html
-            return reset_html(request.args.get("t", ""))
+            from ..accounts.pages import message_html, reset_html
+            from ..accounts.security import reset_token_ok
+            tok = request.args.get("t", "")
+            if not reset_token_ok(tok):                       # checked before the page is drawn
+                return message_html("This link has expired", "Reset links work once, for an hour. "
+                                    "Ask for a new one from the sign-in page."), 400
+            return reset_html(tok)
 
         @app.get("/welcome")
         def welcome_page():

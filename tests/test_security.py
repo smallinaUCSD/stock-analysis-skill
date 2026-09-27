@@ -229,3 +229,59 @@ def test_new_google_account_confirms_email_with_a_code(app, outbox, monkeypatch)
     assert c.post("/api/me/verify-email/send", json={"auto": True}).get_json()["sent"]
     code = re.search(r"(\d{6})", outbox[-1]["text"]).group(1)
     assert c.post("/api/me/verify-email", json={"code": code}).get_json()["ok"]
+
+
+# --- the security review's findings stay fixed ------------------------------------------
+
+EVIL = "</script><script>alert(document.domain)</script>"
+
+
+def test_script_json_cannot_close_the_script():
+    from stockskill.safejs import script_json
+    out = script_json({"a": EVIL, "b": "x&y "})
+    assert "</script" not in out and "<" not in out and "&" not in out and " " not in out
+    import json
+    assert json.loads(out) == {"a": EVIL, "b": "x&y "}
+
+
+def test_reflected_values_are_not_executable(app, outbox):
+    c = app.test_client()
+    r = c.get("/reset?t=" + EVIL)
+    assert r.status_code == 400 and b"alert(document.domain)" not in r.data
+    page = c.get("/login?next=" + EVIL).get_data(as_text=True)
+    assert "alert(document.domain)" not in page and 'NEXT=""' in page
+    assert 'NEXT="/screener?x=1"' in c.get("/login?next=/screener?x=1").get_data(as_text=True)
+    assert 'NEXT=""' in c.get("/login?next=//evil.example/x").get_data(as_text=True)
+    _signup(c)
+    assert "</script><script>alert" not in c.get("/trades?q=" + EVIL).get_data(as_text=True)
+
+
+def test_names_in_the_board_config_are_escaped(app, outbox, monkeypatch):
+    from stockskill.accounts.pages import personalize_board
+    html = personalize_board("<html><head></head><body></body></html>", {"first_name": EVIL, "last_name": "X",
+                                                                         "email": "a@example.com"}, ["AAPL"])
+    assert "</script><script>alert" not in html
+
+
+def test_security_headers(app):
+    h = app.test_client().get("/terms").headers
+    assert h["X-Content-Type-Options"] == "nosniff" and h["X-Frame-Options"] == "SAMEORIGIN"
+    assert "frame-ancestors 'self'" in h["Content-Security-Policy"] and h["Referrer-Policy"]
+
+
+def test_google_sign_in_evicts_an_unconfirmed_squatter(app, outbox, monkeypatch):
+    from stockskill.accounts import auth, db
+    attacker = app.test_client()
+    _signup(attacker, email="victim@gmail.com", confirm=False)            # never proves the inbox
+    assert attacker.post("/auth/passkey/register/options").status_code == 403   # can't plant a passkey either
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "cid")
+    monkeypatch.setattr(auth, "verify_google_token", lambda t, cid: {"sub": "g-v", "email": "victim@gmail.com",
+                                                                     "given_name": "Vic", "family_name": "Tim"})
+    victim = app.test_client()
+    assert victim.post("/auth/google", json={"credential": "x"}).get_json()["ok"]
+    u = db.by_email("victim@gmail.com")
+    assert u["google_sub"] == "g-v" and u["email_verified"] == 1 and u["password_hash"] is None
+    auth._SEEN.clear()
+    assert attacker.get("/api/me").status_code == 401                     # their session is gone
+    r = app.test_client().post("/auth/login", json={"email": "victim@gmail.com", "password": "a-long-password-1"})
+    assert r.status_code == 401                                           # and their password no longer works

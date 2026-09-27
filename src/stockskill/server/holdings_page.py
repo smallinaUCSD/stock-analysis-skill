@@ -167,12 +167,18 @@ not recorded with a price. Net gain needs a cost basis.</p>
 <script>
 // Return to the watchlist tab this was opened from (don't spawn a 2nd watchlist).
 function goBack(e){{ if(e) e.preventDefault();
-  // came here inside this tab: step back; opened as its own tab: close it
-  var r=document.referrer||'';
-  if(history.length>1 && r.indexOf(location.origin+'/')===0 && r!==location.href){{ history.back(); return false; }}
-  try{{ if(window.opener && !window.opener.closed) window.opener.focus(); }}catch(_){{}}
-  window.close();
-  setTimeout(function(){{ location.href='/'; }}, 200);          // the browser refused to close it
+  // step back if the page before this one (in this tab) is ours; otherwise close the tab, or go /
+  var here=location.href, back=false, nav=window.navigation;
+  if(nav && nav.currentEntry && typeof nav.entries==='function'){{
+    var i=nav.currentEntry.index, en=nav.entries();
+    back=i>0 && !!en[i-1] && en[i-1].url.indexOf(location.origin+'/')===0;
+  }} else {{                                        // no Navigation API: the referrer, checked after the fact
+    var r=document.referrer||''; back=history.length>1 && r.indexOf(location.origin+'/')===0 && r!==here;
+  }}
+  function leave(){{ try{{ if(window.opener && !window.opener.closed) window.opener.focus(); }}catch(_){{}}
+    window.close(); setTimeout(function(){{ location.href='/'; }}, 250); }}
+  if(back){{ history.back(); setTimeout(function(){{ if(location.href===here) leave(); }}, 450); }}
+  else leave();
   return false; }}
 function _v(id){{ return (document.getElementById(id).value||'').trim(); }}
 function _msg(id,t,ok){{ const m=document.getElementById(id); m.textContent=t; m.className='h-msg '+(ok?'ok':'bad'); }}

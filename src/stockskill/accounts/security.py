@@ -403,6 +403,18 @@ def not_me():
     return jsonify({"ok": True, "signed_out": n, "password": bool(u.get("password_hash"))})
 
 
+def reset_token_ok(tok: str) -> bool:
+    """A reset link that's signed by us, under an hour old and not used yet."""
+    from itsdangerous import BadSignature, URLSafeTimedSerializer
+    from . import notify
+    try:
+        d = URLSafeTimedSerializer(notify._secret(), salt="reset").loads(tok or "", max_age=3600)
+    except BadSignature:
+        return False
+    u = db.get_user(d.get("u")) if isinstance(d, dict) else None
+    return bool(u) and _reset_payload(u) == d
+
+
 @bp.post("/auth/reset")
 def reset_password():
     from itsdangerous import BadSignature, URLSafeTimedSerializer

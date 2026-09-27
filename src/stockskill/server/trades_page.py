@@ -8,6 +8,7 @@ Data from /api/congress, /api/funds, /api/funds/<cik>, /api/funds/search and
 """
 
 from __future__ import annotations
+from ..safejs import script_json
 
 import html
 import json
@@ -46,7 +47,7 @@ def trades_html(q: str = "") -> str:
             "<p class=\"tr-note\">From SEC Form 13F: long US stock and option positions of managers with $100M+, filed up "
             "to 45 days after each quarter. It doesn't show short positions, cash, bonds or foreign stocks, so it's a "
             "partial and delayed picture of a fund.</p></div>"
-            "</div><script>var INITQ=" + json.dumps(q) + ";\n" + _JS + "</script></body></html>")
+            "</div><script>var INITQ=" + script_json(q) + ";\n" + _JS + "</script></body></html>")
 
 
 _EXTRA_CSS = """
@@ -113,12 +114,18 @@ _EXTRA_CSS = """
 
 _JS = r"""
 function goBack(e){ if(e) e.preventDefault();
-  // came here inside this tab: step back; opened as its own tab: close it
-  var r=document.referrer||'';
-  if(history.length>1 && r.indexOf(location.origin+'/')===0 && r!==location.href){ history.back(); return false; }
-  try{ if(window.opener && !window.opener.closed) window.opener.focus(); }catch(_){}
-  window.close();
-  setTimeout(function(){ location.href='/'; }, 200);          // the browser refused to close it
+  // step back if the page before this one (in this tab) is ours; otherwise close the tab, or go /
+  var here=location.href, back=false, nav=window.navigation;
+  if(nav && nav.currentEntry && typeof nav.entries==='function'){
+    var i=nav.currentEntry.index, en=nav.entries();
+    back=i>0 && !!en[i-1] && en[i-1].url.indexOf(location.origin+'/')===0;
+  } else {                                        // no Navigation API: the referrer, checked after the fact
+    var r=document.referrer||''; back=history.length>1 && r.indexOf(location.origin+'/')===0 && r!==here;
+  }
+  function leave(){ try{ if(window.opener && !window.opener.closed) window.opener.focus(); }catch(_){}
+    window.close(); setTimeout(function(){ location.href='/'; }, 250); }
+  if(back){ history.back(); setTimeout(function(){ if(location.href===here) leave(); }, 450); }
+  else leave();
   return false; }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
 function fdate(iso){ if(!iso) return '-'; var p=iso.split('-'); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+p[1]-1]+' '+(+p[2])+(p[0]!==String(new Date().getFullYear())?' '+p[0]:''); }

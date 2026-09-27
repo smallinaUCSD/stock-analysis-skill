@@ -193,4 +193,4 @@ def test_optional_occupation_and_home(app):
     assert c.post("/api/me/profile", json=PROFILE).get_json()["ok"]            # not sent: left alone
     u = c.get("/api/me").get_json()
     assert u["user"]["occupation"] == "tech" and u["user"]["home_city"] == "Brooklyn"
-    assert ["tech", "Tech or software"] in u["options"]["occupations"] and "place_guess" in u
+    assert ["tech", "Tech or software"] in u["options"]["occupations"]

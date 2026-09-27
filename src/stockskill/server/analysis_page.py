@@ -8,6 +8,7 @@ out and links each box to its plain-language guide on /interpret.
 """
 
 from __future__ import annotations
+from ..safejs import script_json
 
 import html as _html
 import os
@@ -540,12 +541,18 @@ possibly delayed data; the decision is yours.
 <script>
 const REFRESH={int(refresh_seconds)}*1000;
 function goBack(e){{ if(e) e.preventDefault();
-  // came here inside this tab: step back; opened as its own tab: close it
-  var r=document.referrer||'';
-  if(history.length>1 && r.indexOf(location.origin+'/')===0 && r!==location.href){{ history.back(); return false; }}
-  try{{ if(window.opener && !window.opener.closed) window.opener.focus(); }}catch(_){{}}
-  window.close();
-  setTimeout(function(){{ location.href='/'; }}, 200);          // the browser refused to close it
+  // step back if the page before this one (in this tab) is ours; otherwise close the tab, or go /
+  var here=location.href, back=false, nav=window.navigation;
+  if(nav && nav.currentEntry && typeof nav.entries==='function'){{
+    var i=nav.currentEntry.index, en=nav.entries();
+    back=i>0 && !!en[i-1] && en[i-1].url.indexOf(location.origin+'/')===0;
+  }} else {{                                        // no Navigation API: the referrer, checked after the fact
+    var r=document.referrer||''; back=history.length>1 && r.indexOf(location.origin+'/')===0 && r!==here;
+  }}
+  function leave(){{ try{{ if(window.opener && !window.opener.closed) window.opener.focus(); }}catch(_){{}}
+    window.close(); setTimeout(function(){{ location.href='/'; }}, 250); }}
+  if(back){{ history.back(); setTimeout(function(){{ if(location.href===here) leave(); }}, 450); }}
+  else leave();
   return false; }}
 function openHelp(e){{ if(e) e.preventDefault(); window.open(e.currentTarget.getAttribute('href'),'_blank'); return false; }}
 let _busy=false;
@@ -568,7 +575,7 @@ function refresh(){{ if(_busy) return; _busy=true;
 }}
 if(REFRESH>0 && REFRESH<=3600000) setInterval(refresh, Math.max(60000,REFRESH));
 </script>
-<script>var TK="{tk}", RVOL={rvol};
+<script>var TK={script_json(row.ticker)}, RVOL={rvol};
 """ + _PRICE_JS + _OPT_JS + _SIG_JS + _CALC_JS + _FC_JS + ANALYST_JS + _AN_JS + _TABS_JS + """</script>
 </body></html>"""
 

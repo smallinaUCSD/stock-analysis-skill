@@ -363,6 +363,11 @@ def touch_passkey(credential_id: str, sign_count: int) -> None:
                   (sign_count, time.time(), credential_id))
 
 
+def delete_all_passkeys(uid: int) -> None:
+    with conn() as c:
+        c.execute("DELETE FROM passkeys WHERE user_id=?", (uid,))
+
+
 def delete_passkey(uid: int, credential_id: str) -> None:
     with conn() as c:
         c.execute("DELETE FROM passkeys WHERE user_id=? AND credential_id=?", (uid, credential_id))

@@ -3,6 +3,7 @@ one company its report history - EPS vs estimate, and how the stock moved the
 session after each report. Data from /api/earnings/*."""
 
 from __future__ import annotations
+from ..safejs import script_json
 
 import html
 import json
@@ -31,7 +32,7 @@ def earnings_html(initial: str = "") -> str:
             "stock's change over the first full session after the release (after-close reports react the next day). "
             "EPS estimates, surprises and analyst ratings are from Finnhub (free tier: the last four quarters). "
             "A typical move is the average size of past moves in either direction, not a forecast.</p>"
-            "</div><script>" + EMBED_JS + "var INIT=" + json.dumps(t) + ";\n" + _JS + "</script></body></html>")
+            "</div><script>" + EMBED_JS + "var INIT=" + script_json(t) + ";\n" + _JS + "</script></body></html>")
 
 
 _EXTRA_CSS = """
@@ -75,12 +76,18 @@ _EXTRA_CSS = """
 
 _JS = r"""
 function goBack(e){ if(e) e.preventDefault();
-  // came here inside this tab: step back; opened as its own tab: close it
-  var r=document.referrer||'';
-  if(history.length>1 && r.indexOf(location.origin+'/')===0 && r!==location.href){ history.back(); return false; }
-  try{ if(window.opener && !window.opener.closed) window.opener.focus(); }catch(_){}
-  window.close();
-  setTimeout(function(){ location.href='/'; }, 200);          // the browser refused to close it
+  // step back if the page before this one (in this tab) is ours; otherwise close the tab, or go /
+  var here=location.href, back=false, nav=window.navigation;
+  if(nav && nav.currentEntry && typeof nav.entries==='function'){
+    var i=nav.currentEntry.index, en=nav.entries();
+    back=i>0 && !!en[i-1] && en[i-1].url.indexOf(location.origin+'/')===0;
+  } else {                                        // no Navigation API: the referrer, checked after the fact
+    var r=document.referrer||''; back=history.length>1 && r.indexOf(location.origin+'/')===0 && r!==here;
+  }
+  function leave(){ try{ if(window.opener && !window.opener.closed) window.opener.focus(); }catch(_){}
+    window.close(); setTimeout(function(){ location.href='/'; }, 250); }
+  if(back){ history.back(); setTimeout(function(){ if(location.href===here) leave(); }, 450); }
+  else leave();
   return false; }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
 function pct(v,d){ return v==null?'—':(v>0?'+':'')+(v*100).toFixed(d==null?1:d)+'%'; }

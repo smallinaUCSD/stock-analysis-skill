@@ -402,10 +402,19 @@ def google_login():
     sub, email = c["sub"], c["email"].lower()
     u = db.by_google(sub) or db.by_email(email)
     if u:
+        if not u.get("email_verified") and not u.get("google_sub"):
+            # An account made with this address that nobody ever confirmed: whoever made it may not own the
+            # inbox (account pre-hijacking). Google has proved this person does, so they keep the account
+            # but nothing the unconfirmed creator set: password, 2-step, passkeys and open sessions go.
+            db.update_user(u["id"], password_hash=None, mfa_method=None, mfa_secret=None, mfa_recovery=None)
+            db.delete_all_passkeys(u["id"])
+            db.revoke_sessions(u["id"])
+            _SEEN.clear()
         if not u.get("google_sub"):
             db.update_user(u["id"], google_sub=sub)        # link Google to the existing account
         if not u.get("email_verified"):
             db.update_user(u["id"], email_verified=1)      # Google confirmed the address
+        u = db.get_user(u["id"])
     else:
         # new account: they accept the Terms on the first onboarding screen
         # new account: like an email sign-up, it confirms the address with a code before the app opens
@@ -435,6 +444,8 @@ def _unb64(s: str) -> bytes:
 @bp.post("/auth/passkey/register/options")
 @login_required
 def passkey_register_options():
+    if needs_email_code(current_user()):                   # confirm the address before adding a way in
+        return jsonify({"ok": False, "error": "Confirm your email first."}), 403
     from webauthn import generate_registration_options, options_to_json
     from webauthn.helpers.structs import (AuthenticatorSelectionCriteria, PublicKeyCredentialDescriptor,
                                           ResidentKeyRequirement, UserVerificationRequirement)
@@ -453,6 +464,8 @@ def passkey_register_options():
 @bp.post("/auth/passkey/register/verify")
 @login_required
 def passkey_register_verify():
+    if needs_email_code(current_user()):                   # confirm the address before adding a way in
+        return jsonify({"ok": False, "error": "Confirm your email first."}), 403
     from webauthn import verify_registration_response
     chal = session.pop("pk_reg", None)
     b = _body()
@@ -543,12 +556,6 @@ def _public_user(u: dict) -> dict:
     return out
 
 
-def _place_guess() -> dict:
-    """Where this sign-in seems to be (city, region, country), to pre-fill 'where do you live'."""
-    row = db.get_session(session.get("sid") or "") if session.get("sid") else None
-    return {k: (row or {}).get(k) for k in ("city", "region", "country")}
-
-
 @bp.get("/api/me")
 @login_required
 def me():
@@ -563,7 +570,6 @@ def me():
                     "options": {k: [[a, b] for a, b in m.items()] for k, m in (
                         ("investor_types", INVESTOR_TYPES), ("experience", EXPERIENCE), ("genders", GENDERS),
                         ("referrals", REFERRALS), ("occupations", OCCUPATIONS))},
-                    "place_guess": _place_guess(),
                     "terms_version": legal.TERMS_VERSION, "google": bool(google_client_id())})
 
 

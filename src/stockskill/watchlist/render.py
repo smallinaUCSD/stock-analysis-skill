@@ -7,6 +7,7 @@ categories, sections) so one filter engine works across all three views.
 """
 
 from __future__ import annotations
+from ..safejs import script_json
 
 import html
 import json
@@ -799,7 +800,7 @@ def _chart_html(r):
     closes = ph.get("c") or []
     if len(closes) < 5:
         return ""
-    series = json.dumps({"d": ph.get("d", []), "c": closes}, separators=(",", ":"))
+    series = script_json({"d": ph.get("d", []), "c": closes})
     btns = "".join(
         f'<button type="button" class="tfb{" on" if tf == _CHART_DEFAULT_TF else ""}" '
         f'data-tf="{tf}" onclick="chartTf(this)">{lbl}</button>'
