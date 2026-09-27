@@ -205,6 +205,18 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
     if os.environ.get("STOCKSKILL_KEEP_FRESH") == "1":
         import threading as _th
         _th.Thread(target=board.html, daemon=True).start()   # draw the board now, not on the first visit
+
+        def _warm_calendar():                                # the calendar's data, before anyone asks
+            import time as _t
+            while True:
+                try:
+                    from ..data import market_calendar as _MC, economy as _EC
+                    _MC.market_earnings(120)
+                    _EC.calendar(cache_dir, 7, 120)
+                except Exception:  # noqa: BLE001
+                    pass
+                _t.sleep(5 * 3600)
+        _th.Thread(target=_warm_calendar, daemon=True).start()
         board.keep_fresh()    # rebuild whenever stale, not only when someone visits
         board.quote_feed()    # and keep live prices a few minutes fresh in between
 
@@ -1563,6 +1575,52 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
         tk = ticker.upper()
         tr = [t for t in (recent_trades(cache_dir).get("trades") or []) if t.get("ticker") == tk]
         return jsonify({"ok": True, "ticker": tk, "funds": F.holders_of(tk, cache_dir), "congress": tr[:25]})
+
+    @app.get("/calendar")
+    def calendar_page():
+        from .calendar_page import calendar_html
+        return calendar_html()
+
+    def _calendar_events(days: int = 120):
+        """This person's calendar: their watchlist's earnings plus the market's dates."""
+        from datetime import date as _date, timedelta as _td
+        from ..data import market_calendar as MC
+        u = None
+        if auth:
+            from ..accounts.auth import current_user
+            u = current_user()
+        if u:
+            from ..accounts import db as ADB
+            mine = ADB.watchlist(u["id"])
+        else:
+            mine = sorted(board._current_tickers())
+        start, end = _date.today() - _td(days=7), _date.today() + _td(days=days)
+        try:
+            earn = MC.market_earnings(min(days, 120))
+        except Exception:  # noqa: BLE001
+            earn = []
+        try:
+            from ..data import economy as EC
+            econ = EC.calendar(cache_dir, 7, days)
+        except Exception:  # noqa: BLE001
+            econ = []
+        try:
+            from ..data.ipo import calendar as ipo_cal
+            ipos = [r for r in ((ipo_cal(quotes=False) or {}).get("upcoming") or []) if not r.get("spac")]
+        except Exception:  # noqa: BLE001
+            ipos = []
+        return MC.events(mine, start, end, earn, econ, ipos)
+
+    @app.get("/api/calendar")
+    def calendar_api():
+        return jsonify({"ok": True, "events": _calendar_events()})
+
+    @app.get("/api/calendar.ics")
+    def calendar_ics():
+        from ..data.market_calendar import to_ics
+        from flask import Response
+        return Response(to_ics(_calendar_events()), mimetype="text/calendar",
+                        headers={"Content-Disposition": 'attachment; filename="sm-investments.ics"'})
 
     @app.get("/ipos")
     def ipos_page():

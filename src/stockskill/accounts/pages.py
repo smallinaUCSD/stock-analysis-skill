@@ -821,7 +821,7 @@ def personalize_board(board_html: str, user: dict, tickers: list[str], admin: bo
 
 
 _MENU = [("/", "Your watchlist"), ("/screener", "Screener"), ("/markets", "Markets"), ("/earnings", "Earnings"),
-         ("/trades", "Politicians & Funds"), ("/compare", "Compare"), ("/financials", "Financials"),
+         ("/trades", "Politicians & Funds"), ("/calendar", "Calendar"), ("/compare", "Compare"), ("/financials", "Financials"),
          ("/economy", "Economy and rates"), ("/breakouts", "Breakouts"), ("/indicators", "Indicators"),
          ("/interpret", "How to read this")]
 

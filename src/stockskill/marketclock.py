@@ -2,8 +2,8 @@
 
 Uses America/New_York so it's correct regardless of the machine's timezone.
 Regular session is 09:30-16:00 ET, Mon-Fri. Pre (04:00-09:30) and after
-(16:00-20:00) are labeled too. Exchange holidays are NOT handled -- a holiday
-reads as a normal weekday here; note that when it matters.
+(16:00-20:00) are labeled too. NYSE holidays read as "holiday" (not a trading
+day) and early-close days end the session at 13:00 (data/market_calendar.py).
 """
 
 from __future__ import annotations
@@ -28,9 +28,9 @@ AFTER_CLOSE = time(20, 0)
 
 @dataclass(frozen=True)
 class MarketStatus:
-    label: str          # "open" | "pre-market" | "after-hours" | "closed" | "weekend"
+    label: str          # "open" | "pre-market" | "after-hours" | "closed" | "weekend" | "holiday"
     is_open: bool       # regular session in progress
-    is_weekday: bool
+    is_weekday: bool    # a trading day (False on weekends and exchange holidays)
     et: datetime        # the moment, in ET
 
     @property
@@ -41,6 +41,7 @@ class MarketStatus:
             "after-hours": "AFTER HOURS",
             "closed": "CLOSED",
             "weekend": "WEEKEND",
+            "holiday": "HOLIDAY",
         }.get(self.label, self.label.upper())
 
 
@@ -58,13 +59,17 @@ def market_status(now: datetime | None = None) -> MarketStatus:
     is_weekday = et.weekday() < 5  # Mon=0 .. Sun=6
     if not is_weekday:
         return MarketStatus("weekend", False, False, et)
+    from .data.market_calendar import early_close, is_holiday
+    if is_holiday(et.date()):
+        return MarketStatus("holiday", False, False, et)
 
     t = et.time()
-    if REGULAR_OPEN <= t < REGULAR_CLOSE:
+    close = time(13, 0) if early_close(et.date()) else REGULAR_CLOSE
+    if REGULAR_OPEN <= t < close:
         return MarketStatus("open", True, True, et)
     if PRE_OPEN <= t < REGULAR_OPEN:
         return MarketStatus("pre-market", False, True, et)
-    if REGULAR_CLOSE <= t < AFTER_CLOSE:
+    if close <= t < (time(17, 0) if close != REGULAR_CLOSE else AFTER_CLOSE):
         return MarketStatus("after-hours", False, True, et)
     return MarketStatus("closed", False, True, et)
 

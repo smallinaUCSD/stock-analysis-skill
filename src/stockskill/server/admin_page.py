@@ -74,7 +74,7 @@ function goBack(e){ if(e) e.preventDefault();
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
 var DAYS=30;
 var PAGES={'/':'Watchlist board','/analysis/<ticker>':'Stock page','/financials':'Financials','/earnings':'Earnings calendar',
-  '/graph':'Connections graph','/screener':'Screener','/trades':'Politicians & Funds','/politician/<pid>':'Politician profile',
+  '/graph':'Connections graph','/screener':'Screener','/trades':'Politicians & Funds','/calendar':'Calendar','/politician/<pid>':'Politician profile',
   '/fund/<int:cik>':'Hedge-fund profile','/markets':'Markets','/economy':'Economy','/account':'Profile and settings',
   '/welcome':'Sign-up setup','/login':'Sign in','/signup':'Create account','/admin':'Admin','/terms':'Terms','/privacy':'Privacy',
   '/forgot':'Forgot password','/reset':'Reset password','/alerts':'Alerts','/breakouts':'Breakouts','/compare':'Compare',

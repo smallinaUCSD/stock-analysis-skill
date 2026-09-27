@@ -160,7 +160,7 @@ h1{font-size:28px;margin:0}
   border-radius:999px;border:1px solid var(--border);color:var(--muted)}
 .status.open{color:var(--good);background:color-mix(in srgb,var(--good) 14%,transparent);border-color:transparent}
 .status.pre-market,.status.after-hours{color:var(--warn);background:color-mix(in srgb,var(--warn) 12%,transparent);border-color:transparent}
-.status.closed,.status.weekend{color:var(--muted)}
+.status.closed,.status.weekend,.status.holiday{color:var(--muted)}
 .sub{color:var(--muted);font-size:13px;margin:2px 0 18px}
 .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
 @media (max-width:820px){.grid{grid-template-columns:1fr}}
