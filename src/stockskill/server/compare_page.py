@@ -1,4 +1,4 @@
-"""Compare page: 2-4 stocks or funds side by side.
+"""Compare page: 2 to 10 stocks or funds side by side.
 
 Growth of $10k and drawdown charts over the tickers' common history, trailing
 returns, risk vs the S&P 500, return correlations, a profile table, and what's
@@ -16,18 +16,21 @@ from ..dashboard.render import _CSS, _THEME_BOOT, icon
 _TK = re.compile(r"^[A-Z0-9.\-\^]{1,12}$")
 
 
+MAX_TICKERS = 10
+
+
 def compare_html(initial: str = "") -> str:
-    tks = [t for t in re.split(r"[\s,;]+", (initial or "").upper()) if t and _TK.match(t)][:4]
+    tks = [t for t in re.split(r"[\s,;]+", (initial or "").upper()) if t and _TK.match(t)][:MAX_TICKERS]
     return ("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
             "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
             "<title>Compare</title>" + _THEME_BOOT + "<style>" + _CSS + _EXTRA_CSS +
             "</style></head><body><div class=\"wrap\">"
             "<header><h1>Compare</h1>"
-            "<span class=\"sub\" style=\"margin:0\">Up to four stocks or funds, side by side</span>"
+            "<span class=\"sub\" style=\"margin:0\">Up to ten stocks or funds, side by side</span>"
             "<button class=\"page-x\" onclick=\"return goBack(event)\" title=\"Close\" "
             "aria-label=\"Close\">" + icon("x", 17) + "</button></header>"
             + _CONTROLS +
-            "<div id=\"cmp-msg\" class=\"muted cmp-msg\">Add two to four tickers to compare.</div>"
+            "<div id=\"cmp-msg\" class=\"muted cmp-msg\">Add 2 to 10 tickers to compare.</div>"
             "<div id=\"cmp-out\" style=\"display:none\">"
             "<p id=\"cmp-span\" class=\"muted cmp-span\"></p>"
             "<section class=\"cmp-sec\"><h2>Growth of $10,000</h2>"
@@ -155,7 +158,8 @@ function goBack(e){ if(e) e.preventDefault();
   window.close();
   setTimeout(function(){ location.href='/'; }, 200);          // the browser refused to close it
   return false; }
-var COLORS=['var(--accent)','#5db8a6','#e8a55a','#8b7fc7'];
+var COLORS=['var(--accent)','#5db8a6','#e8a55a','#8b7fc7','#4f86d9','#d96c8f','#9bbf4a','#c99a2e','#6fb1d8','#b07256'];
+var MAXT=10;
 var TICKERS=[], PERIOD='5y', DATA=null, HOLD=null, _req=0;
 var W=900, ML=62, MR=14, MT=12, MB=22;
 
@@ -179,10 +183,10 @@ function niceStep(range,target){ var raw=(range||1)/Math.max(1,target); var p=Ma
 function renderChips(){
   document.getElementById('chips').innerHTML=TICKERS.map(function(t){
     return '<span class="cmp-chip">'+dot(t)+esc(t)+'<button title="Remove '+esc(t)+'" aria-label="Remove '+esc(t)+'" onclick="removeT(\''+esc(t)+'\')">&times;</button></span>'; }).join('');
-  var inp=document.getElementById('ctk'); inp.disabled=TICKERS.length>=4;
-  inp.placeholder=TICKERS.length>=4?'Four is the maximum':'Add a ticker (e.g. VOO)';
+  var inp=document.getElementById('ctk'); inp.disabled=TICKERS.length>=MAXT;
+  inp.placeholder=TICKERS.length>=MAXT?'Ten is the maximum':'Add a ticker (e.g. VOO)';
 }
-function addT(t){ t=(t||'').trim().toUpperCase(); if(!t||TICKERS.indexOf(t)>=0||TICKERS.length>=4) return;
+function addT(t){ t=(t||'').trim().toUpperCase(); if(!t||TICKERS.indexOf(t)>=0||TICKERS.length>=MAXT) return;
   if(!/^[A-Z0-9.\-\^]{1,12}$/.test(t)) return; TICKERS.push(t); changed(); }
 function removeT(t){ TICKERS=TICKERS.filter(function(x){return x!==t;}); changed(); }
 function preset(s){ TICKERS=s.split(','); changed(); return false; }
@@ -194,7 +198,7 @@ function syncUrl(){ try{ var q=TICKERS.length?('?t='+TICKERS.join(',')+(PERIOD!=
 function msg(t){ var m=document.getElementById('cmp-msg'); m.textContent=t||''; m.style.display=t?'':'none'; }
 function load(){
   if(TICKERS.length<2){ document.getElementById('cmp-out').style.display='none';
-    msg(TICKERS.length?'Add at least one more ticker.':'Add two to four tickers to compare.'); return; }
+    msg(TICKERS.length?'Add at least one more ticker.':'Add 2 to 10 tickers to compare.'); return; }
   var id=++_req; msg('Loading '+TICKERS.join(', ')+'…');
   fetch('/api/compare?t='+encodeURIComponent(TICKERS.join(','))+'&period='+PERIOD)
     .then(function(r){return r.json();}).then(function(d){ if(id!==_req) return;
@@ -391,7 +395,7 @@ document.getElementById('perseg').addEventListener('click', function(e){ var b=e
   var q=new URLSearchParams(location.search), p=q.get('p');
   if(p && ['1y','3y','5y','max'].indexOf(p)>=0){ PERIOD=p;
     [].forEach.call(document.querySelectorAll('#perseg button'),function(x){x.classList.toggle('on',x.dataset.p===p);}); }
-  TICKERS=(INIT||[]).slice(0,4); renderChips(); load(); loadWlPairs();
-  if(TICKERS.length<4) document.getElementById('ctk').focus();
+  TICKERS=(INIT||[]).slice(0,MAXT); renderChips(); load(); loadWlPairs();
+  if(TICKERS.length<MAXT) document.getElementById('ctk').focus();
 })();
 """

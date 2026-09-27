@@ -1661,7 +1661,7 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
     def _fetch_many(tks):
         from concurrent.futures import ThreadPoolExecutor
         from ..watchlist.pipeline import fetch_one
-        with ThreadPoolExecutor(max_workers=4) as ex:
+        with ThreadPoolExecutor(max_workers=6) as ex:
             got = list(ex.map(lambda t: fetch_one(t, period=period, cache_dir=cache_dir,
                                                   ttl=cache_ttl), tks))
         return dict(zip(tks, got))
@@ -1672,8 +1672,8 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
         from ..performance.benchmarks import load_benchmarks
         from ..performance.compare import compare
         tks = _compare_tickers()
-        if not 2 <= len(tks) <= 4:
-            return jsonify({"ok": False, "error": "pick 2 to 4 tickers"}), 400
+        if not 2 <= len(tks) <= 10:
+            return jsonify({"ok": False, "error": "pick 2 to 10 tickers"}), 400
         per = request.args.get("period", "5y")
         if per not in ("1y", "3y", "5y", "max"):
             per = "5y"
@@ -1775,7 +1775,7 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
         from ..data.funds import etf_holdings
         from ..leverage import registry
         from ..performance.compare import holdings_overlap
-        tks = _compare_tickers()[:4]
+        tks = _compare_tickers()[:10]
         if not tks:
             return jsonify({"ok": False, "error": "no tickers"}), 400
         data = _fetch_many(tks)

@@ -62,7 +62,7 @@ def test_compare_api_returns_aligned_series_and_profiles(client):
 
 def test_compare_api_validates_input(client):
     assert client.get("/api/compare?t=VOO").status_code == 400
-    assert client.get("/api/compare?t=A,B,C,D,E").status_code == 400
+    assert client.get("/api/compare?t=" + ",".join("ABCDEFGHIJK")).status_code == 400    # 11 is one too many
     r = client.get("/api/compare?t=VOO,ZZZZ")
     assert r.status_code == 404 and "ZZZZ" in r.get_json()["error"]
 
