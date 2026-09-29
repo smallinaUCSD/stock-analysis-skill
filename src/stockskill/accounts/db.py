@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS login_failures (
 PROFILE_FIELDS = ("first_name", "last_name", "dob", "gender", "investor_type", "experience", "referral")
 # notification settings, added after the first release (see _migrate)
 NOTIFY_COLUMNS = {"email_verified": "INTEGER NOT NULL DEFAULT 0", "notify_email": "INTEGER NOT NULL DEFAULT 0",
-                  "notify_push": "INTEGER NOT NULL DEFAULT 0", "notify_inapp": "INTEGER NOT NULL DEFAULT 1",
+                  "notify_push": "INTEGER NOT NULL DEFAULT 0", "notify_inapp": "INTEGER NOT NULL DEFAULT 0",
                   "summary_times": "TEXT", "summary_groups": "TEXT", "notify_set": "INTEGER NOT NULL DEFAULT 0",
                   "mfa_method": "TEXT", "mfa_secret": "TEXT", "mfa_recovery": "TEXT", "theme": "TEXT",
                   # text-message alerts: E.164 number, confirmed by a texted code, with the consent time
@@ -128,6 +128,12 @@ def _migrate(c) -> None:
         c.executemany("INSERT INTO account_events (ts, kind, method) VALUES (?, 'created', ?)",
                       [(r[0], "google" if r[1] else "email") for r in
                        c.execute("SELECT created_at, google_sub IS NOT NULL AND password_hash IS NULL FROM users")])
+    c.execute("CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT)")
+    if not c.execute("SELECT 1 FROM meta WHERE k='inapp_to_email'").fetchone():
+        # people found the in-app stack of text unhelpful: summaries and alerts go by email instead
+        c.execute("UPDATE users SET notify_email=1 WHERE notify_inapp=1 AND email_verified=1")
+        c.execute("UPDATE users SET notify_inapp=0")
+        c.execute("INSERT INTO meta (k, v) VALUES ('inapp_to_email', '2026-09-29')")
     for uid, email in c.execute("SELECT id, email FROM users WHERE email_canon IS NULL").fetchall():
         c.execute("UPDATE users SET email_canon=? WHERE id=?", (canonical_email(email), uid))
     try:                                   # one account per confirmed phone number

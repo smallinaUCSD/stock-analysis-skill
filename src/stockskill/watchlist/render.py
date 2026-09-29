@@ -302,13 +302,17 @@ table.wl th:nth-child(15),table.wl td:nth-child(15){text-align:left}
 .mc-fill{height:8px;border-radius:4px} .mc-fill.up{background:var(--up)} .mc-fill.down{background:var(--down)}
 /* ---- panels ------------------------------------------------------------------------ */
 /* three columns, each a stack: sector + your movers | markets | macro + coming up */
-.panels{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:12px;align-items:start}
+.panels{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:12px;align-items:stretch}
 .pcol{display:flex;flex-direction:column;gap:12px;min-width:0}
+.pcol>.panel:last-child{flex:1 1 auto}                /* columns end level: the last panel takes up the slack */
+.panels.measure{align-items:start} .panels.measure .pcol>.panel:last-child{flex:none}
+.pl-row{grid-template-columns:auto 1fr auto;cursor:default}
 .mk-cols{display:block}
 .mv-row{display:grid;grid-template-columns:62px 1fr auto;gap:8px;align-items:baseline;padding:4px 0;font-size:14px;cursor:pointer}
 .mv-row .tk{font-weight:500} .mv-row .nm{color:var(--muted);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .up-row{display:grid;grid-template-columns:62px 1fr;gap:8px;padding:5px 0;font-size:13.5px;border-top:1px solid var(--border)}
 .up-row:first-child{border-top:none} .up-row time{color:var(--muted);font-size:12.5px}
+.up-row.cut,.mv-row.cut{display:none}
 .up-row small{display:block;color:var(--muted);font-size:12px}
 .up-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:1px}
 @media (max-width:980px){.panels{grid-template-columns:1fr 1fr}}
@@ -1118,7 +1122,7 @@ def _movers_html(rows) -> str:
     moved = sorted((r for r in rows if r.changes.get("1d") is not None), key=lambda r: -r.changes["1d"])
     if len(moved) < 2:
         return ""
-    k = min(4, len(moved) // 2)
+    k = min(5, len(moved) // 2)
     pick = moved[:k] + moved[-k:]
 
     def row(r):
@@ -1127,8 +1131,43 @@ def _movers_html(rows) -> str:
                 f'<span class="nm">{html.escape((r.name or "")[:34])}</span>'
                 f'<span class="{"up" if c >= 0 else "down"}">{c * 100:+.2f}%</span></div>')
     return ('<section class="panel p-movers"><div class="panel-h">Your movers<span class="ph-tag">today</span></div>'
-            '<div class="panel-body"><div class="mkgroup">Up the most</div>' + "".join(row(r) for r in pick[:k])
-            + '<div class="mkgroup">Down the most</div>' + "".join(row(r) for r in reversed(pick[k:])) + '</div></section>')
+            '<div class="panel-body"><div class="mkgroup">Up</div>' + "".join(row(r) for r in pick[:k])
+            + '<div class="mkgroup">Down</div>' + "".join(row(r) for r in reversed(pick[k:])) + '</div></section>')
+
+
+def _pulse_html(rows) -> str:
+    """Your watchlist at a glance today: breadth, average move, best and worst
+    sectors, 52-week highs and lows, earnings this week."""
+    from .row import earnings_days
+    ch = [r.changes.get("1d") for r in rows if r.changes.get("1d") is not None]
+    if len(ch) < 2:
+        return ""
+    up, dn = sum(c > 0 for c in ch), sum(c < 0 for c in ch)
+    avg = sum(ch) / len(ch)
+    by_sec: dict = {}
+    for r in rows:
+        if r.sector and r.changes.get("1d") is not None:
+            by_sec.setdefault(r.sector, []).append(r.changes["1d"])
+    secs = sorted(((sum(v) / len(v), k) for k, v in by_sec.items() if len(v) >= 2), reverse=True)
+    highs = [r.ticker for r in rows if r.price and r.week52_high and r.price >= 0.97 * r.week52_high]
+    lows = [r.ticker for r in rows if r.price and r.week52_low and r.price <= 1.03 * r.week52_low]
+    soon = sorted(((earnings_days(r.next_earnings), r.ticker) for r in rows
+                   if earnings_days(r.next_earnings) is not None and 0 <= earnings_days(r.next_earnings) <= 7))
+
+    def line(label, val):
+        return f'<div class="mv-row pl-row"><span class="nm">{label}</span><span></span><span>{val}</span></div>'
+    body = line("Up / down", f'<span class="up">{up}</span> / <span class="down">{dn}</span>')
+    body += line("Average move", f'<span class="{"up" if avg >= 0 else "down"}">{avg * 100:+.2f}%</span>')
+    if secs:
+        body += line("Best sector", f'{html.escape(secs[0][1])} <span class="{"up" if secs[0][0] >= 0 else "down"}">{secs[0][0] * 100:+.1f}%</span>')
+        if len(secs) > 1:
+            body += line("Worst sector", f'{html.escape(secs[-1][1])} <span class="{"up" if secs[-1][0] >= 0 else "down"}">{secs[-1][0] * 100:+.1f}%</span>')
+    body += line("Near 52-week high", html.escape(", ".join(highs[:4]) + (f" +{len(highs) - 4}" if len(highs) > 4 else "")) or "none")
+    if lows:
+        body += line("Near 52-week low", html.escape(", ".join(lows[:4]) + (f" +{len(lows) - 4}" if len(lows) > 4 else "")))
+    body += line("Earnings this week", html.escape(", ".join(t for _, t in soon[:4]) + (f" +{len(soon) - 4}" if len(soon) > 4 else "")) or "none")
+    return ('<section class="panel p-pulse"><div class="panel-h">Your watchlist today</div>'
+            '<div class="panel-body">' + body + '</div></section>')
 
 
 # filled in the browser from /api/calendar (your earnings, economic data, the Fed)
@@ -1389,7 +1428,7 @@ function refreshData(){
     const swap=(sel)=>{ const n=doc.querySelector(sel), o=document.querySelector(sel);
       if(n&&o && o.innerHTML!==n.innerHTML) o.innerHTML=n.innerHTML; };
     swap('#wl tbody'); swap('#view-card .cards'); swap('#view-heatmap');
-    swap('.panels'); swap('.banner-vp'); fillUpcoming();
+    swap('.panels'); swap('.banner-vp'); fillUpcoming(); fitPanels();
     const nc=doc.querySelector('.chips'), oc=document.querySelector('.chips');
     if(nc&&oc&&oc.innerHTML!==nc.innerHTML){ oc.innerHTML=nc.innerHTML;   // new sections -> new chips
       if(typeof active!=='undefined') oc.querySelectorAll('.chip-f[data-group]').forEach(b=>{
@@ -1414,17 +1453,44 @@ function fillUpcoming(){
   if(_upHTML!==null){ el.innerHTML=_upHTML; return; }
   fetch('/api/calendar',{cache:'no-store'}).then(r=>r.json()).then(d=>{
     const t=new Date(), today=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
-    const ev=(d.events||[]).filter(e=>e.date>=today && e.kind!=='ipo' && (e.kind!=='options'||e.importance>1)).slice(0,8);
+    const ev=(d.events||[]).filter(e=>e.date>=today && e.kind!=='ipo' && (e.kind!=='options'||e.importance>1)).slice(0,16);
     const day=s=>new Date(s+'T12:00:00').toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});
     _upHTML=ev.length?ev.map(e=>'<div class="up-row"><time>'+day(e.date).replace(/,.*/,'')+'<br>'+day(e.date).split(', ').slice(1).join(', ')+'</time>'+
       '<span><span class="up-dot" style="background:'+(_UPC[e.kind]||'var(--muted)')+'"></span>'+_esc(e.title)+(e.detail?'<small>'+_esc(e.detail)+'</small>':'')+'</span></div>').join('')
       :'<div class="muted" style="font-size:13px">Nothing in the next few weeks.</div>';
-    el.innerHTML=_upHTML;
+    el.innerHTML=_upHTML; fitPanels();
   }).catch(()=>{ el.innerHTML='<div class="muted" style="font-size:13px">Calendar unavailable.</div>'; });
 }
+// the three columns end level: longer lists (Coming up, Your movers) drop rows until theirs is no taller than the others
+function fitPanels(){
+  const g=document.querySelector('.panels'), cols=[...document.querySelectorAll('.panels>.pcol')];
+  if(!g || cols.length<2) return;
+  document.querySelectorAll('.up-row.cut,.mv-row.cut').forEach(r=>r.classList.remove('cut'));
+  if(innerWidth<980) return;
+  g.classList.add('measure');                      // natural heights, without the stretching
+  const tallest=Math.max(...cols.map(c=>c.querySelector('.p-upcoming,.p-movers')?0:c.offsetHeight));
+  if(tallest) cols.forEach(c=>{ const rows=[...c.querySelectorAll('.p-upcoming .up-row,.p-movers .mv-row:not(.pl-row)')];
+    for(let i=rows.length-1;i>=3 && c.offsetHeight>tallest+4;i--) rows[i].classList.add('cut'); });
+  g.classList.remove('measure');
+}
+window.addEventListener("resize",()=>{ clearTimeout(window._fitT); window._fitT=setTimeout(fitPanels,150); });
+window.addEventListener("load",fitPanels);
 document.addEventListener('click',e=>{ const m=e.target.closest('[data-go-card]'); if(!m) return;
   const card=document.querySelector('.card-item[data-ticker="'+m.dataset.goCard+'"]'); if(card) openCard(card); });
 document.addEventListener('DOMContentLoaded',fillUpcoming);
+// pre-market / after-hours: keep each card's extended-hours line current (every 2 minutes)
+function _extLine(q){ const up=(q.ext_change||0)>=0;
+  return ((q.market_state||'').toUpperCase().indexOf('PRE')===0?'Pre-market':'After hours')+' <b>$'+q.ext_price.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+'</b> '+
+    (q.ext_change==null?'':'<span class="'+(up?'up':'down')+'">'+(up?'+':'')+(q.ext_change*100).toFixed(2)+'%</span>'); }
+function refreshExt(){ if(document.hidden) return;
+  const tks=[...new Set([...document.querySelectorAll('.card-item[data-ticker]')].map(c=>c.dataset.ticker))].slice(0,80);
+  if(!tks.length) return;
+  fetch('/api/ext?t='+encodeURIComponent(tks.join(',')),{cache:'no-store'}).then(r=>r.json()).then(d=>{
+    Object.entries(d.ext||{}).forEach(([t,q])=>{ if(!q||!q.ext_price) return;
+      document.querySelectorAll('.card-item[data-ticker="'+t+'"] .exthrs, #modal-body .exthrs[data-t="'+t+'"]').forEach(el=>{ el.innerHTML=_extLine(q); }); });
+  }).catch(()=>{}); }
+document.addEventListener('DOMContentLoaded',()=>{ refreshExt(); setInterval(refreshExt,120000); });
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) refreshExt(); });
 // ---- recent news in the expanded card (served) ----
 function _esc(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function _newsSec(inner){ return '<div class="det-sec"><div class="det-h">Recent news</div>'+inner+'</div>'; }
@@ -1541,7 +1607,7 @@ TOOLS = [("breakouts", "Breakouts", "openTab('/breakouts')"), ("screener", "Scre
          ("lookthrough", "Look-through (fund holdings)", "openTool('lookthrough')"),
          ("montecarlo", "Monte Carlo", "openTool('montecarlo')"), ("interpret", "How to read this", "openTab('/interpret')")]
 PRIVATE_TOOLS = [("holdings", "Holdings", "openTab('/holdings')"), ("alerts", "Alerts", "openTab('/alerts')")]
-TOOLS_SHOWN = 5
+TOOLS_SHOWN = 4                                    # plus More tools: five buttons in all
 
 
 def _tools_html(public: bool) -> str:
@@ -1556,7 +1622,7 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
                      alerts=None, sectors=None, markets=None, refresh_seconds=1800,
                      served=False, updated_ts=None, macro=None, public=False, bmc_url=None):
     banner, _sig = _banner(alerts or [])
-    sector_html = _sector_html(sectors) + (_movers_html(rows) if served else "")
+    sector_html = _sector_html(sectors) + (_movers_html(rows) + _pulse_html(rows) if served else "")
     markets_html = _markets_html(markets)
     macro_html = _macro_html(macro) + (_UPCOMING_PANEL if served else "")
     # Public mode hides only the Holdings button (personal data). Add-ticker and

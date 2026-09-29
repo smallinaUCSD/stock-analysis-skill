@@ -853,14 +853,14 @@ _MINE_INJECT = r"""<style>
 <script>(function(){
 var C=window.ME_CFG||{};
 window.MYWL=new Set(C.tickers||[]); window.MYWL_ON=true;
-// the toolbar: your most-used tools first (then the default order); five as buttons, the rest under More tools
+// the toolbar: your most-used tools first (then the default order); four as buttons plus More tools
 (function(){ var bar=document.querySelector('.toolsbar'), menu=bar&&bar.querySelector('.tool-menu'), more=bar&&bar.querySelector('.tool-more');
   if(!bar||!menu||!(C.tools||[]).length) return;
   var all=[].slice.call(bar.querySelectorAll('[data-tool]')), orig=all.slice(), rank={};
   (C.tools||[]).forEach(function(k,i){ rank[k]=i; });
   all.sort(function(a,b){ var ra=rank[a.dataset.tool], rb=rank[b.dataset.tool];
     if(ra!=null||rb!=null) return (ra==null?999:ra)-(rb==null?999:rb); return orig.indexOf(a)-orig.indexOf(b); });
-  all.forEach(function(el,i){ if(i<5){ el.className='tool-b'; bar.insertBefore(el,more); } else { el.className=''; menu.appendChild(el); } }); })();
+  all.forEach(function(el,i){ if(i<4){ el.className='tool-b'; bar.insertBefore(el,more); } else { el.className=''; menu.appendChild(el); } }); })();
 document.body.classList.add('mine');
 if(C.theme){ try{ localStorage.setItem('wl_theme',C.theme); }catch(_){} document.documentElement.setAttribute('data-theme',C.theme); }
 try{ if(!localStorage.getItem('wl_density')&&typeof setDensity==='function') setDensity(C.density); }catch(_){}
@@ -912,7 +912,9 @@ _TODAY_INJECT = r"""<style>
 .td-head h3{font-family:var(--font-display);font-weight:500;font-size:24px;margin:0}
 .td-head button{border:none;background:none;font-size:22px;color:var(--muted);cursor:pointer}
 .td-list{overflow-y:auto;padding:8px 18px 24px;flex:1}
-.td-item{border-bottom:1px solid var(--border);padding:12px 0}
+.td-item{border-bottom:1px solid var(--border);padding:10px 0}
+.td-item summary{list-style:none;cursor:pointer} .td-item summary::-webkit-details-marker{display:none}
+.td-item[open] summary{margin-bottom:6px}
 .td-item b{font-weight:500;font-size:15px} .td-item time{display:block;color:var(--muted);font-size:12px;margin:2px 0 6px}
 .td-item p{margin:0 0 6px;font-size:14px;line-height:1.5}
 .td-item.new b:after{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent);margin-left:6px;vertical-align:2px}
@@ -933,8 +935,8 @@ function lines(b){ return (b||'').split('\n').filter(Boolean).map(function(l){ r
 var tr=document.querySelector('.top-r');
 if(tr) tr.insertAdjacentHTML('afterbegin','<button class="me-today" id="me-today" onclick="tdOpen()">Today<span class="dot"></span></button>');
 window.tdOpen=function(){ var l=document.getElementById('td-list'); if(typeof track==='function') track('today_open');
-  l.innerHTML=ITEMS.length?ITEMS.map(function(i){ return '<div class="td-item'+(i.read_at?'':' new')+'"><b>'+e(i.title)+'</b><time>'+when(i.created_at)+'</time>'+lines(i.body)+
-    (i.url&&i.url!=='/'?'<a href="'+e(i.url)+'">Open</a>':'')+'</div>'; }).join(''):
+  l.innerHTML=ITEMS.length?ITEMS.map(function(i){ return '<details class="td-item'+(i.read_at?'':' new')+'"><summary><b>'+e(i.title)+'</b><time>'+when(i.created_at)+'</time></summary>'+
+    lines(i.body)+(i.url&&i.url!=='/'?'<a href="'+e(i.url)+'">Open</a>':'')+'</details>'; }).join(''):
     '<div class="td-empty">Nothing yet. Your daily summaries and politician alerts will appear here. Set them up in <a href="/account">account settings</a>.</div>';
   document.getElementById('td-drawer').classList.add('show');
   if(ITEMS.some(function(i){return !i.read_at;})) fetch('/api/me/notifications/read',{method:'POST'}).then(function(){
@@ -961,10 +963,6 @@ document.addEventListener('visibilitychange', meSync); window.addEventListener('
 setInterval(meSync, 60000);
 fetch('/api/me/notifications').then(function(r){return r.json();}).then(function(d){
   ITEMS=d.items||[]; if(d.unread) document.getElementById('me-today').classList.add('unread');
-  var s=ITEMS.find(function(i){ return i.kind==='summary' && !i.read_at && (Date.now()/1000-i.created_at)<18*3600; });
-  var host=document.querySelector('.panels');
-  if(s && host){ host.insertAdjacentHTML('beforebegin','<div class="td-card" id="td-card"><h4>'+e(s.title)+'</h4>'+lines(s.body)+
-    '<div class="td-act"><a onclick="tdOpen()">See all notifications</a><a onclick="document.getElementById(\'td-card\').remove();fetch(\'/api/me/notifications/read\',{method:\'POST\'})">Dismiss</a></div></div>'); }
 }).catch(function(){});
 })();</script>"""
 
@@ -1151,7 +1149,7 @@ function dobVal(){ var m=document.getElementById('dob-m').value, d=(document.get
 var NF=null, NF0={}, PEOPLE=[], NF_ME=null;
 var TIMES=[['pre','Before the open','8:30am ET'],['post','After the close','4:30pm ET'],['both','Both',''],['none','No daily summary','']];
 function nfInit(me){ var n=me.user.notify; NF_ME=me;
-  NF={times:n.set?n.times:'pre', groups:{}, email:n.set?n.email:false, push:n.set?n.push:false, inapp:n.set?n.inapp:true, follows:{},
+  NF={times:n.set?n.times:'pre', groups:{}, email:n.set?n.email:!!me.email_ready, push:n.set?n.push:false, inapp:n.set?n.inapp:false, follows:{},
       sms:n.set?n.sms:false, events:n.set?n.events:true};
   (n.groups.length?n.groups:me.user.groups).forEach(function(k){ NF.groups[k]=true; });
   (me.follows||[]).forEach(function(f){ NF.follows[f.pid]=f.name||f.pid; }); NF0=Object.assign({},NF.follows); }

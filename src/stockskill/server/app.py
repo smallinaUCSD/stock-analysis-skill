@@ -636,6 +636,29 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
         from ..data.search import search_symbols
         return jsonify({"results": search_symbols(request.args.get("q", ""))})
 
+    _EXT: dict = {}
+
+    @app.get("/api/ext")
+    def ext_api():
+        """Pre-market / after-hours prices for the board (Yahoo), so cards stay
+        current between rebuilds. Empty while the regular session is open."""
+        import time as _t
+        from ..marketclock import market_status
+        if market_status().label == "open":
+            return jsonify({"ok": True, "ext": {}})
+        tks = [t for t in re.split(r"[\s,;]+", (request.args.get("t") or "").upper()) if t and _TICKER_RE.match(t)][:80]
+        now = _t.time()
+        need = [t for t in tks if now - _EXT.get(t, (0, None))[0] > 90]
+        if need:
+            try:
+                from ..data import yahoo_ext
+                got = yahoo_ext.ext_quotes(need)
+            except Exception:  # noqa: BLE001
+                got = {}
+            for t in need:
+                _EXT[t] = (now, got.get(t))
+        return jsonify({"ok": True, "ext": {t: _EXT[t][1] for t in tks if _EXT.get(t, (0, None))[1]}})
+
     @app.get("/api/find")
     def find():
         """Search as you type: stocks, politicians and funds, forgiving typos

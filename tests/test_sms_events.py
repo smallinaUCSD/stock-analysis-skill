@@ -116,7 +116,7 @@ def test_phone_code_and_text_delivery(app, monkeypatch):
     assert out["sms"] is True and texts[-1][1].startswith("SM Investments: NVDA is up 6.1% today")
     assert "https://site.test/analysis/NVDA" in texts[-1][1]
     with db.conn() as cx:
-        assert cx.execute("SELECT channels FROM notifications WHERE dedupe='ev:k'").fetchone()[0] == "inapp,sms"
+        assert cx.execute("SELECT channels FROM notifications WHERE dedupe='ev:k'").fetchone()[0] == "sms"
 
 
 def test_market_events_run_once_per_level(app, monkeypatch):

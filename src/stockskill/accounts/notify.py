@@ -217,8 +217,11 @@ def deliver(u: dict, kind: str, title: str, lines: list[str], url: str, dedupe: 
     if u.get("notify_email") and u.get("email_verified"):
         unsub = f"{public_url()}/notifications/unsubscribe?t={token(u['id'], u['email'], 'unsub')}"
         full = url if url.startswith("http") else public_url() + url
-        out["email"] = send_email(u["email"], title, "\n\n".join(plain) + f"\n\n{full}\n\nUnsubscribe: {unsub}",
-                                  _email_html(title, lines, full, unsub), unsubscribe=unsub)
+        from .brief import polish
+        body = polish(kind, title, lines) or lines        # a written brief when the LLM is set up
+        text = [html.unescape(_strip_tags(ln)) for ln in body]
+        out["email"] = send_email(u["email"], title, "\n\n".join(text) + f"\n\n{full}\n\nUnsubscribe: {unsub}",
+                                  _email_html(title, body, full, unsub), unsubscribe=unsub)
     if u.get("notify_push"):
         out["push"] = send_push(u["id"], title, push_body or (plain[0] if plain else ""), url)
     if u.get("notify_sms") and u.get("phone_verified") and u.get("phone"):
