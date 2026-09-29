@@ -119,8 +119,8 @@ def test_unusual_sign_in_alerts_and_not_me_signs_out_everywhere(app):
     _setup(a)
     b = _client(app, SAFARI_IPHONE, "5.5.5.5")
     assert _login(b).get_json()["ok"]
-    assert _wait(lambda: any(m[1] == "Unusual sign-in to your account" for m in app.mails))
-    mail = next(m for m in app.mails if m[1] == "Unusual sign-in to your account")
+    assert _wait(lambda: any(m[1] == "Was this you? Unusual sign-in to your account" for m in app.mails))
+    mail = next(m for m in app.mails if m[1] == "Was this you? Unusual sign-in to your account")
     assert "Moscow, Russia" in mail[2] and "Safari on iOS" in mail[2] and "5.5.5.5" in mail[2]
     assert "impossible travel" not in mail[2] and "too far from your last sign-in" in mail[2]
     s = a.get("/api/me/sessions").get_json()["sessions"]
@@ -184,3 +184,22 @@ def test_sync_reports_changes_from_other_devices(app):
     b.post("/api/me/theme", json={"theme": "dark"})
     d = a.get("/api/me/sync").get_json()
     assert "NVDA" in d["tickers"] and d["theme"] == "dark" and isinstance(d["unread"], int)
+
+
+def test_was_it_you_yes_remembers_the_device(app):
+    from stockskill.accounts import db
+    a = _client(app)
+    _setup(a)
+    b = _client(app, SAFARI_IPHONE, "8.8.4.4")                       # a new phone, same country
+    assert _login(b).get_json()["ok"]
+    assert _wait(lambda: any(m[1] == "Was this you? New sign-in to your account" for m in app.mails))
+    mail = next(m for m in app.mails if m[1].startswith("Was this you?"))
+    assert "Yes, it was me" in mail[2] and "No, secure my account" in mail[2]
+    tok = next(x for x in mail[2].split() if "/security/was-me?t=" in x).split("t=", 1)[1].strip()
+    anon = app.test_client()
+    assert anon.get("/security/was-me?t=bad").status_code == 400
+    assert anon.get("/security/was-me?t=" + tok).status_code == 200
+    assert anon.post("/security/was-me", json={"t": tok}).get_json()["ok"]
+    s = a.get("/api/me/sessions").get_json()["sessions"]
+    assert all(not x["unusual"] for x in s)                          # no longer flagged
+    assert b.get("/api/me").status_code == 200                       # and still signed in

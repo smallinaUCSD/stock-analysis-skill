@@ -1011,6 +1011,24 @@ document.getElementById('cf').onsubmit=function(ev){ ev.preventDefault();
     return _shell(f"Confirm your email · {BRAND}", body, _AUTH_CSS + ".ve-code{font-size:24px;letter-spacing:6px;text-align:center}", js)
 
 
+def was_me_html(tok: str | None) -> str:
+    """From a sign-in alert: 'Yes, it was me' (confirm with a button)."""
+    if not tok:
+        return message_html("This link has expired", "Open Account settings to see where you're signed in.")
+    body = f"""<div class="lg-wrap"><div class="wz-top">{_brand_link()}<a class="small" href="/">Home</a></div>
+<div class="wz-card" id="wm"><h1>Thanks for checking</h1>
+<p class="lead" style="color:var(--muted)">Confirm it was you and we'll remember this device, so it won't set off
+another alert.</p><div class="err" id="err"></div>
+<button class="btn primary" id="go" type="button">Yes, it was me</button></div></div>"""
+    js = ("document.getElementById('go').onclick=function(){ var b=this; b.disabled=true;"
+          "fetch('/security/was-me',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({t:"
+          + script_json(tok) + "})}).then(function(r){return r.json();}).then(function(d){"
+          "if(!d.ok){ b.disabled=false; document.getElementById('err').textContent=d.error; return; }"
+          "document.getElementById('wm').innerHTML='<h1>All set</h1><p class=\"lead\" style=\"color:var(--muted)\">We\\u2019ll remember this device.</p>"
+          "<a class=\"btn primary\" href=\"/\">Go to your watchlist</a>'; }); };")
+    return _shell(f"Was this you? · {BRAND}", body, _WZ_CSS + _LG_CSS + _AUTH_CSS, js)
+
+
 def not_me_html(tok: str | None) -> str:
     """From an unusual-sign-in alert: confirm, then sign out every device."""
     if not tok:

@@ -51,7 +51,7 @@ OCCUPATIONS = {"student": "Student", "tech": "Tech or software", "finance": "Fin
 REFERRALS = {"friend": "A friend or colleague", "search": "Search engine", "social": "Social media",
              "reddit": "Reddit or a forum", "news": "News or a blog", "other": "Other"}
 _PUBLIC_PATHS = {"/", "/login", "/signup", "/terms", "/privacy", "/healthz", "/favicon.ico", "/logout",
-                 "/security/not-me",
+                 "/security/not-me", "/security/was-me",
                  "/sw.js", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/apple-touch-icon.png",
                  "/notifications/verify", "/notifications/unsubscribe", "/api/board/meta",
                  "/forgot", "/reset", "/account/email/confirm", "/api/t"}

@@ -336,14 +336,18 @@ def unusual_sign_in(u: dict, new: dict, reasons: list[str]) -> None:
     device = f"{new.get('browser') or 'a browser'} on {new.get('os') or 'an unknown system'}"
     tok = URLSafeTimedSerializer(notify._secret(), salt="notme").dumps({"u": u["id"], "s": new["id"]})
     notme = f"{notify.public_url()}/security/not-me?t={tok}"
-    title = "Unusual sign-in to your account" if set(reasons) & {"failed attempts", "impossible travel", "new country"} \
-        else "New sign-in to your account"
+    wasme = f"{notify.public_url()}/security/was-me?t=" + URLSafeTimedSerializer(notify._secret(), salt="wasme").dumps(
+        {"u": u["id"], "s": new["id"]})
+    serious = bool(set(reasons) & {"failed attempts", "impossible travel", "new country"})
+    title = "Was this you? " + ("Unusual sign-in to your account" if serious else "New sign-in to your account")
+    btn = 'display:inline-block;padding:9px 16px;border-radius:8px;text-decoration:none;margin:4px 8px 4px 0'
     lines = [f"Your {html.escape(BRAND)} account was signed in to on {html.escape(when)} from "
              f"<b>{html.escape(place)}</b> (address {html.escape(new.get('ip') or 'unknown')}) using {html.escape(device)}.",
              html.escape(risk.explain(reasons)),
-             "<b>If this was you,</b> there's nothing to do.",
-             f'<b>If it wasn\'t you,</b> <a href="{html.escape(notme)}">sign out everywhere and secure your account</a>. '
-             "We'll sign out every device and send you a link to choose a new password."]
+             "<b>Was this you?</b>",
+             f'<a href="{html.escape(wasme)}" style="{btn};background:#e8e3dc;color:#141413">Yes, it was me</a>'
+             f'<a href="{html.escape(notme)}" style="{btn};background:#b53333;color:#fff">No, secure my account</a>',
+             "If it wasn't you, we'll sign out every device and send you a link to choose a new password."]
     threading.Thread(target=notify.send_simple, args=(u["email"], title, lines, notify.public_url() + "/account",
                                                       "See where you're signed in"), daemon=True).start()
     short = f"{place}, {device}"
@@ -371,6 +375,35 @@ def _notme_payload(tok: str) -> dict | None:
         return URLSafeTimedSerializer(notify._secret(), salt="notme").loads(tok or "", max_age=14 * 86400)
     except BadSignature:
         return None
+
+
+@bp.get("/security/was-me")
+def was_me_page():
+    """'Yes, it was me' from a sign-in alert: a page with a button (a POST, so a
+    mail scanner opening the link doesn't mark anything)."""
+    from .pages import was_me_html
+    d = _wasme_payload(request.args.get("t") or "")
+    return was_me_html(request.args.get("t") if d else None), (200 if d else 400)
+
+
+@bp.post("/security/was-me")
+def was_me():
+    d = _wasme_payload(_body().get("t") or "")
+    if not d:
+        return jsonify({"ok": False, "error": "This link has expired."}), 400
+    db.set_session_risk(d["s"], None)          # a known device from now on: no more alerts for it
+    return jsonify({"ok": True})
+
+
+def _wasme_payload(tok: str) -> dict | None:
+    from itsdangerous import BadSignature, URLSafeTimedSerializer
+    from . import notify
+    try:
+        d = URLSafeTimedSerializer(notify._secret(), salt="wasme").loads(tok or "", max_age=14 * 86400)
+    except BadSignature:
+        return None
+    row = db.get_session(d.get("s") or "") if isinstance(d, dict) else None
+    return d if row and row["user_id"] == d.get("u") else None
 
 
 @bp.get("/security/not-me")
