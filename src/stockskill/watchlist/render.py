@@ -1533,7 +1533,8 @@ function _mcCone(p){ const keys=['p95','p75','p50','p25','p5']; const vals=keys.
 # forward (ME_CFG.tools, from their page views).
 TOOLS = [("breakouts", "Breakouts", "openTab('/breakouts')"), ("screener", "Screener", "openTab('/screener')"),
          ("compare", "Compare", "openTab('/compare')"), ("indicators", "Indicators", "openTab('/indicators')"),
-         ("trades", "Politicians &amp; Funds", "openTab('/trades')"), ("calendar", "Calendar", "openTab('/calendar')"),
+         ("trades", "Politicians &amp; Funds", "openTab('/trades')"), ("lab", "Portfolio lab", "openTab('/lab')"),
+         ("calendar", "Calendar", "openTab('/calendar')"),
          ("markets", "Markets", "openTab('/markets')"), ("earnings", "Earnings", "openTab('/earnings')"),
          ("financials", "Financials", "openTab('/financials')"), ("economy", "Economy and rates", "openTab('/economy')"),
          ("evaluate", "Evaluate a trade", "openTool('evaluate')"),

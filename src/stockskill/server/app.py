@@ -1804,6 +1804,155 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
                                                   ttl=cache_ttl), tks))
         return dict(zip(tks, got))
 
+    # ---- Portfolio lab: Markowitz / Black-Litterman, Brownian-motion paths, ideas ----------
+    @app.get("/lab")
+    def lab_page():
+        from .lab_page import lab_html
+        return lab_html()
+
+    def _lab_watch() -> list[str]:
+        """The tickers to work with: ?t=..., else the person's watchlist, else the board."""
+        raw = [t for t in re.split(r"[\s,;]+", (request.args.get("t") or "").upper()) if t and _TICKER_RE.match(t)]
+        if raw:
+            return list(dict.fromkeys(raw))[:40]
+        if auth:
+            from ..accounts.auth import current_user
+            u = current_user()
+            if u:
+                from ..accounts import db as ADB
+                return ADB.watchlist(u["id"])[:40]
+        return sorted(board._current_tickers())[:40]
+
+    def _lab_data(tks):
+        data = _fetch_many(tks)
+        series, snaps = {}, {}
+        for t, td in data.items():
+            o = td.ohlcv or {}
+            if o.get("close") and o.get("dates"):
+                series[t] = ([str(d) for d in o["dates"]], o["close"])
+            sn = td.snapshot
+            if sn:
+                snaps[t] = {"price": (o.get("close") or [None])[-1] or sn.price, "target": sn.target_mean,
+                            "analysts": sn.analyst_count, "mcap": sn.market_cap, "name": sn.name, "sector": sn.sector}
+        return series, snaps
+
+    @app.get("/api/lab/optimize")
+    def lab_optimize():
+        import numpy as np
+        from ..lab import optimize as O
+        tks = _lab_watch()
+        if len(tks) < 2:
+            return jsonify({"ok": False, "error": "Add at least two stocks to optimize."}), 400
+        cap = min(max(request.args.get("cap", type=float) or 0.25, 0.05), 1.0)
+        series, snaps = _lab_data(tks)
+        names, R = O.align(series)
+        if len(names) < 2:
+            return jsonify({"ok": False, "error": "Not enough shared price history for these stocks."}), 400
+        mu_hist, S = O.estimate(R)
+        rf = 0.04
+        eq = np.full(len(names), 1.0 / len(names))
+        caps = np.array([(snaps.get(t) or {}).get("mcap") or 0.0 for t in names], dtype=float)
+        caps[caps <= 0] = np.median(caps[caps > 0]) if (caps > 0).any() else 1.0
+        w_mkt = caps / caps.sum()
+        views = O.analyst_views(names, snaps)
+        pi, post = O.black_litterman(S, w_mkt, views)
+        mu = O.blend(mu_hist, pi)                        # what Markowitz optimizes: past returns shrunk to the market's
+        fr = O.frontier(mu, S, cap, rf)
+        w_bl = O.solve(post, S, 2.5, cap)
+        pf = {"max_sharpe": fr["max_sharpe"]["w"], "min_var": fr["min_var"]["w"], "equal": eq, "market": w_mkt,
+              "black_litterman": w_bl}
+        vol = np.sqrt(np.diag(S))
+        rows = [{"ticker": t, "name": (snaps.get(t) or {}).get("name"), "ret": float(mu_hist[i]), "exp": float(mu[i]),
+                 "vol": float(vol[i]),
+                 "pi": float(pi[i]), "view": views[i][0] if i in views else None,
+                 "view_conf": views[i][1] if i in views else None, "posterior": float(post[i]),
+                 **{f"w_{k}": round(float(w[i]), 4) for k, w in pf.items()}} for i, t in enumerate(names)]
+        return jsonify({"ok": True, "tickers": names, "skipped": [t for t in tks if t not in names],
+                        "years": round(R.shape[0] / 252, 1), "cap": cap, "rf": rf, "rows": rows,
+                        "frontier": fr["curve"],
+                        "portfolios": {k: {**O.stats(w, mu, S, rf), "w": [round(float(x), 4) for x in w]} for k, w in pf.items()},
+                        "bl_views": len(views)})
+
+    @app.get("/api/lab/simulate")
+    def lab_simulate():
+        import numpy as np
+        from ..lab import optimize as O, paths as PT
+        days = min(max(request.args.get("days", type=int) or 252, 21), 756)
+        tks = _lab_watch()
+        w_raw = request.args.get("w")
+        try:
+            if w_raw:                                        # a portfolio: correlated Brownian motions
+                w = np.array([float(x) for x in w_raw.split(",")], dtype=float)
+                series, _ = _lab_data(tks)
+                names, R = O.align(series)
+                if len(names) != len(w) or len(names) < 2:
+                    return jsonify({"ok": False, "error": "Those weights don't match the stocks."}), 400
+                w = np.clip(w, 0, None)
+                return jsonify({"ok": True, "kind": "portfolio", "tickers": names,
+                                **PT.portfolio(R, w / w.sum(), days=days)})
+            t = tks[0] if tks else None
+            if not t:
+                return jsonify({"ok": False, "error": "Pick a stock."}), 400
+            series, _ = _lab_data([t])
+            if t not in series:
+                return jsonify({"ok": False, "error": f"No price history for {t}."}), 404
+            return jsonify({"ok": True, "kind": "stock", "ticker": t, **PT.one(series[t][1], days=days)})
+        except ValueError as e:
+            return jsonify({"ok": False, "error": str(e)}), 400
+
+    @app.get("/api/lab/ideas")
+    def lab_ideas():
+        import json as _json
+        import numpy as np
+        from ..data import funds13f as F, market_screen as MS
+        from ..data.congress import recent_trades
+        from ..lab import recommend as RC
+        from ..watchlist.pipeline import _load_cached
+        watch = _lab_watch()
+        style = "diversify" if request.args.get("style") == "diversify" else "similar"
+        u = MS.universe(cache_dir, lambda: {})
+        if u.get("warming") or not u.get("rows"):
+            return jsonify({"ok": True, "warming": True})
+        reports = []
+        for _n, _m, cik in F.FUNDS:
+            try:
+                reports.append(_json.load(open(os.path.join(F._dir(cache_dir), f"report_{cik}.json"))))
+            except (OSError, ValueError):
+                pass
+        holders: dict = {}
+        for rep in reports:
+            for h in {h.get("ticker") for h in rep.get("holdings") or [] if h.get("ticker")}:
+                holders[h] = holders.get(h, 0) + 1
+        from datetime import date as _d, timedelta as _td
+        since = (_d.today() - _td(days=365)).isoformat()
+        trades = [t for t in recent_trades(cache_dir).get("trades") or [] if (t.get("filed") or "") >= since]
+        buyers: dict = {}
+        for t in trades:
+            if (t.get("type") or "").startswith("Buy") and t.get("ticker"):
+                buyers.setdefault(t["ticker"], set()).add(t.get("member"))
+        pbuys = {k: len(v) for k, v in buyers.items()}
+
+        def rets(tk):                                        # daily returns by date from the local cache only
+            td = _load_cached(cache_dir, tk) if cache_dir else None
+            o = (td.ohlcv or {}) if td else {}
+            d, c = o.get("dates") or [], o.get("close") or []
+            return {str(d[i]): c[i] / c[i - 1] - 1 for i in range(max(1, len(c) - 253), len(c)) if c[i - 1]}
+        mine = {t: rets(t) for t in watch}
+
+        def corr(tk):
+            r = rets(tk)
+            cs = []
+            for m in mine.values():
+                ks = sorted(set(r) & set(m))
+                if len(ks) >= 60:
+                    cs.append(float(np.corrcoef([r[k] for k in ks], [m[k] for k in ks])[0, 1]))
+            return sum(cs) / len(cs) if cs else None
+        return jsonify({"ok": True, "style": style, "watch": watch,
+                        "stocks": RC.stocks(watch, u["rows"], style=style, fund_holders=holders,
+                                            politician_buys=pbuys, corr=corr),
+                        "funds": RC.funds_to_follow(watch, reports),
+                        "politicians": RC.politicians_to_follow(watch, trades, _member_id)})
+
     @app.get("/api/compare")
     def compare_api():
         from ..leverage import registry

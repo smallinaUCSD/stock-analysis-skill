@@ -246,7 +246,7 @@ def report(days: int = 30, users_db: str | None = None) -> dict:
 
 
 TOOL_ROUTES = {"/breakouts": "breakouts", "/screener": "screener", "/compare": "compare", "/indicators": "indicators",
-               "/trades": "trades", "/politician/<pid>": "trades", "/fund/<int:cik>": "trades", "/calendar": "calendar",
+               "/trades": "trades", "/politician/<pid>": "trades", "/fund/<int:cik>": "trades", "/calendar": "calendar", "/lab": "lab",
                "/markets": "markets", "/earnings": "earnings", "/financials": "financials", "/economy": "economy",
                "/interpret": "interpret", "/holdings": "holdings", "/alerts": "alerts"}
 

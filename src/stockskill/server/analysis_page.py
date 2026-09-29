@@ -418,7 +418,9 @@ _DIV_BOX = ('<div class="asec" data-dv="1"><div class="a-h">Dividends</div>'
             '<div class="dv-body muted">Loading…</div></div>')
 
 
-_FORECAST_BOX = ('<div class="asec" data-fc="1"><div class="a-h">Price range forecast</div>'
+_FORECAST_BOX = ('<div class="asec" data-fc="1"><div class="a-h">Price range forecast'
+                 '<a class="a-help" style="margin-left:auto;font-size:13px" href="#" onclick="window.open(\'/lab?t=\'+'
+                 'encodeURIComponent(TK)+\'#sim\',\'_blank\');return false">Simulate price paths</a></div>'
                  '<div class="fc-body muted">Loading…</div></div>')
 _IDEAS_BOX = ('<div class="asec" data-oi="1"><div class="a-h">Option trade ideas</div>'
               '<div class="oi-body muted">Loading option chain…</div></div>')
