@@ -170,3 +170,25 @@ def test_summary_retried_after_a_failed_run(app, monkeypatch):
     clock["t"] += 600
     s.tick(datetime(2026, 9, 25, 16, 47, tzinfo=ET))                # done: not again
     assert calls["n"] == 2
+
+
+def test_one_account_per_phone_number(app, monkeypatch):
+    from stockskill.accounts import db
+    monkeypatch.setenv("TWILIO_ACCOUNT_SID", "AC1")
+    monkeypatch.setenv("TWILIO_AUTH_TOKEN", "t")
+    monkeypatch.setenv("TWILIO_FROM", "+18885550100")
+    texts = []
+    monkeypatch.setattr(S, "send_sms", lambda to, body: texts.append((to, body)) or (True, None))
+    squatter = app.test_client()
+    squatter.post("/auth/signup", json={"email": "s@example.com", "password": "a-long-password-1", "accept": True})
+    assert squatter.post("/api/me/phone", json={"phone": "415 555 0134", "consent": True}).get_json()["ok"]  # typed, never confirmed
+    owner = app.test_client()
+    _onboarded(owner)
+    owner.post("/api/me/phone", json={"phone": "(415) 555-0134", "consent": True})
+    code = texts[-1][1].split("your code is ")[1][:6]
+    assert owner.post("/api/me/phone/verify", json={"code": code}).get_json()["verified"]
+    assert db.by_email("s@example.com")["phone"] is None                # the unconfirmed copy was released
+    third = app.test_client()
+    third.post("/auth/signup", json={"email": "t@example.com", "password": "a-long-password-1", "accept": True})
+    r = third.post("/api/me/phone", json={"phone": "+14155550134", "consent": True})
+    assert r.status_code == 409 and "another account" in r.get_json()["error"]

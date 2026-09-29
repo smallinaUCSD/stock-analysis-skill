@@ -102,3 +102,19 @@ def test_demographics_groups_and_tools(tmp_path, monkeypatch):
     by_age = {r["group"]: r["top"] for r in g["tools_by_age"]}
     assert by_age["25–34"] == "screener (3)" and by_age["55–64"] == "calendar (1)"
     assert OBS.metro("Seattle", "WA") == "Seattle" and OBS.metro("Boise", "Idaho") == "Boise, Idaho"
+
+
+def test_account_lifecycle_counts(app, monkeypatch):
+    c = app.test_client()
+    c.post("/auth/signup", json={"email": "a@example.com", "password": "a-long-password-1", "accept": True})
+    c.post("/api/me/groups", json={"groups": ["mag7"]})
+    c.post("/api/me/profile", json={"first_name": "Ada", "last_name": "L", "dob": "1990-01-01", "investor_type": "etf",
+                                    "experience": "beginner"})
+    c.post("/api/me/onboarded")
+    d = app.test_client()
+    d.post("/auth/signup", json={"email": "b@example.com", "password": "a-long-password-1", "accept": True})
+    assert d.post("/api/me/delete", json={"confirm": "DELETE"}).get_json()["ok"]
+    monkeypatch.setenv("STOCKSKILL_ADMINS", "a@example.com")
+    L = c.get("/api/admin/report?days=7").get_json()["lifecycle"]
+    assert L["totals"] == {"created": 2, "confirmed": 0, "onboarded": 1, "deleted": 1}
+    assert L["by_method"] == [{"name": "email", "n": 2}] and L["all_time"]["deleted"] == 1

@@ -106,8 +106,15 @@ def test_signup_confirms_email_with_a_code_first(app, outbox):
     ok = c.post("/api/me/verify-email", json={"code": code}).get_json()
     assert ok["ok"] and ok["next"] == "/welcome"
     assert db.by_email("a@example.com")["email_verified"] == 1
-    assert outbox[-1]["subject"] == "Welcome to SM Investments" and "/notifications/verify" not in outbox[-1]["text"]
+    assert not any(m["subject"].startswith("Welcome") for m in outbox)          # not yet: sign-up isn't done
     assert c.get("/api/me").status_code == 200
+    c.post("/api/me/groups", json={"groups": ["mag7"]})
+    c.post("/api/me/profile", json={"first_name": "Ada", "last_name": "L", "dob": "1990-01-01",
+                                    "investor_type": "etf", "experience": "beginner"})
+    assert c.post("/api/me/onboarded").get_json()["ok"]
+    assert outbox[-1]["subject"] == "Welcome to SM Investments" and "/notifications/verify" not in outbox[-1]["text"]
+    c.post("/api/me/onboarded")                                                  # finishing again: no second one
+    assert sum(m["subject"].startswith("Welcome") for m in outbox) == 1
 
 
 def test_wrong_address_can_be_fixed_before_confirming(app, outbox):

@@ -64,6 +64,9 @@ CREATE TABLE IF NOT EXISTS sessions (
   device TEXT, browser TEXT, os TEXT, revoked INTEGER NOT NULL DEFAULT 0, risk TEXT
 );
 CREATE INDEX IF NOT EXISTS sessions_user ON sessions (user_id, last_seen);
+-- accounts created, confirmed, finished and deleted over time; no personal details,
+-- so a deleted account still counts once its data is gone
+CREATE TABLE IF NOT EXISTS account_events (ts REAL NOT NULL, kind TEXT NOT NULL, method TEXT);
 CREATE TABLE IF NOT EXISTS login_failures (
   ts REAL NOT NULL, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
   ip TEXT, country TEXT, reason TEXT
@@ -121,8 +124,16 @@ def _migrate(c) -> None:
         c.execute("ALTER TABLE notifications ADD COLUMN channels TEXT")
     if "risk" not in {r["name"] for r in c.execute("PRAGMA table_info(sessions)")}:
         c.execute("ALTER TABLE sessions ADD COLUMN risk TEXT")
+    if not c.execute("SELECT 1 FROM account_events LIMIT 1").fetchone():   # accounts made before the log began
+        c.executemany("INSERT INTO account_events (ts, kind, method) VALUES (?, 'created', ?)",
+                      [(r[0], "google" if r[1] else "email") for r in
+                       c.execute("SELECT created_at, google_sub IS NOT NULL AND password_hash IS NULL FROM users")])
     for uid, email in c.execute("SELECT id, email FROM users WHERE email_canon IS NULL").fetchall():
         c.execute("UPDATE users SET email_canon=? WHERE id=?", (canonical_email(email), uid))
+    try:                                   # one account per confirmed phone number
+        c.execute("CREATE UNIQUE INDEX IF NOT EXISTS users_phone ON users (phone) WHERE phone_verified = 1")
+    except sqlite3.IntegrityError:         # older duplicates: the app still refuses new ones
+        pass
     try:                                   # one account per inbox, enforced by the database
         c.execute("CREATE UNIQUE INDEX IF NOT EXISTS users_email_canon ON users (email_canon)")
     except sqlite3.IntegrityError:         # older duplicates exist: still look them up fast (admin lists them)
@@ -204,6 +215,30 @@ def update_user(uid: int, **fields) -> None:
     with conn() as c:
         c.execute(f"UPDATE users SET {', '.join(k + '=?' for k in fields)} WHERE id=?",
                   (*fields.values(), uid))
+
+
+def phone_owner(phone: str, exclude: int | None = None) -> int | None:
+    """The account that has confirmed this number, if any (other than ``exclude``)."""
+    with conn() as c:
+        r = c.execute("SELECT id FROM users WHERE phone=? AND phone_verified=1 AND id != ?",
+                      (phone, exclude or -1)).fetchone()
+        return r[0] if r else None
+
+
+def release_phone(phone: str, keep: int) -> None:
+    """Take a number off accounts that entered it but never confirmed it."""
+    with conn() as c:
+        c.execute("UPDATE users SET phone=NULL, notify_sms=0, sms_consent_at=NULL "
+                  "WHERE phone=? AND phone_verified=0 AND id != ?", (phone, keep))
+
+
+def account_event(kind: str, method: str | None = None) -> None:
+    """Log that an account was created / confirmed / onboarded / deleted (counts only)."""
+    try:
+        with conn() as c:
+            c.execute("INSERT INTO account_events (ts, kind, method) VALUES (?,?,?)", (time.time(), kind, method))
+    except sqlite3.Error:
+        pass
 
 
 def delete_user(uid: int) -> None:

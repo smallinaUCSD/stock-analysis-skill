@@ -311,6 +311,23 @@ def _account_stats(users_db: str | None, since: str) -> dict:
                    "events": _n(c, "SELECT COUNT(*) FROM users WHERE notify_events = 1"),
                    "follows": c.execute("SELECT COUNT(*) FROM follows").fetchone()[0]},
     }
+    # accounts created / confirmed / finished sign-up / deleted, per day (deleted accounts still count)
+    try:
+        ev = c.execute("SELECT date(ts, 'unixepoch', '-4 hours') AS day, kind, COUNT(*) FROM account_events "
+                       "WHERE ts >= ? GROUP BY day, kind", (ts0,)).fetchall()
+        byday: dict = {}
+        totals = {"created": 0, "confirmed": 0, "onboarded": 0, "deleted": 0}
+        for day, kind, n in ev:
+            byday.setdefault(day, {"day": day, "created": 0, "confirmed": 0, "onboarded": 0, "deleted": 0})[kind] = n
+            totals[kind] = totals.get(kind, 0) + n
+        out["lifecycle"] = {"days": [byday[d] for d in sorted(byday)], "totals": totals,
+                            "by_method": [dict(r) for r in c.execute(
+                                "SELECT COALESCE(method, 'unknown') AS name, COUNT(*) AS n FROM account_events "
+                                "WHERE kind = 'created' AND ts >= ? GROUP BY name ORDER BY n DESC", (ts0,))],
+                            "all_time": {k: n for k, n in c.execute(
+                                "SELECT kind, COUNT(*) FROM account_events GROUP BY kind")}}
+    except sqlite3.OperationalError:
+        out["lifecycle"] = None
     # sign-ins: who, when, how, from where and on what, and for how long
     try:
         out["signins"] = [dict(r) for r in c.execute(

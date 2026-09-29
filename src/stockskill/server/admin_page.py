@@ -144,6 +144,18 @@ function render(d){
       '<h3 style="margin-top:12px">Browsers</h3>'+table(d.browsers,[['name','Browser'],['people','People']])+'</div>'+
     '<div class="ad-card"><h3>Operating systems</h3>'+table(d.os,[['name','System'],['people','People']])+
       '<h3 style="margin-top:12px">Where visitors came from</h3>'+table(d.referrers,[['name','Site'],['visits','Visits']])+'</div></div>'+
+    (function(){ var L=d.lifecycle; if(!L) return ''; var t=L.totals||{}, at=L.all_time||{};
+      return '<h2 class="ad-sec-h">Accounts</h2><div class="ad-kpis">'+
+        kpi('Created, '+d.days+' days',t.created||0,(L.by_method||[]).map(function(m){ return m.n+' '+m.name; }).join(' · '))+
+        kpi('Confirmed email',t.confirmed||0,t.created?Math.round((t.confirmed||0)/t.created*100)+'% of created':'')+
+        kpi('Finished sign-up',t.onboarded||0,t.created?Math.round((t.onboarded||0)/t.created*100)+'% of created':'')+
+        kpi('Deleted, '+d.days+' days',t.deleted||0,'',(t.deleted||0)>0)+
+        kpi('Net growth',((t.created||0)-(t.deleted||0)>=0?'+':'')+((t.created||0)-(t.deleted||0)),'created minus deleted')+
+        kpi('All time',(at.created||0)+' created',(at.deleted||0)+' deleted · '+(d.accounts||0)+' open now')+'</div>'+
+        '<div class="ad-card" style="margin-bottom:12px"><h3>Accounts per day</h3>'+
+          lines(L.days||[],['created','onboarded','deleted'],['var(--accent)','var(--up)','var(--down)'])+
+          '<div class="ad-leg"><span><i style="background:var(--accent)"></i>Created</span><span><i style="background:var(--up)"></i>Finished sign-up</span>'+
+          '<span><i style="background:var(--down)"></i>Deleted</span></div></div>'; })()+
     (function(){ var g=d.demographics||{}; if(!g.age) return '';
       var by=function(rows,label){ return table(rows,[['group',label],['people','People'],['top','Most used (page views)']]); };
       return '<h2 class="ad-sec-h">Who\'s using it</h2>'+

@@ -536,8 +536,8 @@ def verify_email_code():
         if not check_code(u["id"], "verify", _body().get("code") or ""):
             return jsonify({"ok": False, "error": "That code didn't match or has expired. Send a new one."}), 400
         db.update_user(u["id"], email_verified=1)
-        u = db.get_user(u["id"])
-        welcome(u, verify=False)
+        db.account_event("confirmed")
+        u = db.get_user(u["id"])                 # (the welcome email waits until sign-up is finished)
     return jsonify({"ok": True, "next": _next_for(u)})
 
 

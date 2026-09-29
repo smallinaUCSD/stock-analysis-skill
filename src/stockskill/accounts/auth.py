@@ -328,6 +328,7 @@ def signup():
                              terms_version=legal.TERMS_VERSION, privacy_version=legal.PRIVACY_VERSION)
     except sqlite3.IntegrityError:           # the same inbox signed up a moment ago
         return jsonify({"ok": False, "error": "An account with this email already exists. Sign in instead."}), 409
+    db.account_event("created", "email")
     _login(uid, "password (new account)")
     u = db.get_user(uid)
     if needs_email_code(u):                     # the first email is the code to confirm the address
@@ -423,8 +424,7 @@ def google_login():
         except sqlite3.IntegrityError:
             return jsonify({"ok": False, "error": "An account with this email already exists. Sign in instead."}), 409
         u = db.get_user(uid)
-        from .security import welcome
-        welcome(u, verify=False)
+        db.account_event("created", "google")
     _login(u["id"], "Google")
     return jsonify({"ok": True, "next": _next_for(u, _body().get("next"))})
 
@@ -686,7 +686,12 @@ def finish_onboarding():
     u = current_user()
     if needs_terms(u) or not u.get("dob") or not db.watchlist(u["id"]):
         return jsonify({"ok": False, "error": "A step is still missing."}), 400
+    first = not u.get("onboarded")
     db.update_user(u["id"], onboarded=1)
+    if first:                                    # signing up is done: now the welcome email, once
+        db.account_event("onboarded")
+        from .security import welcome
+        welcome(db.get_user(u["id"]), verify=False)
     return jsonify({"ok": True, "next": "/"})
 
 
@@ -719,6 +724,7 @@ def delete_account():
     if (_body().get("confirm") or "").strip().upper() != "DELETE":
         return jsonify({"ok": False, "error": 'Type DELETE to confirm.'}), 400
     db.delete_user(current_user()["id"])
+    db.account_event("deleted")
     session.clear()
     return jsonify({"ok": True, "next": "/"})
 
@@ -831,6 +837,8 @@ def set_phone():
         return jsonify({"ok": False, "error": "Enter a mobile number, like (555) 123-4567."}), 400
     if not b.get("consent"):
         return jsonify({"ok": False, "error": "Please agree to receive text messages first."}), 400
+    if db.phone_owner(phone, exclude=u["id"]):           # one account per phone number
+        return jsonify({"ok": False, "error": "That number is already on another account."}), 409
     same = phone == u.get("phone") and u.get("phone_verified")
     db.update_user(u["id"], phone=phone, sms_consent_at=time.time(), **({} if same else {"phone_verified": 0}))
     if same:
@@ -858,7 +866,13 @@ def verify_phone():
     phone = S.check_code(u["id"], str(_body().get("code") or ""))
     if not phone or phone != u.get("phone"):
         return jsonify({"ok": False, "error": "That code didn't match or has expired. Send a new one."}), 400
-    db.update_user(u["id"], phone_verified=1, notify_sms=1)
+    if db.phone_owner(phone, exclude=u["id"]):
+        return jsonify({"ok": False, "error": "That number is already on another account."}), 409
+    db.release_phone(phone, keep=u["id"])                 # others who typed it in but never confirmed it
+    try:
+        db.update_user(u["id"], phone_verified=1, notify_sms=1)
+    except sqlite3.IntegrityError:                        # confirmed elsewhere a moment ago
+        return jsonify({"ok": False, "error": "That number is already on another account."}), 409
     return jsonify({"ok": True, "verified": True, "phone": S.mask(phone)})
 
 
