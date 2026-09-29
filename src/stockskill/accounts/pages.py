@@ -218,7 +218,7 @@ def landing_html() -> str:
             ("Portfolio optimization and simulated paths", "No", "Yes", "Yes"),
             ("A readable daily brief by email or text", "Some", "Yes", "Yes"),
             ("Published backtests of every signal", "No", "Rarely", "Yes"),
-            ("Price", "Free with ads", "$20,000+ a year", "Free in beta")]
+            ("Price", "Free with ads", "$30,000+ a year", "Free in beta")]
 
     def cell(v):
         cls = "y" if v == "Yes" else "n" if v == "No" else ""
