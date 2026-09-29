@@ -25,7 +25,8 @@ class Fake:
 @pytest.fixture
 def fake(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test")
-    monkeypatch.delenv("STOCKSKILL_BRIEF", raising=False)
+    for k in ("STOCKSKILL_BRIEF", "HF_TOKEN", "STOCKSKILL_LLM_URL"):
+        monkeypatch.delenv(k, raising=False)
     B._cache.clear()
 
     def use(text, stop="end_turn"):
@@ -83,3 +84,38 @@ def test_deliver_emails_the_brief(fake, monkeypatch, tmp_path):
     notify.deliver(u, "summary", "Before the bell · Tue Sep 29", LINES, "/", "sum:x")
     assert "<b>Markets.</b>" in sent["html"] and "gained 0.4%" in sent["text"]
     assert "Your biggest gainers" in db.notifications(uid)[0]["body"]       # the in-app copy keeps the facts
+
+
+def test_hugging_face_and_local(monkeypatch):
+    for k in ("ANTHROPIC_API_KEY", "STOCKSKILL_BRIEF", "STOCKSKILL_LLM_URL", "STOCKSKILL_HF_MODEL"):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv("HF_TOKEN", "hf_test")
+    B._cache.clear()
+    seen = []
+
+    def post(url, json=None, headers=None, timeout=None):
+        seen.append((url, json, headers))
+        return SimpleNamespace(raise_for_status=lambda: None, json=lambda: {"choices": [{"finish_reason": "stop", "message": {
+            "content": "<think>add them up</think>**Markets.** The S&P 500 rose 0.4%; the Nasdaq fell 1.2%."}}]})
+    import requests
+    monkeypatch.setattr(requests, "post", post)
+    out = B.polish("event", "Big moves", LINES)
+    assert out == ["<b>Markets.</b> The S&amp;P 500 rose 0.4%; the Nasdaq fell 1.2%."]      # reasoning notes dropped
+    url, body, headers = seen[0]
+    assert url == "https://router.huggingface.co/v1/chat/completions" and body["model"] == B.HF_MODEL
+    assert headers == {"Authorization": "Bearer hf_test"} and body["messages"][0]["content"] == B.SYSTEM
+    monkeypatch.delenv("HF_TOKEN")
+    monkeypatch.setenv("STOCKSKILL_LLM_URL", "http://localhost:11434/v1/")
+    assert B.backend() == ("openai", "http://localhost:11434/v1", "qwen3:8b")
+    B.polish("event", "Other", LINES)
+    assert seen[1][0] == "http://localhost:11434/v1/chat/completions" and seen[1][2] == {}    # no key sent to a local server
+
+
+def test_name_never_leaves_the_server(fake):
+    lines = ["Good morning, Ana. All changes are for the last session.", "<b>Markets:</b> S&amp;P 500 <b>+0.4%</b>"]
+    f = fake("Good morning, [NAME].\n\n**Markets.** The S&P 500 rose 0.4%.")
+    assert B.polish("summary", "t", lines, "Ana")[0] == "Good morning, Ana."
+    assert "Ana" not in f.calls[0]["messages"][0]["content"]
+    assert B.polish("summary", "t", ["Good morning, Raj. All changes are for the last session.", lines[1]],
+                    "Raj")[0] == "Good morning, Raj."                     # same facts: cached, own name
+    assert len(f.calls) == 1

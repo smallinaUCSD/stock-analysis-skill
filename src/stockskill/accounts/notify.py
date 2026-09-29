@@ -218,7 +218,7 @@ def deliver(u: dict, kind: str, title: str, lines: list[str], url: str, dedupe: 
         unsub = f"{public_url()}/notifications/unsubscribe?t={token(u['id'], u['email'], 'unsub')}"
         full = url if url.startswith("http") else public_url() + url
         from .brief import polish
-        body = polish(kind, title, lines) or lines        # a written brief when the LLM is set up
+        body = polish(kind, title, lines, u.get("first_name") or "") or lines        # a written brief when the LLM is set up
         text = [html.unescape(_strip_tags(ln)) for ln in body]
         out["email"] = send_email(u["email"], title, "\n\n".join(text) + f"\n\n{full}\n\nUnsubscribe: {unsub}",
                                   _email_html(title, body, full, unsub), unsubscribe=unsub)

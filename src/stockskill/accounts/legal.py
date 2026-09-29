@@ -251,6 +251,9 @@ providers), who may use it only to provide those services;</li>
 <li>with Google, only if you choose to sign in with Google;</li>
 <li>with our email provider, to deliver emails you asked for, with Apple (iMessage) or our text-message provider
 (Twilio), to deliver texts you asked for, and with your browser's push service, to deliver browser notifications you turned on;</li>
+<li>with an AI text provider (such as a model hosted through Hugging Face), which receives the market facts in a
+summary or alert (prices, moves and tickers from your watchlist, never your name, email or phone) only to reword
+them as a readable brief;</li>
 <li>when required by law, subpoena or court order, or to protect the rights, property or safety of us, our
 users or others;</li>
 <li>in connection with a merger, acquisition or sale of assets, in which case this policy continues to apply

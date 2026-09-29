@@ -131,26 +131,42 @@ function pkError(e){ var n=(e&&e.name)||''; if(n==='NotAllowedError'||n==='Abort
 # --- landing -------------------------------------------------------------------
 
 _FEATURES = [
-    ("chart", "A live market board", "Every stock you follow with signals, trend, volume, 52-week range and a quick-look "
-     "chart, updated through the trading day, as a table, cards or a heatmap."),
-    ("scale", "Valuations from SEC filings", "Discounted cash flow built on three years of reported cash flow, a reverse "
-     "DCF that shows the growth the price assumes, and industry peer multiples."),
-    ("book", "Ten years of financials", "Income statement, balance sheet and cash flow as filed, with 17 ratios, split-"
-     "adjusted per-share numbers and growth rates, side by side."),
-    ("calendar", "Earnings, measured", "Who reports next, and how each stock has actually moved the session after its "
-     "last twelve reports, timed to the minute from the company's own filing."),
-    ("filter", "A market-wide screener", "Filter all 5,900 US-listed stocks by size, sector, valuation, margins and growth, "
-     "with presets and CSV export."),
-    ("graph", "Supply-chain maps", "Who a company buys from, who buys from it (including customers over 10% of revenue "
-     "from its annual report), what it owns and who it competes with."),
-    ("users", "Congress, the President and hedge funds", "Two years of reported trades by members of Congress, the President's "
-     "filings and 21 major funds' holdings, with profiles and track records."),
-    ("pulse", "Economy and rates", "The CPI, jobs, GDP and Fed calendar with the latest readings, and the Treasury yield "
-     "curve with its inversion history."),
-    ("target", "Forecast ranges and option ideas", "Where a price could be in 1 to 12 months from what options imply, "
-     "and defined-risk option structures priced from the real chain."),
-    ("bell", "Alerts on your phone", "Price levels, big moves, breakouts, insider purchases and next-day earnings, pushed "
-     "to your phone."),
+    ("Research any stock", [
+        ("chart", "A live market board", "Every stock you follow with signals, trend, volume, 52-week range and a quick-look "
+         "chart, updated through the day, plus pre-market and after-hours prices, as a table, cards or a heatmap."),
+        ("scale", "Valuations from SEC filings", "Discounted cash flow built on reported cash flow, a Monte Carlo DCF that "
+         "shows the full range of fair values, a reverse DCF that shows the growth the price assumes, and peer multiples."),
+        ("book", "Ten years of financials", "Income statement, balance sheet and cash flow as filed, with 17 ratios, "
+         "split-adjusted per-share numbers, analyst ratings and dividend history, side by side."),
+        ("calendar", "Earnings, measured", "Who reports next, and how each stock has actually moved the session after its "
+         "last twelve reports, timed to the minute from the company's own filing."),
+        ("columns", "Compare up to 10 stocks", "Put up to ten companies side by side: valuation, growth, margins, returns "
+         "and risk in one table and one chart."),
+        ("graph", "Supply-chain maps", "Who a company buys from, who buys from it (including customers over 10% of revenue "
+         "from its annual report), what it owns and who it competes with."),
+    ]),
+    ("Find and test ideas", [
+        ("filter", "A market-wide screener", "Filter every US-listed stock by size, sector, valuation, margins and growth, "
+         "with presets and CSV export. A background crawl keeps the whole market's data fresh."),
+        ("flask", "Portfolio lab", "Markowitz and Black-Litterman portfolios built from your own stocks, Brownian-motion "
+         "paths of where a stock or a mix could go, and ideas for stocks to add based on what you hold."),
+        ("users", "Congress, the President and hedge funds", "Two years of reported trades by members of Congress, the "
+         "President's filings and 21 major funds' holdings, with profiles, track records and who to follow."),
+        ("target", "Forecast ranges and trade plans", "Where a price could be in 1 to 12 months from what options imply, "
+         "and a trade plan with entry, stop and defined-risk option structures priced from the real chain."),
+        ("search", "Search that forgives typos", "Stocks, politicians and funds appear as you type in every search box, "
+         "even when a name is misspelled."),
+    ]),
+    ("Stay on top of it", [
+        ("mail", "A written brief, twice a day", "Before the bell and after the close: the market, your sectors and your "
+         "biggest movers, written as a short readable brief and sent by email or text."),
+        ("bell", "Alerts that matter", "Big moves in your stocks, new trades by the politicians you follow and new filings "
+         "from the funds you follow, by email, text or push."),
+        ("pulse", "Economy, rates and a calendar", "Earnings, economic releases and IPOs on one calendar, the Fed schedule, "
+         "fear and greed, and the Treasury yield curve with its inversion history."),
+        ("shield", "Your account, protected", "Passkeys, email confirmation, and a \"was this you?\" email whenever someone "
+         "signs in from a device we haven't seen."),
+    ]),
 ]
 
 _ICONS = {
@@ -165,6 +181,11 @@ _ICONS = {
     "target": '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1"/>',
     "bell": '<path d="M6 16V11a6 6 0 0112 0v5l2 2H4zM10 20a2 2 0 004 0"/>',
     "check": '<path d="M5 12l5 5 9-10"/>',
+    "columns": '<rect x="3" y="5" width="5" height="14" rx="1"/><rect x="10" y="5" width="5" height="14" rx="1"/><rect x="17" y="5" width="4" height="14" rx="1"/>',
+    "flask": '<path d="M9 3h6M10 3v6l-5 9a2 2 0 002 3h10a2 2 0 002-3l-5-9V3M7.5 14h9"/>',
+    "search": '<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>',
+    "mail": '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
+    "shield": '<path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="M9 12l2 2 4-4"/>',
 }
 
 
@@ -174,8 +195,9 @@ def _ico(name: str, size: int = 22) -> str:
 
 
 def landing_html() -> str:
-    feats = "".join(f'<div class="lp-feat"><div class="lp-fi">{_ico(k)}</div><h3>{html.escape(t)}</h3>'
-                    f'<p>{html.escape(d)}</p></div>' for k, t, d in _FEATURES)
+    feats = "".join(f'<h3 class="lp-gh">{html.escape(g)}</h3><div class="lp-feats">' + "".join(
+        f'<div class="lp-feat"><div class="lp-fi">{_ico(k)}</div><h3>{html.escape(t)}</h3><p>{html.escape(d)}</p></div>'
+        for k, t, d in items) + "</div>" for g, items in _FEATURES)
     diff = [
         ("Math you can check", "Every number, from a fair-value estimate to a forecast range, comes from tested code "
          "applied to real data. No language model is asked to guess a price."),
@@ -183,8 +205,8 @@ def landing_html() -> str:
          "not beat an ordinary day. You see the evidence next to the number."),
         ("Straight from the source", "Financial statements and customers from SEC filings, economic data from the BLS "
          "and Treasury, trades from official disclosures. Sources are labeled throughout."),
-        ("Terminal breadth, without the terminal", "Financials, earnings, screening, supply chains, insider and "
-         "political trades, rates and alerts in one place, instead of five subscriptions."),
+        ("Terminal breadth, without the terminal", "Financials, earnings, screening, supply chains, portfolio "
+         "optimization, insider and political trades, rates and alerts in one place, instead of five subscriptions."),
     ]
     diff_html = "".join(f'<div class="lp-diff"><span class="lp-dk">{_ico("check", 18)}</span><div><h3>{html.escape(a)}'
                         f'</h3><p>{html.escape(b)}</p></div></div>' for a, b in diff)
@@ -193,6 +215,8 @@ def landing_html() -> str:
             ("Congress, President and hedge-fund trades", "Some", "Yes", "Yes"),
             ("Earnings moves timed to the release", "No", "Yes", "Yes"),
             ("Screen every US stock", "Some", "Yes", "Yes"),
+            ("Portfolio optimization and simulated paths", "No", "Yes", "Yes"),
+            ("A readable daily brief by email or text", "Some", "Yes", "Yes"),
             ("Published backtests of every signal", "No", "Rarely", "Yes"),
             ("Price", "Free with ads", "$20,000+ a year", "Free in beta")]
 
@@ -202,10 +226,13 @@ def landing_html() -> str:
     table = "".join(f"<tr><th>{html.escape(r[0])}</th>{cell(r[1])}{cell(r[2])}{cell(r[3])}</tr>" for r in rows)
     tiers = [
         ("Free", "$0", "during the beta", True, ["The live market board and your own watchlist",
-                                                  "Valuations, financials and earnings", "The market-wide screener",
-                                                  "Supply-chain maps and trade trackers", "Economy calendar and yield curve"]),
+                                                  "Valuations, financials, earnings and compare",
+                                                  "The market-wide screener and portfolio lab",
+                                                  "Supply-chain maps and trade trackers",
+                                                  "Daily briefs and alerts by email or text",
+                                                  "Calendar, economy and yield curve"]),
         ("Plus", "Coming soon", "", False, ["Everything in Free", "More alerts and saved screens", "Portfolio tracking",
-                                            "Exports and email digests"]),
+                                            "Exports"]),
         ("Pro", "Coming soon", "", False, ["Everything in Plus", "Deeper history and faster data", "API access",
                                            "Priority support"]),
     ]
@@ -221,6 +248,9 @@ def landing_html() -> str:
             "and nothing here is a recommendation to buy or sell anything. See our Terms."),
            ("Where does the data come from?", "Company filings from the SEC, economic data from the BLS, BEA, Treasury and "
             "the Federal Reserve, prices and listings from market-data providers. Sources are labeled throughout."),
+           ("Do you use AI?", "Only to make our emails easier to read. Every number is calculated by our own tested code; "
+            "a language model then rewrites those facts as a short brief, and we check that every number in its draft "
+            "matches ours before it's sent. If anything doesn't match, you get the plain version instead."),
            ("What does it cost?", "It's free while in beta. Paid plans with extra features are coming; you'll never be "
             "charged without choosing a plan."),
            ("What do you do with my information?", "We use it to run your account and personalize your watchlist. We "
@@ -248,8 +278,8 @@ def landing_html() -> str:
   <div><p class="lp-eyebrow">Free during the beta</p>
   <h1>Research stocks the way professionals do.</h1>
   <p class="lp-lead">Valuations built on SEC filings, ten years of financials, earnings reactions, a screener for every US
-  stock, supply-chain maps and the trades of Congress and hedge funds, all in one place, with every number shown and
-  sourced.</p>
+  stock, a portfolio lab, supply-chain maps and the trades of Congress and hedge funds, all in one place, with every
+  number shown and sourced, and a readable brief in your inbox before the bell.</p>
   <div class="lp-cta"><a class="btn primary" href="/signup">Create a free account</a><a class="btn ghost" href="#features">See what's inside</a></div>
   <p class="muted small">No credit card. Not financial advice.</p></div>
   {mock}
@@ -260,7 +290,7 @@ def landing_html() -> str:
 </div></section>
 <section id="features" class="lp-sec"><div class="lp-in"><p class="lp-eyebrow">Features</p>
   <h2>Everything you check before you buy, on one screen.</h2>
-  <div class="lp-feats">{feats}</div></div></section>
+  {feats}</div></section>
 <section id="why" class="lp-sec alt"><div class="lp-in"><p class="lp-eyebrow">Why {BRAND}</p>
   <h2>What sets us apart</h2><div class="lp-diffs">{diff_html}</div>
   <div class="lp-cmpwrap"><table class="lp-cmp"><thead><tr><th></th><th>Typical free sites</th><th>Professional terminals</th><th class="us">{BRAND}</th></tr></thead>
@@ -320,6 +350,8 @@ _LANDING_CSS = """
 .lp-stats4 span{color:var(--muted);font-size:14px}
 .lp-sec{padding:84px 0} .lp-sec.alt{background:var(--surface);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
 .lp-sec h2,.lp-final h2{font-family:var(--font-display);font-weight:500;font-size:clamp(30px,3.6vw,44px);letter-spacing:-.015em;margin:0 0 34px;max-width:760px;line-height:1.1}
+.lp-gh{font-size:13px;font-weight:500;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);margin:34px 0 14px}
+.lp-gh:first-of-type{margin-top:0}
 .lp-feats{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
 .lp-feat{border:1px solid var(--border);border-radius:14px;background:var(--surface);padding:22px;transition:border-color .2s var(--ease-out),transform .2s var(--ease-out)}
 .lp-feat:hover{border-color:var(--border-strong);transform:translateY(-2px)}
