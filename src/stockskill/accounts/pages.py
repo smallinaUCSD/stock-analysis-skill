@@ -8,6 +8,7 @@ from ..safejs import script_json
 import html
 import json
 
+from ..dashboard.suggest import SUGGEST_CSS, SUGGEST_JS
 from ..dashboard.render import _CSS, _THEME_BOOT, icon
 from . import legal
 
@@ -466,7 +467,7 @@ def welcome_html() -> str:
     body = f"""<div class="wz-wrap"><div class="wz-top">{_brand_link()}<a class="small muted" href="/logout">Sign out</a></div>
 <div class="wz-prog" id="wz-prog"></div>
 <div class="wz-card" id="wz"><p class="muted">Loading…</p></div></div>"""
-    return _shell(f"Set up your account · {BRAND}", body, _WZ_CSS + _NF_CSS, _NF_JS + _WZ_JS)
+    return _shell(f"Set up your account · {BRAND}", body, _WZ_CSS + _NF_CSS + SUGGEST_CSS, SUGGEST_JS + _NF_JS + _WZ_JS)
 
 
 _WZ_CSS = """
@@ -612,7 +613,7 @@ Promise.all([fetch('/api/me').then(function(r){return r.json();}), fetch('/api/g
 def account_html() -> str:
     body = f"""<div class="ac-wrap"><div class="wz-top">{_brand_link()}<span><a class="btn ghost" href="/">Back to the board</a></span></div>
 <h1 class="ac-h">Account settings</h1><div id="ac" class="muted">Loading…</div></div>"""
-    return _shell(f"Account · {BRAND}", body, _WZ_CSS + _AC_CSS + _NF_CSS, _NF_JS + _AC_JS)
+    return _shell(f"Account · {BRAND}", body, _WZ_CSS + _AC_CSS + _NF_CSS + SUGGEST_CSS, SUGGEST_JS + _NF_JS + _AC_JS)
 
 
 _AC_CSS = """
@@ -769,6 +770,8 @@ function ssRevoke(body){ post('/api/me/sessions/revoke',body).then(function(d){
   ssLoad(); }); }
 function render(){ var a=document.getElementById('ac'); a.className=''; if(!NF) nfInit(ME);
   a.innerHTML=prof()+look()+wl()+notif()+signin()+devices()+secu()+danger(); nfBind(ME); ssLoad();
+  attachSuggest(document.getElementById('addt'),{kinds:'stocks', lastToken:true, onPick:function(it,i){
+    var parts=i.value.split(/([\s,;]+)/); parts[parts.length-1]=it.symbol; i.value=parts.join(''); addT(); }});
   document.getElementById('ss-all').onclick=function(){ ssRevoke({all_others:true}); };
   document.getElementById('ss-list').onclick=function(e){ var b=e.target.closest('[data-ss]'); if(b) ssRevoke({id:b.getAttribute('data-ss')}); };
   document.querySelectorAll('#theme-seg button').forEach(function(b){ b.onclick=function(){ setLook(b.getAttribute('data-t')); }; }); }
@@ -1202,7 +1205,9 @@ function nfPhone(me){
       document.getElementById('nf-sms-note').textContent='To '+d.phone+'.'; say('Confirmed. Texts will go to '+d.phone+'.',true); }); };
 }
 function nfPeople(){ var q=(document.getElementById('nf-q').value||'').trim().toLowerCase(), el=document.getElementById('nf-people');
-  var list=PEOPLE.filter(function(p){ return !q || (p.name+' '+(p.state||'')+' '+(p.party||'')+' '+(p.chamber||'')).toLowerCase().indexOf(q)>=0; });
+  var list=PEOPLE.filter(function(p){ if(!q) return true;
+    p._s=Math.max(fzScore(q,p.name), (p.state+' '+p.party+' '+p.chamber).toLowerCase().indexOf(q)>=0?0.9:0); return p._s>=0.62; });
+  if(q) list.sort(function(a,b){ return b._s-a._s; });
   var followed=PEOPLE.filter(function(p){ return NF.follows[p.id]; });
   if(!q){ list=followed.concat(list.filter(function(p){ return !NF.follows[p.id]; })).slice(0, Math.max(12, followed.length)); } else list=list.slice(0,24);
   if(!list.length){ el.innerHTML='<p class="small muted">'+(PEOPLE.length?'No one matches.':'Trade data is still loading. You can follow people later from the Politicians &amp; Funds page or your account.')+'</p>'; return; }

@@ -8,6 +8,7 @@ from ..safejs import script_json
 import html
 import json
 
+from ..dashboard.suggest import SUGGEST_CSS, SUGGEST_JS
 from ..dashboard.render import _CSS, _THEME_BOOT, icon
 from .embed import EMBED_CSS, EMBED_JS
 from .graph_js import GRAPH_CSS, GRAPH_JS
@@ -17,7 +18,7 @@ def graph_html(initial: str = "") -> str:
     t = html.escape((initial or "NVDA").upper()[:12])
     return ("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
             "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
-            "<title>Connections</title>" + _THEME_BOOT + "<style>" + _CSS + GRAPH_CSS + _EXTRA_CSS + EMBED_CSS +
+            "<title>Connections</title>" + _THEME_BOOT + "<style>" + _CSS + SUGGEST_CSS + GRAPH_CSS + _EXTRA_CSS + EMBED_CSS +
             "</style></head><body><div class=\"wrap\">"
             "<header><h1>Connections</h1>"
             "<span class=\"sub\" style=\"margin:0\">Who supplies it, who buys from it, what it owns</span>"
@@ -33,7 +34,7 @@ def graph_html(initial: str = "") -> str:
             "supply chain. Customers also include every customer the company's latest 10-K reports at 10% or more of revenue (usually unnamed there). Investments are from the company's own SEC 13F filing (listed stakes it held last quarter). "
             "Competitors share its SEC industry code on this watchlist. A ring around a company means its latest 10-K also "
             "names this one. Click any company to recenter on it.</p>"
-            "</div><script>" + EMBED_JS + "var INIT=" + script_json(t) + ";\n" + GRAPH_JS + _JS + "</script></body></html>")
+            "</div><script>" + EMBED_JS + SUGGEST_JS + "var INIT=" + script_json(t) + ";\n" + GRAPH_JS + _JS + "</script></body></html>")
 
 
 _EXTRA_CSS = """
@@ -99,4 +100,5 @@ function renderLists(d){
     return '<div class="kg-list"><h3>'+g[1]+'</h3>'+d[g[0]].map(item).join('')+'</div>'; }).join('');
 }
 load(INIT);
+attachSuggest(document.getElementById('kt'), {kinds:'stocks', onPick:sgRunTicker});
 """

@@ -636,6 +636,47 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
         from ..data.search import search_symbols
         return jsonify({"results": search_symbols(request.args.get("q", ""))})
 
+    @app.get("/api/find")
+    def find():
+        """Search as you type: stocks, politicians and funds, forgiving typos
+        ("palosi" finds Nancy Pelosi). ``kinds`` limits it (comma-separated)."""
+        from ..data.fuzzy import rank, score
+        q = (request.args.get("q") or "").strip()[:60]
+        kinds = set((request.args.get("kinds") or "stocks,politicians,funds").split(","))
+        out: dict = {"ok": True, "q": q}
+        if not q:
+            return jsonify(out)
+        if "stocks" in kinds:
+            from ..data import market_screen as MS
+            rows = MS._STATE.get("rows") or []
+            qu = q.upper()
+            hits = [r for r in rows if (r.get("ticker") or "").startswith(qu)]
+            hits.sort(key=lambda r: (r.get("ticker") != qu, -(r.get("mcap") or 0)))
+            if len(q) >= 3:
+                named = [r for r in rows if score(q, r.get("name") or "") >= 0.85]
+                named.sort(key=lambda r: -(r.get("mcap") or 0))
+                hits += [r for r in named if r not in hits]
+            stocks = [{"symbol": r["ticker"], "name": r.get("name")} for r in hits[:8]]
+            if len(stocks) < 4:                              # not in the local list yet: ask the symbol search
+                from ..data.search import search_symbols
+                have = {x["symbol"] for x in stocks}
+                stocks += [{"symbol": x["symbol"], "name": x.get("name")} for x in search_symbols(q)
+                           if x.get("symbol") not in have][:8 - len(stocks)]
+            out["stocks"] = stocks
+        if "politicians" in kinds:
+            ppl = list(_members() or [])
+            from ..data.politicians import TRUMP
+            if TRUMP and not any(p.get("id") == TRUMP.get("id") for p in ppl):
+                ppl.append(TRUMP)
+            out["politicians"] = [{"id": p["id"], "name": p["name"], "party": p.get("party"), "chamber": p.get("chamber"),
+                                   "state": p.get("state"), "photo": p.get("photo")}
+                                  for p in rank(q, ppl, lambda p: p.get("name") or "", limit=6)]
+        if "funds" in kinds:
+            from ..data import funds13f as F
+            out["funds"] = [{"cik": c, "fund": n, "manager": m} for n, m, c in
+                            rank(q, list(F.FUNDS), lambda f: f"{f[0]} {f[1]}", limit=5)]
+        return jsonify(out)
+
     @app.get("/api/analysts/<ticker>")
     def analysts_api(ticker: str):
         """Analyst buy/hold/sell split by month, consensus and price target."""
@@ -1155,8 +1196,11 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
         recent = [t for t in (data.get("trades") or []) if (t.get("filed") or "") >= since90]
         if tk:
             tr = [t for t in tr if (t.get("ticker") or "") == tk]
-        if who:
-            tr = [t for t in tr if who in (t.get("member") or "").lower()]
+        if who:                                          # forgiving: "palosi" finds Nancy Pelosi's trades
+            from ..data.fuzzy import score as _fz
+            names = {t.get("member") or "" for t in tr}
+            ok = {n for n in names if who in n.lower() or _fz(who, n) >= 0.62}
+            tr = [t for t in tr if (t.get("member") or "") in ok]
         if ch in ("House", "Senate", "President"):
             tr = [t for t in tr if t.get("chamber") == ch]
         if kind == "buy":

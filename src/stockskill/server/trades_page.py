@@ -13,13 +13,14 @@ from ..safejs import script_json
 import html
 import json
 
+from ..dashboard.suggest import SUGGEST_CSS, SUGGEST_JS
 from ..dashboard.render import _CSS, _THEME_BOOT, icon
 
 
 def trades_html(q: str = "") -> str:
     return ("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
             "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
-            "<title>Politicians &amp; Funds</title>" + _THEME_BOOT + "<style>" + _CSS + _EXTRA_CSS +
+            "<title>Politicians &amp; Funds</title>" + _THEME_BOOT + "<style>" + _CSS + _EXTRA_CSS + SUGGEST_CSS +
             "</style></head><body><div class=\"wrap\">"
             "<header><h1>Politicians &amp; Funds</h1>"
             "<span class=\"sub\" style=\"margin:0\">Follow what members of Congress and big hedge funds buy and sell</span>"
@@ -47,7 +48,7 @@ def trades_html(q: str = "") -> str:
             "<p class=\"tr-note\">From SEC Form 13F: long US stock and option positions of managers with $100M+, filed up "
             "to 45 days after each quarter. It doesn't show short positions, cash, bonds or foreign stocks, so it's a "
             "partial and delayed picture of a fund.</p></div>"
-            "</div><script>var INITQ=" + script_json(q) + ";\n" + _JS + "</script></body></html>")
+            "</div><script>var INITQ=" + script_json(q) + ";\n" + SUGGEST_JS + _JS + "</script></body></html>")
 
 
 _EXTRA_CSS = """
@@ -145,6 +146,15 @@ function seg(id,key,cb){ document.getElementById(id).addEventListener('click',fu
   [].forEach.call(this.querySelectorAll('button'),function(x){x.classList.toggle('on',x===b);}); cb(b.dataset[key]); }); }
 seg('chamber','c',function(v){ CH=v; loadPol(); renderPeople(); }); seg('kind','k',function(v){ KIND=v; loadPol(); });
 document.getElementById('q').addEventListener('keydown',function(e){ if(e.key==='Enter') search(); });
+// as you type: suggestions (stocks, politicians, funds) and the people grid filters itself
+attachSuggest(document.getElementById('q'), {kinds:'stocks,politicians,funds', onPick:function(it, inp){
+  if(it.kind==='politician') location.href='/politician/'+encodeURIComponent(it.id);
+  else if(it.kind==='fund') location.href='/fund/'+it.cik;
+  else { inp.value=it.symbol; search(); } }});
+var _qLive=null;
+document.getElementById('q').addEventListener('input',function(){ var q=this.value.trim();
+  if(/^[A-Z.\-]{1,6}$/.test(q)) return;               // looks like a ticker: wait for Enter or a pick
+  FILTER.member=q; renderPeople(); clearTimeout(_qLive); _qLive=setTimeout(function(){ if(q.length!==1) loadPol(); }, 400); });
 function search(){ var q=(document.getElementById('q').value||'').trim();
   try{ history.replaceState(null,'','/trades'+(q?'?q='+encodeURIComponent(q):'')); }catch(_){}
   FILTER={ticker:'',member:''}; document.getElementById('tk-view').innerHTML='';
@@ -171,7 +181,9 @@ function yrs(iso){ if(!iso) return ''; var y=Math.floor((new Date()-new Date(iso
 function loadPeople(){ fetch('/api/politicians').then(function(r){return r.json();}).then(function(d){ PEOPLE=d; renderPeople();
   if(d.loading && !(d.people||[]).length) setTimeout(loadPeople,8000); }); }
 function renderPeople(){ var box=document.getElementById('people'); if(!PEOPLE) return;
-  var ppl=(PEOPLE.people||[]).filter(function(p){ return !FILTER.member || (p.name||'').toLowerCase().indexOf(FILTER.member.toLowerCase())>=0; });
+  var ppl=(PEOPLE.people||[]).slice();
+  if(FILTER.member){ ppl.forEach(function(p){ p._s=fzScore(FILTER.member, p.name); });          // forgiving: "palosi" finds Pelosi
+    ppl=ppl.filter(function(p){ return p._s>=0.62; }).sort(function(a,b){ return b._s-a._s || b.trades-a.trades; }); }
   if(CH) ppl=ppl.filter(function(p){ return p.chamber===CH; });
   if(!ppl.length){ box.innerHTML=''; return; }
   var cards=ppl.slice(0,PSHOW).map(function(p){ var party=(p.party||'I')[0];

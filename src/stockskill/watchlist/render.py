@@ -1289,7 +1289,7 @@ function addSearch(){
       _addResults=(d.results||[]).slice(0,8);
       if(!_addResults.length){ sug.innerHTML=''; sug.style.display='none'; return; }
       sug.innerHTML=_addResults.map((x,i)=>
-        '<div class="sug" onclick="pickAdd('+i+')"><b>'+x.symbol+'</b> <span>'+
+        '<div class="sug" onclick="pickAdd('+i+')"><b>'+_esc(x.symbol)+'</b> <span>'+
         (x.name||'').replace(/</g,'&lt;')+'</span></div>').join('');
       sug.style.display='block';
     }).catch(()=>{ sug.style.display='none'; });

@@ -3,13 +3,14 @@ and manage the rules. Data from /api/alerts."""
 
 from __future__ import annotations
 
+from ..dashboard.suggest import SUGGEST_CSS, SUGGEST_JS
 from ..dashboard.render import _CSS, _THEME_BOOT, icon
 
 
 def alerts_html() -> str:
     return ("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
             "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
-            "<title>Alerts</title>" + _THEME_BOOT + "<style>" + _CSS + _EXTRA_CSS +
+            "<title>Alerts</title>" + _THEME_BOOT + "<style>" + _CSS + _EXTRA_CSS + SUGGEST_CSS +
             "</style></head><body><div class=\"wrap\">"
             "<header><h1>Alerts</h1>"
             "<span class=\"sub\" style=\"margin:0\">Notifications on your phone</span>"
@@ -28,7 +29,9 @@ def alerts_html() -> str:
             "daily moves every 15). Breakouts are checked after the close, insider purchases (SEC Form 4, via Finnhub) in "
             "the evening, and earnings each morning for the next trading day. Alerts only run while this app is running. "
             "Each alert fires once: a price alert re-arms after the price moves 1% back the other way.</p>"
-            "</div><script>" + _JS + "</script></body></html>")
+            "</div><script>" + SUGGEST_JS + _JS +
+            "attachSuggest(document.getElementById('al-tk'),{kinds:'stocks',onPick:function(it,i){ i.value=it.symbol; }});"
+            "</script></body></html>")
 
 
 _EXTRA_CSS = """

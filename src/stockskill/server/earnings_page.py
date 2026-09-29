@@ -8,6 +8,7 @@ from ..safejs import script_json
 import html
 import json
 
+from ..dashboard.suggest import SUGGEST_CSS, SUGGEST_JS
 from ..dashboard.render import _CSS, _THEME_BOOT, icon
 from .embed import EMBED_CSS, EMBED_JS
 
@@ -16,7 +17,7 @@ def earnings_html(initial: str = "") -> str:
     t = html.escape((initial or "").upper()[:12])
     return ("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
             "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
-            "<title>Earnings</title>" + _THEME_BOOT + "<style>" + _CSS + _EXTRA_CSS + EMBED_CSS +
+            "<title>Earnings</title>" + _THEME_BOOT + "<style>" + _CSS + SUGGEST_CSS + _EXTRA_CSS + EMBED_CSS +
             "</style></head><body><div class=\"wrap\">"
             "<header><h1>Earnings</h1>"
             "<span class=\"sub\" style=\"margin:0\">When they report, and how the stock usually reacts</span>"
@@ -32,7 +33,7 @@ def earnings_html(initial: str = "") -> str:
             "stock's change over the first full session after the release (after-close reports react the next day). "
             "EPS estimates, surprises and analyst ratings are from Finnhub (free tier: the last four quarters). "
             "A typical move is the average size of past moves in either direction, not a forecast.</p>"
-            "</div><script>" + EMBED_JS + "var INIT=" + script_json(t) + ";\n" + _JS + "</script></body></html>")
+            "</div><script>" + EMBED_JS + SUGGEST_JS + "var INIT=" + script_json(t) + ";\n" + _JS + "</script></body></html>")
 
 
 _EXTRA_CSS = """
@@ -187,4 +188,5 @@ function company(t){
 }
 if(!document.documentElement.classList.contains('embed')) loadCal();   // embedded: just this company
 if(INIT){ setView('co'); company(INIT); }
+attachSuggest(document.getElementById('et'), {kinds:'stocks', onPick:sgRunTicker});
 """

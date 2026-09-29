@@ -158,7 +158,7 @@ def _http():
 def _house(days: int, cache_dir, s) -> list[dict]:
     today = date.today()
     filings = []
-    for y in sorted({today.year, (today - timedelta(days=days)).year}):
+    for y in range((today - timedelta(days=days)).year, today.year + 1):   # every year in the window
         r = s.get(_HOUSE_ZIP.format(y=y), timeout=30)
         if r.status_code != 200:
             continue

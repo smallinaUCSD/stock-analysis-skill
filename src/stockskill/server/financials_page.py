@@ -8,6 +8,7 @@ from ..safejs import script_json
 import html
 import json
 
+from ..dashboard.suggest import SUGGEST_CSS, SUGGEST_JS
 from ..dashboard.render import _CSS, _THEME_BOOT, icon
 from .embed import EMBED_CSS, EMBED_JS
 
@@ -16,7 +17,7 @@ def financials_html(initial: str = "") -> str:
     t = html.escape((initial or "").upper()[:12])
     return ("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
             "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
-            "<title>Financials</title>" + _THEME_BOOT + "<style>" + _CSS + _EXTRA_CSS + EMBED_CSS +
+            "<title>Financials</title>" + _THEME_BOOT + "<style>" + _CSS + SUGGEST_CSS + _EXTRA_CSS + EMBED_CSS +
             "</style></head><body><div class=\"wrap\">"
             "<header><h1>Financials</h1>"
             "<span class=\"sub\" style=\"margin:0\">Ten years of annual reports, side by side</span>"
@@ -32,7 +33,7 @@ def financials_html(initial: str = "") -> str:
             "<div id=\"fa-chart\" class=\"fa-chart\"></div>"
             "<div id=\"fa-table\" class=\"fa-box muted\">Loading…</div>"
             "<p id=\"fa-note\" class=\"fa-note\"></p>"
-            "</div><script>" + EMBED_JS + "var INIT=" + script_json(t) + ";\n" + _JS + "</script></body></html>")
+            "</div><script>" + EMBED_JS + SUGGEST_JS + "var INIT=" + script_json(t) + ";\n" + _JS + "</script></body></html>")
 
 
 _EXTRA_CSS = """
@@ -205,4 +206,5 @@ function emptyState(){
   document.getElementById('ft').focus();
 }
 if(INIT) load(INIT); else emptyState();
+attachSuggest(document.getElementById('ft'), {kinds:'stocks', onPick:sgRunTicker});
 """

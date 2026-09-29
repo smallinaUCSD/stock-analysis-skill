@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import html
 
+from ..dashboard.suggest import SUGGEST_CSS, SUGGEST_JS
 from ..dashboard.render import _CSS
 
 _ACCOUNTS = [("brokerage", "Brokerage"), ("roth", "Roth IRA"), ("401k", "401(k)")]
@@ -104,7 +105,7 @@ def holdings_html(snap: dict, updated: str = "") -> str:
         '<p class="muted">No holdings found. Add a trade below to start.</p>'
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Holdings</title><style>{_CSS}{_EXTRA_CSS}</style></head>
+<title>Holdings</title><style>{_CSS}{_EXTRA_CSS}{SUGGEST_CSS}</style></head>
 <body><div class="wrap">
 <header><h1>Holdings</h1>
   <span class="status closed">LOCAL ONLY</span>
@@ -207,7 +208,8 @@ function doCash(){{
   }}).catch(()=>_msg('cmsg','network error',false));
 }}
 </script>
-<script>""" + _RISK_JS + """</script>
+<script>""" + SUGGEST_JS + _RISK_JS + """
+attachSuggest(document.getElementById('tk'),{kinds:'stocks',onPick:function(it,i){ i.value=it.symbol; }});</script>
 </body></html>"""
 
 
