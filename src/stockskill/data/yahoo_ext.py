@@ -50,20 +50,19 @@ def _ext_from_quote(q: dict):
             "ext_change": (ch / 100.0) if ch is not None else None}
 
 
-def ext_quotes(tickers: list[str], chunk: int = 100) -> dict[str, dict]:
-    """{TICKER: {market_state, ext_price, ext_change}} for names in an extended
-    session. {} on any failure (e.g. a rate-limited datacenter IP)."""
+def _v7(tickers: list[str], chunk: int = 100) -> list[dict]:
+    """Raw v7 quote results for many symbols (100 per request). [] on any failure
+    (e.g. a rate-limited datacenter IP)."""
     import requests
 
     syms = [t.upper() for t in (tickers or []) if t]
     if not syms:
-        return {}
+        return []
     session = requests.Session()
     crumb = _get_crumb(session)
     if not crumb:
-        return {}
-
-    out: dict[str, dict] = {}
+        return []
+    out: list[dict] = []
     for i in range(0, len(syms), chunk):
         try:
             r = session.get("https://query1.finance.yahoo.com/v7/finance/quote",
@@ -71,12 +70,31 @@ def ext_quotes(tickers: list[str], chunk: int = 100) -> dict[str, dict]:
                             headers=_HEADERS, timeout=(3, 6))
             if r.status_code != 200:
                 continue
-            results = (r.json().get("quoteResponse") or {}).get("result") or []
+            out += (r.json().get("quoteResponse") or {}).get("result") or []
         except Exception:  # noqa: BLE001
             continue
-        for q in results:
-            sym = (q.get("symbol") or "").upper()
-            ext = _ext_from_quote(q) if sym else None
-            if ext:
-                out[sym] = ext
+    return out
+
+
+def ext_quotes(tickers: list[str], chunk: int = 100) -> dict[str, dict]:
+    """{TICKER: {market_state, ext_price, ext_change}} for names in an extended
+    session. {} on any failure."""
+    out: dict[str, dict] = {}
+    for q in _v7(tickers, chunk):
+        sym = (q.get("symbol") or "").upper()
+        ext = _ext_from_quote(q) if sym else None
+        if ext:
+            out[sym] = ext
+    return out
+
+
+def regular_quotes(tickers: list[str]) -> dict[str, dict]:
+    """{TICKER: {price, change_pct}}: the regular session's latest price (the
+    close once it's shut) and day change, the same shape as Finnhub's quotes.
+    Fills in names the rate-limited quote feed missed. {} on any failure."""
+    out: dict[str, dict] = {}
+    for q in _v7(tickers):
+        sym, px, ch = (q.get("symbol") or "").upper(), q.get("regularMarketPrice"), q.get("regularMarketChangePercent")
+        if sym and px:
+            out[sym] = {"price": float(px), "change_pct": (ch / 100.0) if ch is not None else None}
     return out

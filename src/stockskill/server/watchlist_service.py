@@ -262,18 +262,57 @@ class WatchlistService:
             while True:
                 try:
                     tks = sorted(self._current_tickers())
+                    started = time.time()
                     for i in range(0, len(tks), chunk):
                         got = finnhub.batch_quotes(tks[i:i + chunk])
                         now = time.time()
                         for t, q in (got or {}).items():
                             if q and q.get("price"):
                                 B._QUOTES[t.upper()] = (now, q)
+                    B.fill_missing_quotes(tks, started)     # what the rate limit dropped, in one request
                     if market_status().label != "open":
                         time.sleep(900)
                     else:
                         time.sleep(5)
                 except Exception:  # noqa: BLE001
                     time.sleep(60)
+        threading.Thread(target=loop, daemon=True).start()
+
+    def refresh_bars(self, pause: float = 1.5, every: float = 600.0) -> None:
+        """After each close, re-download the day's bars for every board stock
+        (gently, one at a time) and rebuild, so trends, signals and the
+        fallback price never lag by days. The cache otherwise keeps bars for
+        up to STOCKSKILL_CACHE_TTL (30 days on the Mac mini)."""
+        with self._lock:
+            if getattr(self, "_bars_loop", False):
+                return
+            self._bars_loop = True
+
+        def loop():
+            from ..marketclock import last_session
+            from ..watchlist.pipeline import _load_cached, fetch_one
+            done_for = None
+            import random
+            time.sleep(random.uniform(30, 150))    # the Mac mini's two copies share one cache: stagger them
+            while True:
+                try:
+                    sess = last_session().isoformat()
+                    if sess != done_for:
+                        n = 0
+                        for t in sorted(self._current_tickers()):
+                            c = _load_cached(self._cache_dir, t) if self._cache_dir else None
+                            last = ((c.ohlcv or {}).get("dates") or [""])[-1] if c else ""
+                            if str(last)[:10] >= sess:
+                                continue
+                            fetch_one(t, period=self._period, cache_dir=self._cache_dir, ttl=0.0)
+                            n += 1
+                            time.sleep(pause)
+                        done_for = sess            # once per session, even for names that failed
+                        if n:
+                            self._start_bg_build()
+                except Exception:  # noqa: BLE001
+                    pass
+                time.sleep(every)
         threading.Thread(target=loop, daemon=True).start()
 
     def quotes(self) -> dict:

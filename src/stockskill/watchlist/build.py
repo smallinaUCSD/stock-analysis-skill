@@ -219,6 +219,25 @@ def _attach_risk(rows, risk: dict) -> None:
 _QUOTES: dict[str, tuple[float, dict]] = {}
 
 
+def fill_missing_quotes(tickers, since: float) -> int:
+    """Names the rate-limited quote feed missed (no quote fetched since ``since``)
+    get one from Yahoo's batch quote instead, so a card never falls back to the
+    cached bars' days-old close. Returns how many were filled."""
+    import time
+    miss = [t.upper() for t in tickers if (_QUOTES.get(t.upper()) or (0,))[0] < since]
+    if not miss:
+        return 0
+    try:
+        from ..data import yahoo_ext
+        got = yahoo_ext.regular_quotes(miss)
+    except Exception:  # noqa: BLE001
+        return 0
+    now = time.time()
+    for t, q in got.items():
+        _QUOTES[t] = (now, q)
+    return len(got)
+
+
 def _overlay_live_prices(rows, status, max_age: float = 0.0) -> None:
     """Patch rows' price + 1d change from a live quote source in EVERY session.
 
@@ -252,6 +271,7 @@ def _overlay_live_prices(rows, status, max_age: float = 0.0) -> None:
     for t, q in (fetched or {}).items():
         if q and q.get("price"):
             _QUOTES[t.upper()] = (now, q)
+    fill_missing_quotes(need, now)
     for r in rows:
         hit = _QUOTES.get(r.ticker.upper())
         q = hit[1] if hit else None

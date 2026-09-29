@@ -278,11 +278,12 @@ def create_app(tickers_path: str = "data/tickers.csv", cache_dir: str | None = N
                     print(f"profile warm-up: {_e!r}", file=_sys.stderr, flush=True)
                 _t.sleep(6 * 3600)
         _th.Thread(target=_warm_profiles, daemon=True).start()
+        board.keep_fresh()    # rebuild whenever stale, not only when someone visits
+        board.quote_feed()    # and keep live prices a few minutes fresh in between
+        board.refresh_bars()  # and each day's bars once the market closes
     if os.environ.get("STOCKSKILL_CRAWL") == "1" and cache_dir:
         from ..data import market_crawl
         market_crawl.run_forever(cache_dir, period)      # slowly cache the whole market, biggest first
-        board.keep_fresh()    # rebuild whenever stale, not only when someone visits
-        board.quote_feed()    # and keep live prices a few minutes fresh in between
 
     @app.get("/api/quotes")
     def live_quotes():

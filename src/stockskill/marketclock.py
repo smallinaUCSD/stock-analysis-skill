@@ -9,7 +9,7 @@ day) and early-close days end the session at 13:00 (data/market_calendar.py).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, time
+from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 try:
@@ -92,3 +92,22 @@ def refresh_seconds_for(status: "MarketStatus", base_interval: float | None = No
         return 1800         # 30 min (extended hours)
     return 3600             # 1h overnight/weekend — still polls so the page picks
     #                         up the next session's open without a manual reload
+
+
+def last_session(now: datetime | None = None, settle_minutes: int = 20) -> date:
+    """The most recent trading day whose close has passed (plus a few minutes for
+    data providers to publish the final bar)."""
+    from .data.market_calendar import early_close, is_holiday
+    if now is None:
+        now = datetime.now(ET)
+    elif now.tzinfo is None:
+        now = now.replace(tzinfo=ET)
+    et = now.astimezone(ET)
+    d = et.date()
+    close = time(13, 0) if early_close(d) else REGULAR_CLOSE
+    settled = (datetime.combine(d, close, ET) + timedelta(minutes=settle_minutes)).time()
+    if et.time() < settled:
+        d -= timedelta(days=1)
+    while d.weekday() >= 5 or is_holiday(d):
+        d -= timedelta(days=1)
+    return d

@@ -306,13 +306,18 @@ table.wl th:nth-child(15),table.wl td:nth-child(15){text-align:left}
 .pcol{display:flex;flex-direction:column;gap:12px;min-width:0}
 .pcol>.panel:last-child{flex:1 1 auto}                /* columns end level: the last panel takes up the slack */
 .panels.measure{align-items:start} .panels.measure .pcol>.panel:last-child{flex:none}
-.pl-row{grid-template-columns:auto 1fr auto;cursor:default}
+.pl-row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:5px 0;font-size:14px}
+.pl-k{color:var(--muted);font-size:13px} .pl-v{text-align:right}
+.p-movers{cursor:pointer} .p-movers:hover{border-color:var(--border-strong)}
+.mv-more{font-size:12px;margin-left:auto} .mv-none{font-size:13px;padding:4px 0}
+.mv-h{font-family:var(--font-display);font-weight:500;font-size:24px;margin:0 0 4px} .mv-sub{font-size:13px;margin:0 0 10px}
+.mv-cols{display:grid;grid-template-columns:1fr 1fr;gap:28px} @media (max-width:640px){.mv-cols{grid-template-columns:1fr}}
 .mk-cols{display:block}
 .mv-row{display:grid;grid-template-columns:62px 1fr auto;gap:8px;align-items:baseline;padding:4px 0;font-size:14px;cursor:pointer}
 .mv-row .tk{font-weight:500} .mv-row .nm{color:var(--muted);font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .up-row{display:grid;grid-template-columns:62px 1fr;gap:8px;padding:5px 0;font-size:13.5px;border-top:1px solid var(--border)}
 .up-row:first-child{border-top:none} .up-row time{color:var(--muted);font-size:12.5px}
-.up-row.cut,.mv-row.cut{display:none}
+.up-row.cut{display:none}
 .up-row small{display:block;color:var(--muted);font-size:12px}
 .up-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:1px}
 @media (max-width:980px){.panels{grid-template-columns:1fr 1fr}}
@@ -333,8 +338,6 @@ table.wl th:nth-child(15),table.wl td:nth-child(15){text-align:left}
 .mkchg{text-align:right;font-weight:500}
 .mkchg.up{color:var(--up)} .mkchg.down{color:var(--down)}
 .macro-fg{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:14px;padding:2px 0}
-.macro-fomc{font-size:14px;padding:2px 0}
-.macro-fomc b{font-weight:500}
 .macro-ev{display:block;text-decoration:none;color:var(--ink);font-size:13px;line-height:1.4;
   padding:5px 0;border-bottom:1px solid var(--border)}
 .macro-ev:last-child{border-bottom:none}
@@ -1118,27 +1121,42 @@ def _banner(alerts):
 
 
 def _movers_html(rows) -> str:
-    """Your watchlist's biggest moves today (fills the column under sectors)."""
+    """Your watchlist's biggest moves today: three up, three down; a click opens
+    the top ten each way."""
     moved = sorted((r for r in rows if r.changes.get("1d") is not None), key=lambda r: -r.changes["1d"])
     if len(moved) < 2:
         return ""
-    k = min(5, len(moved) // 2)
-    pick = moved[:k] + moved[-k:]
 
     def row(r):
         c = r.changes["1d"]
         return (f'<div class="mv-row" data-go-card="{html.escape(r.ticker)}"><span class="tk">{html.escape(r.ticker)}</span>'
                 f'<span class="nm">{html.escape((r.name or "")[:34])}</span>'
                 f'<span class="{"up" if c >= 0 else "down"}">{c * 100:+.2f}%</span></div>')
-    return ('<section class="panel p-movers"><div class="panel-h">Your movers<span class="ph-tag">today</span></div>'
-            '<div class="panel-body"><div class="mkgroup">Up</div>' + "".join(row(r) for r in pick[:k])
-            + '<div class="mkgroup">Down</div>' + "".join(row(r) for r in reversed(pick[k:])) + '</div></section>')
+
+    def group(label, rs):
+        return (f'<div class="mkgroup">{label}</div>'
+                + ("".join(row(r) for r in rs) or '<div class="muted mv-none">None today</div>'))
+
+    def ups(k):
+        return [r for r in moved[:k] if r.changes["1d"] > 0]
+
+    def downs(k):
+        return [r for r in reversed(moved[-k:]) if r.changes["1d"] < 0]
+    half = max(1, len(moved) // 2)
+    k, full = min(3, half), min(10, half)
+    return ('<section class="panel p-movers" onclick="openMovers(event)" title="See your top 10 up and down">'
+            '<div class="panel-h">Your movers<span class="ph-tag">today</span>'
+            f'<span class="site-help mv-more">Top {full}</span></div>'
+            '<div class="panel-body">' + group("Up", ups(k)) + group("Down", downs(k)) + '</div>'
+            f'<template id="mv-all"><h2 class="mv-h">Your movers today</h2><p class="muted mv-sub">The {full} biggest '
+            f'gains and drops on your watchlist. Click one to open it.</p><div class="mv-cols">'
+            f'<div>{group("Up", ups(full))}</div><div>{group("Down", downs(full))}</div></div></template>'
+            '</section>')
 
 
 def _pulse_html(rows) -> str:
     """Your watchlist at a glance today: breadth, average move, best and worst
-    sectors, 52-week highs and lows, earnings this week."""
-    from .row import earnings_days
+    sectors, 52-week highs and lows (earnings are in Coming up)."""
     ch = [r.changes.get("1d") for r in rows if r.changes.get("1d") is not None]
     if len(ch) < 2:
         return ""
@@ -1151,21 +1169,27 @@ def _pulse_html(rows) -> str:
     secs = sorted(((sum(v) / len(v), k) for k, v in by_sec.items() if len(v) >= 2), reverse=True)
     highs = [r.ticker for r in rows if r.price and r.week52_high and r.price >= 0.97 * r.week52_high]
     lows = [r.ticker for r in rows if r.price and r.week52_low and r.price <= 1.03 * r.week52_low]
-    soon = sorted(((earnings_days(r.next_earnings), r.ticker) for r in rows
-                   if earnings_days(r.next_earnings) is not None and 0 <= earnings_days(r.next_earnings) <= 7))
 
     def line(label, val):
-        return f'<div class="mv-row pl-row"><span class="nm">{label}</span><span></span><span>{val}</span></div>'
+        return f'<div class="pl-row"><span class="pl-k">{label}</span><span class="pl-v">{val}</span></div>'
     body = line("Up / down", f'<span class="up">{up}</span> / <span class="down">{dn}</span>')
     body += line("Average move", f'<span class="{"up" if avg >= 0 else "down"}">{avg * 100:+.2f}%</span>')
     if secs:
-        body += line("Best sector", f'{html.escape(secs[0][1])} <span class="{"up" if secs[0][0] >= 0 else "down"}">{secs[0][0] * 100:+.1f}%</span>')
+        body += line("Best sector", f'{html.escape(_abbr_sector(secs[0][1]))} <span class="{"up" if secs[0][0] >= 0 else "down"}">{secs[0][0] * 100:+.1f}%</span>')
         if len(secs) > 1:
-            body += line("Worst sector", f'{html.escape(secs[-1][1])} <span class="{"up" if secs[-1][0] >= 0 else "down"}">{secs[-1][0] * 100:+.1f}%</span>')
+            body += line("Worst sector", f'{html.escape(_abbr_sector(secs[-1][1]))} <span class="{"up" if secs[-1][0] >= 0 else "down"}">{secs[-1][0] * 100:+.1f}%</span>')
     body += line("Near 52-week high", html.escape(", ".join(highs[:4]) + (f" +{len(highs) - 4}" if len(highs) > 4 else "")) or "none")
     if lows:
         body += line("Near 52-week low", html.escape(", ".join(lows[:4]) + (f" +{len(lows) - 4}" if len(lows) > 4 else "")))
-    body += line("Earnings this week", html.escape(", ".join(t for _, t in soon[:4]) + (f" +{len(soon) - 4}" if len(soon) > 4 else "")) or "none")
+    def few(ts):
+        return html.escape(", ".join(ts[:4]) + (f" +{len(ts) - 4}" if len(ts) > 4 else "")) or "none"
+    busy = [r.ticker for r in sorted(rows, key=lambda r: -(r.rvol or 0)) if (r.rvol or 0) >= 1.5]
+    body += line("Unusual volume", few(busy))
+    hot = [r.ticker for r in rows if r.rsi is not None and r.rsi >= 70]
+    cold = [r.ticker for r in rows if r.rsi is not None and r.rsi <= 30]
+    body += line("Overbought (RSI 70+)", few(hot))
+    if cold:
+        body += line("Oversold (RSI 30 or less)", few(cold))
     return ('<section class="panel p-pulse"><div class="panel-h">Your watchlist today</div>'
             '<div class="panel-body">' + body + '</div></section>')
 
@@ -1273,28 +1297,6 @@ def _macro_html(macro):
                  f'<span><b class="{fcls}">{score:.0f}</b> '
                  f'<span class="{fcls}" style="font-size:13px">{html.escape(str(fg.get("rating","")))}</span>'
                  '</span></div>')
-
-    fomc = macro.get("fomc")
-    if fomc:
-        iso, days = fomc
-        when = "today" if days == 0 else ("tomorrow" if days == 1 else f"in {days}d")
-        body += ('<div class="mkgroup">Fed</div>'
-                 f'<div class="macro-fomc">Fed decision (FOMC) <b>{when}</b> '
-                 f'<span class="muted">{html.escape(iso)}</span></div>')
-
-    ipos = macro.get("ipos") or []
-    if ipos:
-        rows = []
-        for r in ipos:
-            rng = ("" if r.get("low") is None else
-                   (f'${r["low"]:,.0f}' if r["low"] == r["high"] else f'${r["low"]:,.0f}-{r["high"]:,.0f}'))
-            d = r.get("date", "")[5:].replace("-", "/").lstrip("0")
-            rows.append(f'<div class="mkrow ipo"><span class="mkname">{html.escape(r.get("name", "")[:26])}'
-                        f' <span class="muted">{html.escape(r.get("symbol", ""))}</span></span>'
-                        f'<span class="mkpx">{rng}</span><span class="mkchg muted">{html.escape(d)}</span></div>')
-        body += ('<div class="mkgroup">Upcoming IPOs</div>' + "".join(rows) +
-                 '<a class="site-help" style="font-size:13px" href="/ipos" '
-                 'onclick="openTab(\'/ipos\');return false">See all IPOs</a>')
 
     events = macro.get("events", [])
     if events:
@@ -1453,7 +1455,7 @@ function fillUpcoming(){
   if(_upHTML!==null){ el.innerHTML=_upHTML; return; }
   fetch('/api/calendar',{cache:'no-store'}).then(r=>r.json()).then(d=>{
     const t=new Date(), today=t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
-    const ev=(d.events||[]).filter(e=>e.date>=today && e.kind!=='ipo' && (e.kind!=='options'||e.importance>1)).slice(0,16);
+    const ev=(d.events||[]).filter(e=>e.date>=today && (e.kind!=='options'||e.importance>1)).slice(0,40);
     const day=s=>new Date(s+'T12:00:00').toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});
     _upHTML=ev.length?ev.map(e=>'<div class="up-row"><time>'+day(e.date).replace(/,.*/,'')+'<br>'+day(e.date).split(', ').slice(1).join(', ')+'</time>'+
       '<span><span class="up-dot" style="background:'+(_UPC[e.kind]||'var(--muted)')+'"></span>'+_esc(e.title)+(e.detail?'<small>'+_esc(e.detail)+'</small>':'')+'</span></div>').join('')
@@ -1461,21 +1463,27 @@ function fillUpcoming(){
     el.innerHTML=_upHTML; fitPanels();
   }).catch(()=>{ el.innerHTML='<div class="muted" style="font-size:13px">Calendar unavailable.</div>'; });
 }
-// the three columns end level: longer lists (Coming up, Your movers) drop rows until theirs is no taller than the others
+// the three columns end level: Coming up drops rows until its column is no taller than the others
 function fitPanels(){
   const g=document.querySelector('.panels'), cols=[...document.querySelectorAll('.panels>.pcol')];
   if(!g || cols.length<2) return;
-  document.querySelectorAll('.up-row.cut,.mv-row.cut').forEach(r=>r.classList.remove('cut'));
+  document.querySelectorAll('.up-row.cut').forEach(r=>r.classList.remove('cut'));
   if(innerWidth<980) return;
   g.classList.add('measure');                      // natural heights, without the stretching
-  const tallest=Math.max(...cols.map(c=>c.querySelector('.p-upcoming,.p-movers')?0:c.offsetHeight));
-  if(tallest) cols.forEach(c=>{ const rows=[...c.querySelectorAll('.p-upcoming .up-row,.p-movers .mv-row:not(.pl-row)')];
+  const tallest=Math.max(...cols.map(c=>c.querySelector('.p-upcoming')?0:c.offsetHeight));
+  if(tallest) cols.forEach(c=>{ const rows=[...c.querySelectorAll('.p-upcoming .up-row')];
     for(let i=rows.length-1;i>=3 && c.offsetHeight>tallest+4;i--) rows[i].classList.add('cut'); });
   g.classList.remove('measure');
 }
+// Your movers: the whole panel opens the top ten up and down (a row inside opens that stock)
+function openMovers(e){
+  const t=document.getElementById('mv-all'); if(!t) return;
+  document.getElementById('modal-body').innerHTML=t.innerHTML;
+  document.getElementById('modal').classList.add('show');
+}
 window.addEventListener("resize",()=>{ clearTimeout(window._fitT); window._fitT=setTimeout(fitPanels,150); });
 window.addEventListener("load",fitPanels);
-document.addEventListener('click',e=>{ const m=e.target.closest('[data-go-card]'); if(!m) return;
+document.addEventListener('click',e=>{ const m=e.target.closest('#modal-body [data-go-card]'); if(!m) return;
   const card=document.querySelector('.card-item[data-ticker="'+m.dataset.goCard+'"]'); if(card) openCard(card); });
 document.addEventListener('DOMContentLoaded',fillUpcoming);
 // pre-market / after-hours: keep each card's extended-hours line current (every 2 minutes)
@@ -1624,7 +1632,9 @@ def render_watchlist(rows, title="Watchlist", updated="", status_badge="", statu
     banner, _sig = _banner(alerts or [])
     sector_html = _sector_html(sectors) + (_movers_html(rows) + _pulse_html(rows) if served else "")
     markets_html = _markets_html(markets)
-    macro_html = _macro_html(macro) + (_UPCOMING_PANEL if served else "")
+    macro_html = _macro_html(macro)
+    if served:                        # macro under markets; Coming up gets the third column to itself
+        markets_html, macro_html = markets_html + macro_html, _UPCOMING_PANEL
     # Public mode hides only the Holdings button (personal data). Add-ticker and
     # the read-only tools stay.
     _add_box = (
@@ -2034,6 +2044,7 @@ function _schedulePoll(){{
 let _boardTs=Date.now()/1000;
 function _watchBoard(){{
   if(!SERVED) return;
+  setTimeout(_liveQuotes, 1500);          // the page may be minutes older than the latest quotes
   setInterval(function(){{
     if(document.hidden) return;
     fetch('/api/board/meta',{{cache:'no-store'}}).then(r=>r.ok?r.json():null).then(m=>{{

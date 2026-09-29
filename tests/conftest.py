@@ -48,3 +48,14 @@ def _analytics_to_tmp(tmp_path, monkeypatch):
     monkeypatch.delenv("STOCKSKILL_ADMINS", raising=False)
     # texts never reach a real Messages helper from a test
     monkeypatch.setenv("STOCKSKILL_IMESSAGE_DIR", str(tmp_path / "imessage"))
+
+
+@pytest.fixture(autouse=True)
+def _no_yahoo_price_fallback(monkeypatch):
+    """The board fills quotes the feed missed from Yahoo; tests that drive the
+    overlay must never reach the network for that. Tests of the fallback stub
+    it themselves."""
+    from stockskill.watchlist import build
+    if not hasattr(build, "_real_fill_missing_quotes"):
+        build._real_fill_missing_quotes = build.fill_missing_quotes
+    monkeypatch.setattr(build, "fill_missing_quotes", lambda tickers, since: 0)
