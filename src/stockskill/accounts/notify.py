@@ -220,6 +220,10 @@ def deliver(u: dict, kind: str, title: str, lines: list[str], url: str, dedupe: 
         from .brief import polish
         body = polish(kind, title, lines, u.get("first_name") or "") or lines        # a written brief when the LLM is set up
         text = [html.unescape(_strip_tags(ln)) for ln in body]
+        if kind == "summary":                                   # "Was this brief useful? Yes · No"
+            from .feedback import rating_links
+            rate_html, rate_text = rating_links(u, dedupe)
+            body, text = list(body) + [rate_html], text + [rate_text]
         out["email"] = send_email(u["email"], title, "\n\n".join(text) + f"\n\n{full}\n\nUnsubscribe: {unsub}",
                                   _email_html(title, body, full, unsub), unsubscribe=unsub)
     if u.get("notify_push"):

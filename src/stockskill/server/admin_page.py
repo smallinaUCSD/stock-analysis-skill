@@ -23,6 +23,7 @@ def admin_html() -> str:
             "<div id=\"ad-signins\"></div>"
             "<h3 style=\"margin-top:16px\">Failed sign-in attempts</h3><div id=\"ad-fail\"></div>"
             "<p class=\"ad-note\" id=\"ad-geo\"></p></div>"
+            "<div id=\"ad-fb\"></div>"
             "<div id=\"ad\" class=\"muted\">Loading…</div>"
             "<p class=\"ad-note\">First-party counts from this server's own logs. People = signed-in accounts plus anonymous "
             "visitors (a daily hash of IP and browser; the IP isn't stored). Bots and scripts are left out. Data is kept 90 days, as the Privacy Policy says.</p>"
@@ -58,6 +59,13 @@ _EXTRA_CSS = """
 .ad-sub{text-transform:none;letter-spacing:0;font-size:12px;color:var(--muted)}
 .ad-scroll{overflow-x:auto}
 .ad-w td{vertical-align:top}
+.fb-item{border-top:1px solid var(--border);padding:10px 0;display:grid;grid-template-columns:1fr auto;gap:8px 14px}
+.fb-item:first-child{border-top:none}
+.fb-msg{white-space:pre-wrap;line-height:1.5} .fb-meta{font-size:12px;color:var(--muted);margin-top:4px}
+.fb-ctl{display:flex;flex-direction:column;gap:6px;min-width:190px}
+.fb-ctl select,.fb-ctl input{height:32px;border:1px solid var(--border-strong);border-radius:8px;background:var(--bg);color:var(--ink);font:13px var(--font);padding:0 8px}
+.fb-new{display:inline-block;background:var(--accent);color:var(--accent-ink,#1a1512);border-radius:999px;font-size:11px;padding:1px 8px;margin-right:6px}
+@media (max-width:700px){.fb-item{grid-template-columns:1fr}}
 .ad-w td small{display:block;color:var(--muted);font-size:12px;margin:1px 0 0}
 .ad-w tr.pick{cursor:pointer} .ad-w tr.pick:hover td{background:var(--surface-2)}
 .ad-w td small.ad-odd{color:var(--down)}
@@ -228,5 +236,29 @@ function load(){ fetch('/api/admin/report?days='+DAYS).then(function(r){return r
     document.querySelectorAll('#ad .ad-kpis').forEach(function(n){ k.appendChild(n); }); renderWho(); } else document.getElementById('ad').textContent='Not available.'; }); }
 document.querySelectorAll('#ad-days button').forEach(function(b){ b.onclick=function(){ DAYS=+b.dataset.d;
   document.querySelectorAll('#ad-days button').forEach(function(x){ x.classList.toggle('on',x===b); }); load(); }; });
+var FBS={'new':'New','planned':'Planned','shipped':'Shipped','wontfix':"Won't do"};
+function loadFb(){ fetch('/api/admin/feedback?days='+DAYS).then(function(r){return r.json();}).then(function(d){ if(!d.ok) return;
+  var el=document.getElementById('ad-fb'), R=d.ratings||{}, tot=(R.yes||0)+(R.no||0), F=d.feedback||[];
+  var nNew=F.filter(function(f){return f.status==='new';}).length;
+  el.innerHTML='<h2 class="ad-sec-h">Feedback</h2><div class="ad-kpis">'+
+    kpi('Briefs rated useful',tot?Math.round(R.yes/tot*100)+'%':'n/a',tot?(R.yes+' yes · '+R.no+' no, last '+DAYS+' days'):'no ratings yet')+
+    (R.by_brief||[]).map(function(b){ var t=(b.yes||0)+(b.no||0); return kpi(esc(b.brief),t?Math.round(b.yes/t*100)+'%':'n/a',b.yes+' yes · '+b.no+' no'); }).join('')+
+    kpi('Feedback messages',F.length,nNew+' new',nNew>0)+'</div>'+
+    ((R.comments||[]).length?'<div class="ad-card" style="margin-bottom:12px"><h3>What people said about the briefs</h3>'+
+      R.comments.map(function(c){ return '<div class="fb-item" style="grid-template-columns:1fr"><div class="fb-msg">'+(c.vote?'👍 ':'👎 ')+esc(c.comment)+
+        '</div><div class="fb-meta">'+esc(new Date(c.ts*1000).toLocaleString())+' · '+esc(c.key)+'</div></div>'; }).join('')+'</div>':'')+
+    '<div class="ad-card" style="margin-bottom:12px"><h3>Messages from the Feedback button</h3>'+(F.length?F.map(function(f){
+      return '<div class="fb-item" data-id="'+f.id+'"><div><div class="fb-msg">'+(f.status==='new'?'<span class="fb-new">New</span>':'')+esc(f.message)+'</div>'+
+        '<div class="fb-meta">'+esc(f.first_name||f.email||'Deleted account')+(f.email&&f.first_name?' ('+esc(f.email)+')':'')+' · '+
+        esc(new Date(f.ts*1000).toLocaleString())+' · '+esc(f.page||'')+' · '+esc(f.viewport||'')+'</div></div>'+
+        '<div class="fb-ctl"><select aria-label="Status">'+Object.keys(FBS).map(function(k){ return '<option value="'+k+'"'+(k===f.status?' selected':'')+'>'+FBS[k]+'</option>'; }).join('')+
+        '</select><input type="text" placeholder="Private note" value="'+esc(f.note||'')+'" maxlength="500"></div></div>'; }).join(''):
+      '<div class="muted small">Nothing yet. The Feedback button sits in the bottom-left corner of every page.</div>')+'</div>';
+}); }
+document.getElementById('ad-fb').addEventListener('change', function(e){ var it=e.target.closest('.fb-item[data-id]'); if(!it) return;
+  var b=e.target.tagName==='SELECT'?{status:e.target.value}:{note:e.target.value};
+  fetch('/api/admin/feedback/'+it.dataset.id,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)})
+    .then(function(r){ if(r.ok && b.status) loadFb(); }); });
+var _load0=load; load=function(){ _load0(); loadFb(); };
 load(); setInterval(function(){ if(!document.hidden) load(); }, 60000);
 """

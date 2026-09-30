@@ -67,6 +67,19 @@ CREATE INDEX IF NOT EXISTS sessions_user ON sessions (user_id, last_seen);
 -- accounts created, confirmed, finished and deleted over time; no personal details,
 -- so a deleted account still counts once its data is gone
 CREATE TABLE IF NOT EXISTS account_events (ts REAL NOT NULL, kind TEXT NOT NULL, method TEXT);
+-- messages from the in-app Feedback button; the account link goes (not the message) if the account is deleted
+CREATE TABLE IF NOT EXISTS feedback (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL,
+  user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  page TEXT, ua TEXT, viewport TEXT, message TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'new', note TEXT, updated_at REAL
+);
+-- "Was this brief useful?" answers, one per person per brief (key = the brief's dedupe key)
+CREATE TABLE IF NOT EXISTS brief_ratings (
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  key TEXT NOT NULL, vote INTEGER NOT NULL, comment TEXT, ts REAL NOT NULL,
+  PRIMARY KEY (user_id, key)
+);
 CREATE TABLE IF NOT EXISTS login_failures (
   ts REAL NOT NULL, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
   ip TEXT, country TEXT, reason TEXT
@@ -500,3 +513,60 @@ def update_user_email(uid: int, email: str) -> None:
     with conn() as c:
         c.execute("UPDATE users SET email=?, email_canon=?, email_verified=1 WHERE id=?",
                   (email.strip().lower(), canonical_email(email), uid))
+
+
+# --- feedback and brief ratings ---------------------------------------------------
+
+FEEDBACK_STATUSES = ("new", "planned", "shipped", "wontfix")
+
+
+def add_feedback(uid: int, page: str | None, ua: str | None, viewport: str | None, message: str) -> int:
+    with conn() as c:
+        cur = c.execute("INSERT INTO feedback (ts, user_id, page, ua, viewport, message) VALUES (?,?,?,?,?,?)",
+                        (time.time(), uid, page, ua, viewport, message))
+        return int(cur.lastrowid)
+
+
+def feedback_list(limit: int = 200) -> list[dict]:
+    with conn() as c:
+        return [dict(r) for r in c.execute(
+            "SELECT f.id, f.ts, f.page, f.ua, f.viewport, f.message, f.status, f.note, f.updated_at, "
+            "u.email, u.first_name FROM feedback f LEFT JOIN users u ON u.id = f.user_id "
+            "ORDER BY f.status = 'new' DESC, f.ts DESC LIMIT ?", (limit,))]
+
+
+def set_feedback(fid: int, status: str | None = None, note: str | None = None) -> bool:
+    fields = {}
+    if status in FEEDBACK_STATUSES:
+        fields["status"] = status
+    if note is not None:
+        fields["note"] = note[:500]
+    if not fields:
+        return False
+    with conn() as c:
+        cur = c.execute(f"UPDATE feedback SET {', '.join(k + '=?' for k in fields)}, updated_at=? WHERE id=?",
+                        (*fields.values(), time.time(), fid))
+        return cur.rowcount > 0
+
+
+def rate_brief(uid: int, key: str, vote: bool, comment: str | None = None) -> None:
+    """Record (or change) someone's answer for one brief; a later comment is added to it."""
+    with conn() as c:
+        c.execute("INSERT INTO brief_ratings (user_id, key, vote, comment, ts) VALUES (?,?,?,?,?) "
+                  "ON CONFLICT(user_id, key) DO UPDATE SET vote=excluded.vote, "
+                  "comment=COALESCE(excluded.comment, brief_ratings.comment), ts=excluded.ts",
+                  (uid, key, 1 if vote else 0, (comment or None) and comment[:1000], time.time()))
+
+
+def brief_rating_stats(days: int = 30) -> dict:
+    since = time.time() - days * 86400
+    with conn() as c:
+        yes, no = c.execute("SELECT COALESCE(SUM(vote), 0), COALESCE(SUM(1 - vote), 0) FROM brief_ratings WHERE ts >= ?",
+                            (since,)).fetchone()
+        slots = [dict(r) for r in c.execute(
+            "SELECT CASE WHEN key LIKE '%:pre' THEN 'Before the bell' WHEN key LIKE '%:post' THEN 'After the close' ELSE key END AS brief, "
+            "SUM(vote) AS yes, SUM(1 - vote) AS no FROM brief_ratings WHERE ts >= ? GROUP BY brief", (since,))]
+        comments = [dict(r) for r in c.execute(
+            "SELECT ts, vote, comment, key FROM brief_ratings WHERE ts >= ? AND comment IS NOT NULL ORDER BY ts DESC LIMIT 20",
+            (since,))]
+    return {"yes": yes, "no": no, "by_brief": slots, "comments": comments}

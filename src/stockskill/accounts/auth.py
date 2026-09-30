@@ -54,7 +54,7 @@ _PUBLIC_PATHS = {"/", "/login", "/signup", "/terms", "/privacy", "/healthz", "/f
                  "/security/not-me", "/security/was-me",
                  "/sw.js", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/apple-touch-icon.png",
                  "/notifications/verify", "/notifications/unsubscribe", "/api/board/meta",
-                 "/forgot", "/reset", "/account/email/confirm", "/api/t"}
+                 "/forgot", "/reset", "/account/email/confirm", "/api/t", "/brief/rate", "/api/brief/rate"}
 _ONBOARD_OK = {"/welcome", "/account", "/logout", "/terms", "/privacy"}
 
 
@@ -91,6 +91,8 @@ def init_app(app, board, tickers_path: str, cache_dir) -> None:
     app.before_request(_gate)
     from . import attribution
     attribution.init_app(app)
+    from . import feedback
+    feedback.init_app(app)
     from . import security  # noqa: F401  (registers its routes on the blueprint)
     app.register_blueprint(bp)
 
