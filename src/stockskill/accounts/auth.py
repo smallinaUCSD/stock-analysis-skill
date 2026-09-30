@@ -89,6 +89,8 @@ def init_app(app, board, tickers_path: str, cache_dir) -> None:
     app.config["ACCT"] = {"board": board, "tickers_path": tickers_path, "cache_dir": cache_dir}
     db.init()
     app.before_request(_gate)
+    from . import attribution
+    attribution.init_app(app)
     from . import security  # noqa: F401  (registers its routes on the blueprint)
     app.register_blueprint(bp)
 
@@ -329,6 +331,8 @@ def signup():
     except sqlite3.IntegrityError:           # the same inbox signed up a moment ago
         return jsonify({"ok": False, "error": "An account with this email already exists. Sign in instead."}), 409
     db.account_event("created", "email")
+    from .attribution import record_signup
+    record_signup(uid)
     _login(uid, "password (new account)")
     u = db.get_user(uid)
     if needs_email_code(u):                     # the first email is the code to confirm the address
@@ -423,6 +427,8 @@ def google_login():
             uid = db.create_user(email, google_sub=sub, first_name=c.get("given_name"), last_name=c.get("family_name"))
         except sqlite3.IntegrityError:
             return jsonify({"ok": False, "error": "An account with this email already exists. Sign in instead."}), 409
+        from .attribution import record_signup
+        record_signup(uid)
         u = db.get_user(uid)
         db.account_event("created", "google")
     _login(u["id"], "Google")

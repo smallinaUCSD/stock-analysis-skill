@@ -283,6 +283,14 @@ def time_on_site(c, since_ts: float, gap: float = 1800.0) -> dict[int, float]:
     return out
 
 
+def _rows(c, sql: str, args=()) -> list[dict]:
+    """Rows as dicts, or [] when a column doesn't exist yet (an older users.db)."""
+    try:
+        return [dict(r) for r in c.execute(sql, args)]
+    except sqlite3.OperationalError:
+        return []
+
+
 def _account_stats(users_db: str | None, since: str) -> dict:
     """Sign-ups, the onboarding funnel, retention and notification settings."""
     p = users_db or os.environ.get("STOCKSKILL_DB") or "data/users.db"
@@ -298,6 +306,13 @@ def _account_stats(users_db: str | None, since: str) -> dict:
             "SELECT date(created_at, 'unixepoch') AS day, COUNT(*) AS n FROM users WHERE created_at >= ? GROUP BY day ORDER BY day", (ts0,))],
         "new_accounts": c.execute("SELECT COUNT(*) FROM users WHERE created_at >= ?", (ts0,)).fetchone()[0],
         "new_onboarded": c.execute("SELECT COUNT(*) FROM users WHERE created_at >= ? AND onboarded = 1", (ts0,)).fetchone()[0],
+        "signup_sources": _rows(c, """SELECT COALESCE(src_source, 'unknown') AS source, COALESCE(src_medium, '') AS medium,
+                                     COALESCE(src_campaign, '') AS campaign, COUNT(*) AS signups,
+                                     SUM(email_verified) AS confirmed, SUM(onboarded) AS finished
+                                     FROM users WHERE created_at >= ? GROUP BY source, medium, campaign
+                                     ORDER BY signups DESC LIMIT 30""", (ts0,)),
+        "heard_about": _rows(c, """SELECT COALESCE(NULLIF(referral, ''), 'not answered') AS name, COUNT(*) AS n
+                                  FROM users WHERE created_at >= ? GROUP BY name ORDER BY n DESC""", (ts0,)),
         "investor_types": [dict(r) for r in c.execute(
             "SELECT COALESCE(investor_type,'not set') AS name, COUNT(*) AS n FROM users GROUP BY name ORDER BY n DESC")],
         "sign_in": {"google": c.execute("SELECT COUNT(*) FROM users WHERE google_sub IS NOT NULL").fetchone()[0],

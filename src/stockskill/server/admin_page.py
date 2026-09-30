@@ -167,6 +167,10 @@ function render(d){
         '<h3 style="margin-top:12px">By occupation</h3>'+by(g.tools_by_occupation,'Occupation')+
         '<h3 style="margin-top:12px">By place</h3>'+by(g.tools_by_place,'Metro or city')+
         '<p class="ad-note">Places are the approximate city people sign in from. Groups with few people are anecdotes, not trends.</p></div>'; })()+
+    '<div class="ad-grid"><div class="ad-card"><h3>Where sign-ups come from, last '+d.days+' days</h3>'+
+      table(d.signup_sources||[],[['source','Source'],['medium','Medium'],['campaign','Campaign'],['signups','Sign-ups'],['confirmed','Confirmed'],['finished','Finished']])+
+      '<p class="ad-note">From campaign tags on links (?utm_source=linkedin&amp;utm_campaign=…) or the site that sent them; "direct" means neither.</p></div>'+
+      '<div class="ad-card"><h3>What they told us: how did you hear about us?</h3>'+table(d.heard_about||[],[['name','Answer'],['n','Accounts']])+'</div></div>'+
     '<div class="ad-grid"><div class="ad-card"><h3>Kinds of investor</h3>'+table(d.investor_types,[['name','Type'],['n','Accounts']])+'</div>'+
     '<div class="ad-card"><h3>Sign-in and notifications</h3>'+table([
       {k:'Google sign-in',v:(d.sign_in||{}).google},{k:'Password',v:(d.sign_in||{}).password},{k:'Passkey',v:(d.sign_in||{}).passkey},

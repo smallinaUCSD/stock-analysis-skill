@@ -85,6 +85,9 @@ NOTIFY_COLUMNS = {"email_verified": "INTEGER NOT NULL DEFAULT 0", "notify_email"
                   "email_canon": "TEXT",
                   # optional demographics (what to build for whom)
                   "occupation": "TEXT", "home_city": "TEXT", "home_region": "TEXT"}
+# where the account came from (accounts/attribution.py): campaign tags or the referring site
+SOURCE_COLUMNS = {"src_source": "TEXT", "src_medium": "TEXT", "src_campaign": "TEXT", "src_referrer": "TEXT",
+                  "src_landing": "TEXT"}
 
 
 def path() -> str:
@@ -117,7 +120,7 @@ def init() -> None:
 def _migrate(c) -> None:
     """Add columns introduced after a database was created."""
     have = {r["name"] for r in c.execute("PRAGMA table_info(users)")}
-    for col, decl in NOTIFY_COLUMNS.items():
+    for col, decl in {**NOTIFY_COLUMNS, **SOURCE_COLUMNS}.items():
         if col not in have:
             c.execute(f"ALTER TABLE users ADD COLUMN {col} {decl}")
     if "channels" not in {r["name"] for r in c.execute("PRAGMA table_info(notifications)")}:
@@ -209,7 +212,7 @@ def by_google(sub: str) -> dict | None:
 
 
 def update_user(uid: int, **fields) -> None:
-    allowed = set(PROFILE_FIELDS) | set(NOTIFY_COLUMNS) | {"groups", "onboarded", "google_sub", "password_hash",
+    allowed = set(PROFILE_FIELDS) | set(NOTIFY_COLUMNS) | set(SOURCE_COLUMNS) | {"groups", "onboarded", "google_sub", "password_hash",
                                                            "last_login", "terms_version", "privacy_version",
                                                            "accepted_at", "email"}
     fields = {k: v for k, v in fields.items() if k in allowed}

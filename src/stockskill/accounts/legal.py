@@ -217,8 +217,10 @@ encryption keys issued by its push service (for example Google, Apple or Mozilla
 that service encrypted. We keep the summaries and alerts shown in your Today panel for 90 days.</p>
 <p><b>Information collected automatically.</b> Our servers record technical information needed to operate and
 secure the Service: IP address, browser type, the pages and features requested, and error logs. We use one
-essential cookie to keep you signed in. We do not use advertising cookies, cross-site trackers or third-party
-analytics.</p>
+essential cookie to keep you signed in, and one first-party cookie, kept for 60 days, that remembers how you
+found us (the campaign tag on a link you followed, such as "linkedin", or the site that linked to us); if you
+create an account, that source is saved with it so we can tell which places bring people. It is never shared.
+We do not use advertising cookies, cross-site trackers or third-party analytics.</p>
 <p><b>Sign-in history.</b> Each time you sign in we record when, how (password, Google or passkey, and any
 second step), your IP address, an approximate location (city, region and country) that we look up from the IP
 address on our own server using the DB-IP database (the address is not sent to anyone for this), and your
