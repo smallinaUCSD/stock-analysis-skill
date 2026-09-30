@@ -147,7 +147,7 @@ def verify_second_factor(u: dict, code: str) -> bool:
         if step is not None and _USED_STEPS.get(u["id"]) != step:
             _USED_STEPS[u["id"]] = step
             return True
-    if u.get("mfa_method") == "email" and check_code(u["id"], "login", code):
+    if check_code(u["id"], "login", code):          # an emailed code (sent only when email is their second step)
         return True
     return use_recovery_code(u, code)
 
@@ -166,17 +166,20 @@ def notice(u: dict, subject: str, text: str) -> None:
 
 # --- the second step at sign-in ----------------------------------------------------------
 
-def start_mfa(u: dict, nxt: str | None):
-    """Called by the password sign-in when 2-step verification is on."""
+def start_mfa(u: dict, nxt: str | None, via: str = "password"):
+    """The second step of a sign-in (password, Google or Apple) on a device it hasn't trusted yet."""
+    from .devices import second_step
+    method = second_step(u) or "email"
     session.clear()
     session["mfa_uid"] = u["id"]
     session["mfa_at"] = time.time()
     session["mfa_next"] = nxt or ""
+    session["mfa_via"] = via
     hint = None
-    if u.get("mfa_method") == "email":
+    if method == "email":
         send_code(u, "login")
         hint = _mask(u["email"])
-    return jsonify({"ok": False, "mfa": u.get("mfa_method"), "email_hint": hint})
+    return jsonify({"ok": False, "mfa": method, "email_hint": hint})
 
 
 @bp.post("/auth/mfa")
@@ -192,16 +195,21 @@ def finish_mfa():
         from .auth import _failed
         _failed(u, "wrong 2-step code")
         return jsonify({"ok": False, "error": "That code didn't work. Check it and try again."}), 401
-    nxt = session.get("mfa_next")
-    _login(uid, "password + " + ("authenticator app" if u.get("mfa_method") == "totp" else "emailed code"))
-    return jsonify({"ok": True, "next": _next_for(u, nxt)})
+    nxt, via = session.get("mfa_next"), session.get("mfa_via") or "password"
+    _login(uid, via + " + " + ("authenticator app" if u.get("mfa_method") == "totp" else "emailed code"))
+    resp = jsonify({"ok": True, "next": _next_for(u, nxt)})
+    if _body().get("remember", True):
+        from .devices import remember
+        remember(resp, uid)
+    return resp
 
 
 @bp.post("/auth/mfa/resend")
 def resend_mfa():
     uid = session.get("mfa_uid")
     u = db.get_user(uid) if uid else None
-    if not u or u.get("mfa_method") != "email" or _limited(f"mfa-resend:{uid}", 3):
+    from .devices import second_step
+    if not u or second_step(u) != "email" or _limited(f"mfa-resend:{uid}", 3):
         return jsonify({"ok": False, "error": "Can't send another code right now."}), 400
     send_code(u, "login")
     return jsonify({"ok": True})
@@ -255,6 +263,7 @@ def mfa_confirm():
         return jsonify({"ok": False, "error": "Choose a method."}), 400
     codes, stored = new_recovery_codes()
     db.update_user(u["id"], mfa_recovery=stored, **fields)
+    db.forget_devices(u["id"])                  # every browser proves the new method once
     session.pop("mfa_setup", None)
     notice(u, "2-step verification is on", "2-step verification was turned on for your account.")
     return jsonify({"ok": True, "recovery_codes": codes})
@@ -300,6 +309,10 @@ def forgot():
     email = (_body().get("email") or "").strip().lower()
     if _limited("forgot-ip:" + (request.remote_addr or "?"), 10, 3600) or _limited("forgot:" + email, 3, 3600):
         return jsonify({"ok": False, "error": "Too many requests. Try again in an hour."}), 429
+    from .antibot import check as bot_check
+    bot = bot_check(_body(), 1.0)
+    if bot:
+        return jsonify({"ok": False, "error": bot}), 400
     u = db.by_email(email) if _EMAIL_RE.match(email) else None
     if u:
         send_reset(u)
@@ -461,8 +474,10 @@ def reset_password():
     if not u or _reset_payload(u) != d:
         return jsonify({"ok": False, "error": "This reset link has expired or was already used. Request a new one."}), 400
     pw = b.get("password") or ""
-    if len(pw) < 10 or len(set(pw)) < 5:
-        return jsonify({"ok": False, "error": "Use a password of at least 10 characters."}), 400
+    from .passwords import problem
+    bad = problem(pw, u["email"])
+    if bad:
+        return jsonify({"ok": False, "error": bad}), 400
     db.update_user(u["id"], password_hash=generate_password_hash(pw), email_verified=1)
     db.revoke_sessions(u["id"])                      # a reset signs out every device
     from .auth import _SEEN
@@ -571,6 +586,8 @@ def verify_email_code():
         db.update_user(u["id"], email_verified=1)
         db.account_event("confirmed")
         u = db.get_user(u["id"])                 # (the welcome email waits until sign-up is finished)
+        from .devices import remember            # the code proved the inbox: trust this browser too
+        return remember(jsonify({"ok": True, "next": _next_for(u)}), u["id"])
     return jsonify({"ok": True, "next": _next_for(u)})
 
 

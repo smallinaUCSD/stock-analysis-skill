@@ -91,6 +91,9 @@ def init_app(app) -> None:
     def _attribution_in():
         if request.method != "GET" or request.path.startswith(("/api/", "/static/")):
             return None
+        from .consent import optional_allowed
+        if not optional_allowed():                 # they chose essential cookies only
+            return None
         t = touch(request.args, request.referrer or "", request.host or "", request.path)
         have = read(request.cookies.get(COOKIE))
         if t and (t.get("u") or not have):

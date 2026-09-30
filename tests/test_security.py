@@ -55,6 +55,13 @@ def app(tmp_path, monkeypatch):
     groups._CACHE["groups"] = None
 
 
+def _code_step(c, outbox, r):
+    """Finish a sign-in that asked for the emailed code (every new browser gets one)."""
+    assert r.get("mfa") == "email", r
+    code = re.search(r"Your code: (\d{6})", outbox[-1]["subject"]).group(1)
+    return c.post("/auth/mfa", json={"code": code}).get_json()
+
+
 @pytest.fixture
 def outbox(monkeypatch):
     from stockskill.accounts import notify
@@ -190,7 +197,8 @@ def test_forgot_and_reset_password(app, outbox):
     assert c.post("/auth/reset", json={"token": tok, "password": "brand-new-password-2"}).get_json()["ok"]
     assert outbox[-1]["subject"] == "Your password was changed"
     assert c.post("/auth/reset", json={"token": tok, "password": "another-password-33"}).status_code == 400   # used
-    assert c.post("/auth/login", json={"email": "a@example.com", "password": "brand-new-password-2"}).get_json()["ok"]
+    r = c.post("/auth/login", json={"email": "a@example.com", "password": "brand-new-password-2"}).get_json()
+    assert _code_step(c, outbox, r)["ok"]                                    # a reset forgot this browser: code again
 
 
 def test_change_email(app, outbox):
@@ -221,7 +229,8 @@ def test_one_account_per_inbox(app, outbox):
         r = app.test_client().post("/auth/signup", json={"email": twin, "password": "a-long-password-1", "accept": True})
         assert r.status_code == 409, twin
     c = app.test_client()                                                    # the same inbox signs in to it
-    assert c.post("/auth/login", json={"email": "J.Smith@gmail.com", "password": "a-long-password-1"}).get_json()["ok"]
+    r = c.post("/auth/login", json={"email": "J.Smith@gmail.com", "password": "a-long-password-1"}).get_json()
+    assert _code_step(c, outbox, r)["ok"]
     assert db.duplicate_accounts() == []
 
 
@@ -285,7 +294,7 @@ def test_google_sign_in_evicts_an_unconfirmed_squatter(app, outbox, monkeypatch)
     monkeypatch.setattr(auth, "verify_google_token", lambda t, cid: {"sub": "g-v", "email": "victim@gmail.com",
                                                                      "given_name": "Vic", "family_name": "Tim"})
     victim = app.test_client()
-    assert victim.post("/auth/google", json={"credential": "x"}).get_json()["ok"]
+    assert _code_step(victim, outbox, victim.post("/auth/google", json={"credential": "x"}).get_json())["ok"]
     u = db.by_email("victim@gmail.com")
     assert u["google_sub"] == "g-v" and u["email_verified"] == 1 and u["password_hash"] is None
     auth._SEEN.clear()

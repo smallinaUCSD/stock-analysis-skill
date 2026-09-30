@@ -59,3 +59,20 @@ def _no_yahoo_price_fallback(monkeypatch):
     if not hasattr(build, "_real_fill_missing_quotes"):
         build._real_fill_missing_quotes = build.fill_missing_quotes
     monkeypatch.setattr(build, "fill_missing_quotes", lambda tickers, since: 0)
+
+
+@pytest.fixture(autouse=True)
+def _no_breach_lookups(monkeypatch):
+    """The password breach check calls Have I Been Pwned; tests never reach the network.
+    Tests of the check stub it themselves."""
+    from stockskill.accounts import passwords
+    if not hasattr(passwords, "_real_pwned_count"):
+        passwords._real_pwned_count = passwords.pwned_count
+    monkeypatch.setattr(passwords, "pwned_count", lambda pw: 0)
+
+
+@pytest.fixture(autouse=True)
+def _no_antibot(monkeypatch):
+    """Tests call the sign-in APIs directly (no page, no form token); the anti-bot
+    checks have their own tests, which turn them back on."""
+    monkeypatch.setenv("STOCKSKILL_ANTIBOT", "0")

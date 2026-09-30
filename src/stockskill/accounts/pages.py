@@ -304,7 +304,7 @@ def landing_html() -> str:
   <a class="btn primary" href="/signup">Create a free account</a></div></section>
 </main>
 <footer class="lp-foot"><div class="lp-in"><div>{_brand_link()}<p class="muted small">&copy; 2026 {html.escape(legal.operator())}. All rights reserved.</p></div>
-  <div class="lp-flinks"><a href="/terms">Terms of Service</a><a href="/privacy">Privacy Policy</a><a href="/login">Sign in</a></div>
+  <div class="lp-flinks"><a href="/terms">Terms of Service</a><a href="/privacy">Privacy Policy</a><a href="/cookies">Cookie policy</a><a href="/login">Sign in</a></div>
   <p class="muted small lp-disc">{BRAND} provides information for research and education only. It is not investment advice or a
   recommendation to buy or sell any security. Investing involves risk, including loss of principal. Data may be delayed or
   inaccurate. Past and simulated performance do not guarantee future results.</p></div></footer>"""
@@ -394,21 +394,30 @@ _LANDING_CSS = """
 
 def login_html(mode: str = "login", google_client_id: str | None = None, nxt: str = "") -> str:
     gsi = '<script src="https://accounts.google.com/gsi/client" async defer></script>' if google_client_id else ""
+    from .apple import client_id as apple_client_id
+    aid = apple_client_id()
+    if aid:
+        gsi += ('<script src="https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js" '
+                'async defer></script>')
     body = f"""<div class="au-wrap"><div class="au-top">{_brand_link()}</div>
 <div class="au-card">
   <div class="au-tabs" role="tablist"><button data-m="login">Sign in</button><button data-m="signup">Create account</button></div>
   <h1 id="au-h"></h1><p id="au-sub" class="muted"></p>
   <div id="g-btn" class="g-btn"></div>
+  <button id="apple-btn" class="btn block apple-btn" type="button" hidden><svg width="16" height="18" viewBox="0 0 170 200" aria-hidden="true"><path fill="currentColor" d="M150 170c-8 12-17 24-30 24s-17-8-32-8-20 8-32 8-22-12-30-24C9 145-3 102 14 72c9-15 24-24 41-24 13 0 25 9 33 9s23-11 39-9c7 0 26 3 38 20-1 1-23 13-23 40 0 31 27 42 27 42s-5 13-19 20zM119 30c7-8 11-19 10-30-10 0-22 7-29 15-6 7-12 18-10 29 11 1 22-6 29-14z"/></svg>Sign in with Apple</button>
   <button id="pk-btn" class="btn ghost block" type="button" hidden>{_ico('target', 18)}Sign in with a passkey</button>
   <div class="divider" id="au-or">or with email</div>
   <form id="au-form" novalidate>
     <div class="field"><label for="em">Email</label><input class="inp" id="em" type="email" autocomplete="username webauthn" required></div>
     <div class="field"><label for="pw">Password</label><input class="inp" id="pw" type="password" autocomplete="current-password" required>
-      <span class="small muted" id="pw-hint" hidden>At least 10 characters.</span>
+      <span class="small muted" id="pw-hint" hidden>At least 10 characters. Avoid common or previously leaked passwords.</span>
       <a class="small au-forgot" id="forgot" href="/forgot">Forgot password?</a></div>
     <label class="au-accept" id="acc-wrap" hidden><input type="checkbox" id="acc" disabled data-legal-gate> <span>I am 18 or older and agree to the
       <a href="/terms" data-legal="terms">Terms of Service</a> (including binding arbitration and a class-action waiver) and the
       <a href="/privacy" data-legal="privacy">Privacy Policy</a>.<small class="lg-need">Open both to agree.</small></span></label>
+    <label class="au-accept" id="upd-wrap" hidden><input type="checkbox" id="upd"> <span>Email me product updates, about
+      once a month. Optional; unsubscribe any time.</span></label>
+    <div class="hp" aria-hidden="true"><label>Website <input id="hp-web" name="website" tabindex="-1" autocomplete="off"></label></div>
     <div class="err" id="au-err" role="alert"></div>
     <button class="btn primary block" id="au-go" type="submit"></button>
   </form>
@@ -418,14 +427,17 @@ def login_html(mode: str = "login", google_client_id: str | None = None, nxt: st
   <h1>2-step verification</h1><p class="muted" id="mfa-sub"></p>
   <form id="mfa-form" novalidate><div class="field"><label for="code">Code</label>
     <input class="inp" id="code" inputmode="numeric" autocomplete="one-time-code" placeholder="123456"></div>
+    <label class="au-accept"><input type="checkbox" id="mfa-rem" checked> <span>Remember this device for 30 days</span></label>
     <div class="err" id="mfa-err" role="alert"></div>
     <button class="btn primary block" type="submit">Verify</button></form>
   <p class="small muted au-switch">Lost access? Enter one of your backup codes instead.
     <a id="mfa-resend" hidden onclick="resendMfa()">Email me a new code</a></p>
 </div>
 <p class="small muted au-legal">Not financial advice. <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a></p></div>"""
+    from .antibot import form_token
     js = ("var MODE=" + script_json(mode if mode in ("login", "signup") else "login") + ", NEXT=" + script_json(nxt or "")
-          + ", GID=" + script_json(google_client_id or "") + ";\n" + _LOGIN_JS)
+          + ", GID=" + script_json(google_client_id or "") + ", AID=" + script_json(aid or "")
+          + ", FT=" + script_json(form_token()) + ";\n" + _LOGIN_JS)
     return _shell(("Sign in" if mode == "login" else "Create your account") + f" · {BRAND}", body, _AUTH_CSS, js, gsi)
 
 
@@ -444,6 +456,9 @@ _AUTH_CSS = """
 .au-legal{margin-top:18px}
 .au-forgot{align-self:flex-end;margin-top:4px;text-decoration:none}
 #mfa{margin-top:0}
+.hp{position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden}
+.apple-btn{display:flex;align-items:center;justify-content:center;gap:10px;background:#000;color:#fff;border:1px solid #000;margin:8px auto 0;max-width:320px}
+.apple-btn:hover{background:#1a1a1a}
 """
 
 _LOGIN_JS = r"""
@@ -454,7 +469,7 @@ function setMode(m){ MODE=m;
   document.getElementById('au-sub').textContent=su?'Free during the beta. Takes about a minute.':'Sign in to your watchlist and research.';
   document.getElementById('au-go').textContent=su?'Create account':'Sign in';
   document.getElementById('pw').setAttribute('autocomplete', su?'new-password':'current-password');
-  document.getElementById('pw-hint').hidden=!su; document.getElementById('acc-wrap').hidden=!su;
+  document.getElementById('pw-hint').hidden=!su; document.getElementById('acc-wrap').hidden=!su; document.getElementById('upd-wrap').hidden=!su;
   document.getElementById('forgot').hidden=su;
   document.getElementById('pk-btn').hidden=su||!passkeySupported();
   document.getElementById('au-switch').innerHTML=su?'Already have an account? <a onclick="setMode(\'login\')">Sign in</a>':
@@ -471,17 +486,28 @@ function done(d){
     document.getElementById('mfa-resend').hidden=d.mfa!=='email'; document.getElementById('code').focus(); return; }
   if(d.ok){ location.href=d.next||'/'; } else { document.getElementById('au-err').textContent=d.error||'Something went wrong.'; } }
 document.getElementById('mfa-form').addEventListener('submit',function(e){ e.preventDefault();
-  post('/auth/mfa',{code:document.getElementById('code').value}).then(function(d){
+  post('/auth/mfa',{code:document.getElementById('code').value, remember:document.getElementById('mfa-rem').checked}).then(function(d){
     if(d.ok) location.href=d.next||'/'; else document.getElementById('mfa-err').textContent=d.error; }); });
 function resendMfa(){ post('/auth/mfa/resend').then(function(d){ document.getElementById('mfa-err').textContent=d.ok?'Sent a new code.':d.error; }); }
 document.getElementById('au-form').addEventListener('submit',function(e){ e.preventDefault();
   var btn=document.getElementById('au-go'); btn.disabled=true;
-  var body={email:document.getElementById('em').value, password:document.getElementById('pw').value, next:NEXT};
-  if(MODE==='signup') body.accept=document.getElementById('acc').checked;
+  var body={email:document.getElementById('em').value, password:document.getElementById('pw').value, next:NEXT,
+            website:document.getElementById('hp-web').value, ft:FT};
+  if(MODE==='signup'){ body.accept=document.getElementById('acc').checked; body.updates=document.getElementById('upd').checked; }
   post(MODE==='signup'?'/auth/signup':'/auth/login', body).then(function(d){ btn.disabled=false; done(d); }); });
 document.getElementById('pk-btn').addEventListener('click',function(){
   document.getElementById('au-err').textContent='';
   signInWithPasskey(NEXT).then(done).catch(function(e){ document.getElementById('au-err').textContent=pkError(e); }); });
+function renderApple(){
+  if(!AID) return; if(!window.AppleID||!AppleID.auth){ setTimeout(renderApple,200); return; }
+  AppleID.auth.init({clientId:AID, scope:'name email', redirectURI:location.origin+'/login', usePopup:true});
+  var b=document.getElementById('apple-btn'); b.hidden=false;
+  b.onclick=function(){ document.getElementById('au-err').textContent='';
+    AppleID.auth.signIn().then(function(r){ return post('/auth/apple',{id_token:r.authorization.id_token, user:r.user||null, next:NEXT}); })
+      .then(function(d){ if(d) done(d); })
+      .catch(function(e){ if(!e||e.error!=='popup_closed_by_user') document.getElementById('au-err').textContent='Apple sign-in didn\'t finish. Try again.'; }); };
+}
+if(AID) renderApple();
 function renderGoogle(){
   var el=document.getElementById('g-btn'); if(!GID){ el.innerHTML=''; document.getElementById('au-or').hidden=!passkeySupported()||MODE==='signup'; return; }
   if(!window.google||!google.accounts){ setTimeout(renderGoogle,200); return; }
@@ -738,9 +764,15 @@ function testNf(){ var m=document.getElementById('nf-msg'); post('/api/me/notify
   var miss={email:'Email',sms:'Text',push:'Browser'}, why=d.not_sent||{};
   m.innerHTML='Sent to '+esc(got.join(', '))+'.'+Object.keys(why).map(function(k){ return '<br><span class="muted">'+miss[k]+': not sent, '+esc(why[k])+'.</span>'; }).join(''); }); }
 function secu(){ var u=ME.user, pwf=function(id){ return u.has_password?'<div class="field"><label>Current password</label><input class="inp" id="'+id+'" type="password" autocomplete="current-password"></div>':''; };
+  var devs='<div class="ac-row" style="margin-top:6px"><span class="small muted">'+(u.trusted_devices||0)+' remembered device'+(u.trusted_devices===1?'':'s')+
+      ' (no code needed there for 30 days)</span><button class="btn ghost" onclick="forgetDevices()">Forget all</button></div>';
   var mfa=u.mfa?'<p style="margin:0 0 10px"><b>On</b> · '+(u.mfa==='totp'?'authenticator app':'codes emailed to you')+' · '+u.recovery_left+' backup codes left</p>'+
       '<div class="row2">'+pwf('mfp')+'</div><div class="wz-foot" style="margin-top:0"><span class="small" id="mf-msg"></span><span style="display:flex;gap:8px">'+
-      '<button class="btn ghost" onclick="newCodes()">New backup codes</button><button class="btn ghost" onclick="mfaOff()">Turn off</button></span></div>':
+      '<button class="btn ghost" onclick="newCodes()">New backup codes</button><button class="btn ghost" onclick="mfaOff()">'+(u.mfa_required?'Switch to emailed codes':'Turn off')+'</button></span></div>'+devs:
+    u.mfa_effective==='email'?'<p style="margin:0 0 10px"><b>On</b> · a code is emailed to you when you sign in on a new device</p>'+
+      '<p class="small muted" style="margin:0 0 10px">For stronger protection, use an authenticator app instead: a code on your phone that works even if someone gets into your email.</p>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost" onclick="mfaStart(\'totp\')">Use an authenticator app</button></div>'+
+      '<div class="small" id="mf-msg" style="margin-top:8px"></div>'+devs:
     '<p class="small muted" style="margin:0 0 10px">Ask for a second code when you sign in with your password, so a stolen password isn\'t enough. '+
       '(Passkeys and Google sign-in already verify you strongly.)</p><div style="display:flex;gap:8px;flex-wrap:wrap">'+
       '<button class="btn ghost" onclick="mfaStart(\'totp\')">Use an authenticator app</button>'+
@@ -750,6 +782,8 @@ function secu(){ var u=ME.user, pwf=function(id){ return u.has_password?'<div cl
     '<div class="row2"><div class="field"><label>New email</label><input class="inp" id="ne" type="email" autocomplete="email"></div>'+pwf('nep')+'</div>'+
     '<div class="wz-foot" style="margin-top:0"><span class="small" id="ne-msg"></span><button class="btn ghost" onclick="chEmail()">Change email</button></div></div>'+
     '<div class="ac-sec"><h2>2-step verification</h2>'+mfa+'<div id="mf-setup"></div></div>'; }
+function forgetDevices(){ if(!confirm('Every browser, including this one, will ask for a code at its next sign-in. Continue?')) return;
+  post('/api/me/devices/forget').then(function(d){ if(d.ok) load(); }); }
 function say(id, ok, t){ var m=document.getElementById(id); m.className='small '+(ok?'ok-msg':'err'); m.textContent=t; }
 function chEmail(){ var p=document.getElementById('nep'); post('/api/me/email',{email:v('ne'),password:p?p.value:''}).then(function(d){
   say('ne-msg', d.ok, d.ok?'Check '+v('ne')+' for a link to confirm the change.':d.error); }); }
@@ -1316,14 +1350,16 @@ def forgot_html() -> str:
 <div class="au-card"><h1>Reset your password</h1><p class="muted">Enter your account's email and we'll send you a link to
 choose a new password.</p>
 <form id="f" novalidate><div class="field"><label for="em">Email</label><input class="inp" id="em" type="email" autocomplete="username"></div>
+<div class="hp" aria-hidden="true"><label>Website <input id="hp-web" name="website" tabindex="-1" autocomplete="off"></label></div>
 <div class="err" id="err" role="alert"></div><button class="btn primary block" type="submit">Send the link</button></form>
 <p class="small muted au-switch"><a href="/login">Back to sign in</a></p></div></div>"""
     js = r"""document.getElementById('f').addEventListener('submit',function(e){ e.preventDefault();
-  post('/auth/forgot',{email:document.getElementById('em').value}).then(function(d){
+  post('/auth/forgot',{email:document.getElementById('em').value, website:document.getElementById('hp-web').value, ft:FT}).then(function(d){
     if(!d.ok){ document.getElementById('err').textContent=d.error; return; }
     document.querySelector('.au-card').innerHTML='<h1>Check your email</h1><p class="muted">If an account uses that address, a link to reset '+
       'the password is on its way. It works once, for one hour. Check your spam folder too.</p><p><a href="/login">Back to sign in</a></p>'; }); });"""
-    return _shell(f"Reset your password · {BRAND}", body, _AUTH_CSS, js)
+    from .antibot import form_token
+    return _shell(f"Reset your password · {BRAND}", body, _AUTH_CSS, "var FT=" + script_json(form_token()) + ";\n" + js)
 
 
 def reset_html(token: str) -> str:

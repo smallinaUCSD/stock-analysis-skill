@@ -80,6 +80,12 @@ CREATE TABLE IF NOT EXISTS brief_ratings (
   key TEXT NOT NULL, vote INTEGER NOT NULL, comment TEXT, ts REAL NOT NULL,
   PRIMARY KEY (user_id, key)
 );
+-- browsers that passed the second step: skip it there for 30 days (the raw token lives only in the cookie)
+CREATE TABLE IF NOT EXISTS trusted_devices (
+  id TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at REAL NOT NULL, last_used REAL, ua TEXT
+);
 CREATE TABLE IF NOT EXISTS login_failures (
   ts REAL NOT NULL, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
   ip TEXT, country TEXT, reason TEXT
@@ -97,7 +103,11 @@ NOTIFY_COLUMNS = {"email_verified": "INTEGER NOT NULL DEFAULT 0", "notify_email"
                   "sms_consent_at": "REAL", "notify_events": "INTEGER NOT NULL DEFAULT 0",
                   "email_canon": "TEXT",
                   # optional demographics (what to build for whom)
-                  "occupation": "TEXT", "home_city": "TEXT", "home_region": "TEXT"}
+                  "occupation": "TEXT", "home_city": "TEXT", "home_region": "TEXT",
+                  # opted in (at sign-up or in settings) to the monthly product-update email
+                  "notify_updates": "INTEGER NOT NULL DEFAULT 0", "updates_consent_at": "REAL",
+                  # Sign in with Apple's stable user id
+                  "apple_sub": "TEXT"}
 # where the account came from (accounts/attribution.py): campaign tags or the referring site
 SOURCE_COLUMNS = {"src_source": "TEXT", "src_medium": "TEXT", "src_campaign": "TEXT", "src_referrer": "TEXT",
                   "src_landing": "TEXT"}
@@ -156,6 +166,7 @@ def _migrate(c) -> None:
         c.execute("CREATE UNIQUE INDEX IF NOT EXISTS users_phone ON users (phone) WHERE phone_verified = 1")
     except sqlite3.IntegrityError:         # older duplicates: the app still refuses new ones
         pass
+    c.execute("CREATE UNIQUE INDEX IF NOT EXISTS users_apple_sub ON users (apple_sub) WHERE apple_sub IS NOT NULL")
     try:                                   # one account per inbox, enforced by the database
         c.execute("CREATE UNIQUE INDEX IF NOT EXISTS users_email_canon ON users (email_canon)")
     except sqlite3.IntegrityError:         # older duplicates exist: still look them up fast (admin lists them)
@@ -345,6 +356,7 @@ def revoke_sessions(uid: int, sid: str | None = None, keep: str | None = None) -
         else:
             cur = c.execute("UPDATE sessions SET revoked=1, ended_at=COALESCE(ended_at, ?) "
                             "WHERE user_id=? AND id != ? AND ended_at IS NULL", (now, uid, keep or ""))
+            c.execute("DELETE FROM trusted_devices WHERE user_id=?", (uid,))   # every device asks for a code again
         return cur.rowcount
 
 
@@ -570,3 +582,37 @@ def brief_rating_stats(days: int = 30) -> dict:
             "SELECT ts, vote, comment, key FROM brief_ratings WHERE ts >= ? AND comment IS NOT NULL ORDER BY ts DESC LIMIT 20",
             (since,))]
     return {"yes": yes, "no": no, "by_brief": slots, "comments": comments}
+
+
+# --- remembered devices (the second step at sign-in) -----------------------------------
+
+def add_trusted_device(token_hash: str, uid: int, ua: str | None) -> None:
+    now = time.time()
+    with conn() as c:
+        c.execute("INSERT OR REPLACE INTO trusted_devices (id, user_id, created_at, last_used, ua) VALUES (?,?,?,?,?)",
+                  (token_hash, uid, now, now, (ua or "")[:200]))
+
+
+def trusted_device(token_hash: str) -> dict | None:
+    with conn() as c:
+        return _row(c.execute("SELECT * FROM trusted_devices WHERE id=?", (token_hash,)).fetchone())
+
+
+def touch_trusted_device(token_hash: str) -> None:
+    with conn() as c:
+        c.execute("UPDATE trusted_devices SET last_used=? WHERE id=?", (time.time(), token_hash))
+
+
+def forget_devices(uid: int) -> None:
+    with conn() as c:
+        c.execute("DELETE FROM trusted_devices WHERE user_id=?", (uid,))
+
+
+def by_apple(sub: str) -> dict | None:
+    with conn() as c:
+        return _row(c.execute("SELECT * FROM users WHERE apple_sub=?", (sub,)).fetchone())
+
+
+def trusted_device_count(uid: int) -> int:
+    with conn() as c:
+        return c.execute("SELECT COUNT(*) FROM trusted_devices WHERE user_id=?", (uid,)).fetchone()[0]

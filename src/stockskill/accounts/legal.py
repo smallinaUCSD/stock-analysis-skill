@@ -219,8 +219,9 @@ that service encrypted. We keep the summaries and alerts shown in your Today pan
 secure the Service: IP address, browser type, the pages and features requested, and error logs. We use one
 essential cookie to keep you signed in, and one first-party cookie, kept for 60 days, that remembers how you
 found us (the campaign tag on a link you followed, such as "linkedin", or the site that linked to us); if you
-create an account, that source is saved with it so we can tell which places bring people. It is never shared.
-We do not use advertising cookies, cross-site trackers or third-party analytics.</p>
+create an account, that source is saved with it so we can tell which places bring people. It is never shared,
+and you can turn it off with "Essential only" in the cookie banner or on our <a href="/cookies">cookie policy</a>
+page. We do not use advertising cookies, cross-site trackers or third-party analytics.</p>
 <p><b>Sign-in history.</b> Each time you sign in we record when, how (password, Google or passkey, and any
 second step), your IP address, an approximate location (city, region and country) that we look up from the IP
 address on our own server using the DB-IP database (the address is not sent to anyone for this), and your

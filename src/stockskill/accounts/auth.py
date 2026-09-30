@@ -54,7 +54,8 @@ _PUBLIC_PATHS = {"/", "/login", "/signup", "/terms", "/privacy", "/healthz", "/f
                  "/security/not-me", "/security/was-me",
                  "/sw.js", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/apple-touch-icon.png",
                  "/notifications/verify", "/notifications/unsubscribe", "/api/board/meta",
-                 "/forgot", "/reset", "/account/email/confirm", "/api/t", "/brief/rate", "/api/brief/rate"}
+                 "/forgot", "/reset", "/account/email/confirm", "/api/t", "/brief/rate", "/api/brief/rate",
+                 "/cookies", "/api/consent"}
 _ONBOARD_OK = {"/welcome", "/account", "/logout", "/terms", "/privacy"}
 
 
@@ -93,6 +94,10 @@ def init_app(app, board, tickers_path: str, cache_dir) -> None:
     attribution.init_app(app)
     from . import feedback
     feedback.init_app(app)
+    from . import consent
+    consent.init_app(app)
+    from . import apple
+    apple.init_app(app)
     from . import security  # noqa: F401  (registers its routes on the blueprint)
     app.register_blueprint(bp)
 
@@ -317,12 +322,16 @@ def signup():
     pw = b.get("password") or ""
     if _limited("signup:" + _ip(), 10, 3600):
         return jsonify({"ok": False, "error": "Too many attempts. Try again later."}), 429
+    from .antibot import check as bot_check
+    bot = bot_check(b, 2.0)
+    if bot:
+        return jsonify({"ok": False, "error": bot}), 400
     if not _EMAIL_RE.match(email):
         return jsonify({"ok": False, "error": "Enter a valid email address."}), 400
-    if len(pw) < 10 or len(pw) > 200:
-        return jsonify({"ok": False, "error": "Use a password of at least 10 characters."}), 400
-    if pw.lower() == email or pw.isdigit() or len(set(pw)) < 5:
-        return jsonify({"ok": False, "error": "That password is too easy to guess."}), 400
+    from .passwords import problem
+    bad = problem(pw, email)
+    if bad:
+        return jsonify({"ok": False, "error": bad}), 400
     if not b.get("accept"):
         return jsonify({"ok": False, "error": "Please accept the Terms of Service and Privacy Policy."}), 400
     if db.by_email(email):
@@ -335,6 +344,8 @@ def signup():
     db.account_event("created", "email")
     from .attribution import record_signup
     record_signup(uid)
+    if b.get("updates"):                          # the optional, unticked-by-default product-update opt-in
+        db.update_user(uid, notify_updates=1, updates_consent_at=time.time())
     _login(uid, "password (new account)")
     u = db.get_user(uid)
     if needs_email_code(u):                     # the first email is the code to confirm the address
@@ -351,6 +362,10 @@ def login():
     pw = b.get("password") or ""
     if _limited("login-ip:" + _ip(), 20) or _limited("login:" + email, 8):
         return jsonify({"ok": False, "error": "Too many attempts. Wait 15 minutes and try again."}), 429
+    from .antibot import check as bot_check
+    bot = bot_check(b, 0.0)                      # password managers fill instantly: no minimum time here
+    if bot:
+        return jsonify({"ok": False, "error": bot}), 400
     u = db.by_email(email) if email else None
     # same message whether the email exists or not
     if not u or not u.get("password_hash") or not check_password_hash(u["password_hash"], pw):
@@ -358,7 +373,8 @@ def login():
         if u and not u.get("password_hash") and u.get("google_sub"):
             return jsonify({"ok": False, "error": "This account uses Sign in with Google."}), 401
         return jsonify({"ok": False, "error": "Email or password is incorrect."}), 401
-    if u.get("mfa_method"):
+    from .devices import is_trusted, second_step
+    if second_step(u) and not is_trusted(u):
         from .security import start_mfa
         return start_mfa(u, b.get("next"))
     _login(u["id"], "password")
@@ -408,6 +424,7 @@ def google_login():
         return jsonify({"ok": False, "error": "Google sign-in failed. Please try again."}), 401
     sub, email = c["sub"], c["email"].lower()
     u = db.by_google(sub) or db.by_email(email)
+    created = not u
     if u:
         if not u.get("email_verified") and not u.get("google_sub"):
             # An account made with this address that nobody ever confirmed: whoever made it may not own the
@@ -433,6 +450,11 @@ def google_login():
         record_signup(uid)
         u = db.get_user(uid)
         db.account_event("created", "google")
+    if not created:
+        from .devices import is_trusted, second_step
+        if second_step(u) and not is_trusted(u):
+            from .security import start_mfa
+            return start_mfa(u, _body().get("next"), via="Google")
     _login(u["id"], "Google")
     return jsonify({"ok": True, "next": _next_for(u, _body().get("next"))})
 
@@ -549,6 +571,10 @@ def _public_user(u: dict) -> dict:
     out["groups"] = [x for x in (u.get("groups") or "").split(",") if x]
     out["has_password"] = bool(u.get("password_hash"))
     out["mfa"] = u.get("mfa_method")
+    from .devices import required as _mfa_required, second_step as _second_step
+    out["mfa_required"] = _mfa_required()
+    out["mfa_effective"] = _second_step(u)          # what sign-in actually asks for: totp / email / None
+    out["trusted_devices"] = db.trusted_device_count(u["id"])
     out["theme"] = u.get("theme") or "system"
     import json as _json
     out["recovery_left"] = len(_json.loads(u.get("mfa_recovery") or "[]"))
@@ -745,8 +771,10 @@ def set_password():
     pw = b.get("password") or ""
     if u.get("password_hash") and not check_password_hash(u["password_hash"], b.get("current") or ""):
         return jsonify({"ok": False, "error": "Your current password is incorrect."}), 400
-    if len(pw) < 10 or len(set(pw)) < 5:
-        return jsonify({"ok": False, "error": "Use a password of at least 10 characters."}), 400
+    from .passwords import problem
+    bad = problem(pw, u["email"])
+    if bad:
+        return jsonify({"ok": False, "error": bad}), 400
     db.update_user(u["id"], password_hash=generate_password_hash(pw))
     out = db.revoke_sessions(u["id"], keep=session.get("sid"))      # sign out everywhere else
     _SEEN.clear()
@@ -1012,4 +1040,12 @@ def set_theme():
     if t not in ("light", "dark", "system"):
         return jsonify({"ok": False, "error": "Choose light, dark or system."}), 400
     db.update_user(current_user()["id"], theme=None if t == "system" else t)
+    return jsonify({"ok": True})
+
+
+@bp.post("/api/me/devices/forget")
+@login_required
+def forget_my_devices():
+    """Every browser asks for a 2-step code again at its next sign-in."""
+    db.forget_devices(current_user()["id"])
     return jsonify({"ok": True})
