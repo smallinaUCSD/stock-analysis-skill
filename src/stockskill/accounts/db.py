@@ -106,6 +106,8 @@ NOTIFY_COLUMNS = {"email_verified": "INTEGER NOT NULL DEFAULT 0", "notify_email"
                   "occupation": "TEXT", "home_city": "TEXT", "home_region": "TEXT",
                   # opted in (at sign-up or in settings) to the monthly product-update email
                   "notify_updates": "INTEGER NOT NULL DEFAULT 0", "updates_consent_at": "REAL",
+                  # finished (or skipped) the first-run walkthrough of the board
+                  "tour_done": "INTEGER NOT NULL DEFAULT 0",
                   # Sign in with Apple's stable user id
                   "apple_sub": "TEXT"}
 # where the account came from (accounts/attribution.py): campaign tags or the referring site

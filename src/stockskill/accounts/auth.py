@@ -1049,3 +1049,11 @@ def forget_my_devices():
     """Every browser asks for a 2-step code again at its next sign-in."""
     db.forget_devices(current_user()["id"])
     return jsonify({"ok": True})
+
+
+@bp.post("/api/me/tour")
+@login_required
+def tour_seen():
+    """The first-run walkthrough was finished or skipped: don't show it again."""
+    db.update_user(current_user()["id"], tour_done=1 if (_body().get("done", True)) else 0)
+    return jsonify({"ok": True})

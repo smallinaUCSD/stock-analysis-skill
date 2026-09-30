@@ -887,8 +887,8 @@ def personalize_board(board_html: str, user: dict, tickers: list[str], admin: bo
     cfg = {"tickers": tickers, "initials": initials, "title": f"{first.split()[0]}'s watchlist",
            "name": " ".join(x for x in (user.get("first_name"), user.get("last_name")) if x) or user.get("email"),
            "email": user.get("email"), "theme": theme, "density": density, "admin": bool(admin),
-           "tools": tools or []}
-    inject = "<script>var ME_CFG=" + script_json(cfg) + ";</script>" + _MINE_INJECT + _TODAY_INJECT
+           "tools": tools or [], "tour": not user.get("tour_done")}
+    inject = "<script>var ME_CFG=" + script_json(cfg) + ";</script>" + _MINE_INJECT + _TODAY_INJECT + _TOUR_INJECT
     h = board_html.find("</head>")
     if h >= 0:
         board_html = board_html[:h] + HEAD_PWA + board_html[h:]
@@ -938,6 +938,7 @@ if(tr){ var links=__MENU__;
     '<div class="me-menu" id="me-menu" role="menu"><div class="me-id"><b>'+e(C.name)+'</b><small>'+e(C.email)+'</small></div>'+
     links.map(function(l){ return '<a role="menuitem" href="'+l[0]+'"'+(l[0]==='/'?'':' onclick="openTab(this.href);closeMe();return false"')+'>'+e(l[1])+'</a>'; }).join('')+
     '<div class="sep"></div>'+(C.admin?'<a role="menuitem" href="/admin" onclick="openTab(this.href);closeMe();return false">Admin dashboard</a>':'')+
+    '<a role="menuitem" href="#" onclick="closeMe();if(window.smiTour)smiTour();return false">Take the tour</a>'+
     '<a role="menuitem" href="/account">Profile and settings</a><a role="menuitem" class="me-out" href="/logout">Sign out</a></div></span>');
   var btn=document.getElementById('me-btn'), menu=document.getElementById('me-menu');
   window.closeMe=function(){ menu.classList.remove('show'); btn.setAttribute('aria-expanded','false'); };
@@ -963,6 +964,65 @@ window.pruneChips=function(){
     if(bs.length) g.style.display=[].some.call(bs,function(b){ return b.style.display!=='none'; })?'':'none'; }); };
 if(typeof applyFilter==='function'){ var _af=applyFilter; window.applyFilter=applyFilter=function(){ _af(); pruneChips(); }; applyFilter(); }
 })();</script>""".replace("__MENU__", script_json([list(x) for x in _MENU]))
+
+
+# a short first-run walkthrough of the board: a spotlight on one part at a time with a note;
+# shown once (users.tour_done), replayable from the profile menu ("Take the tour")
+_TOUR_INJECT = r"""<style>
+#smi-tour{position:fixed;inset:0;z-index:2147483100;pointer-events:none}
+#smi-tour .t-hole{position:fixed;border-radius:14px;box-shadow:0 0 0 9999px rgba(10,9,8,.62);transition:all .35s cubic-bezier(.2,.8,.2,1);
+  outline:2px solid var(--accent,#cc785c);outline-offset:4px}
+#smi-tour .t-tip{position:fixed;width:min(340px,calc(100vw - 32px));background:var(--bg,#1f1e1b);color:var(--ink,#faf9f5);
+  border:1px solid var(--border-strong,rgba(250,249,245,.25));border-radius:14px;padding:16px 16px 12px;box-shadow:0 18px 50px rgba(0,0,0,.4);
+  pointer-events:auto;transition:top .35s cubic-bezier(.2,.8,.2,1),left .35s cubic-bezier(.2,.8,.2,1)}
+#smi-tour h4{margin:0 0 6px;font:500 20px/1.2 var(--font-display,Georgia,serif)}
+#smi-tour p{margin:0 0 12px;color:var(--muted,#a09d96);font-size:14px;line-height:1.5}
+#smi-tour .t-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+#smi-tour .t-dots{display:flex;gap:5px} #smi-tour .t-dots i{width:6px;height:6px;border-radius:50%;background:var(--border-strong,#555)}
+#smi-tour .t-dots i.on{background:var(--accent,#cc785c)}
+#smi-tour button{height:32px;padding:0 14px;border-radius:999px;border:1px solid var(--border-strong,rgba(250,249,245,.25));background:transparent;
+  color:inherit;font:inherit;font-size:14px;cursor:pointer}
+#smi-tour button.p{background:var(--accent,#cc785c);border-color:var(--accent,#cc785c);color:#1a1512;font-weight:600}
+#smi-tour .t-skip{border:none;color:var(--muted,#a09d96);padding:0 6px}
+</style><script>
+(function(){
+  var STEPS=[
+    {sel:'.bar .seg', t:'Your watchlist, your way', b:'See the stocks you follow as a table, cards or a heatmap, with live prices, signals and after-hours moves.'},
+    {sel:'.view.active .item', t:'Everything, one click away', b:'Click any stock for a quick look: chart, key numbers and news. "Full analysis" opens valuation, forecasts, risk and more.'},
+    {sel:'#addq', t:'Add any stock', b:'Type a ticker or a company name. Typos are fine; suggestions appear as you type.'},
+    {sel:'.toolsbar', t:'Your tools', b:'Politicians and funds, the portfolio lab, the screener and the calendar. "More tools" has the rest.'},
+    {sel:'#me-today', t:'Today', b:'Your briefs before the bell and after the close, and your alerts, all in one place.'},
+    {sel:'#smi-fb-btn', t:'Tell us what you think', b:'Something confusing or missing? Every message is read. That is it: enjoy exploring.'}
+  ];
+  var root=null, hole=null, tip=null, steps=[], i=0;
+  function visible(el){ if(!el) return false; var r=el.getBoundingClientRect(); return r.width>4 && r.height>4; }
+  function end(done){ if(root){ root.remove(); root=null; } document.removeEventListener('keydown',key);
+    removeEventListener('resize',place); removeEventListener('scroll',place,true);
+    if(done!==false) fetch('/api/me/tour',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({done:true})}).catch(function(){}); }
+  function key(e){ if(e.key==='Escape') end(); else if(e.key==='ArrowRight') go(i+1); else if(e.key==='ArrowLeft') go(i-1); }
+  function place(){ if(!root) return; var el=document.querySelector(steps[i].sel); if(!visible(el)) return;
+    var r=el.getBoundingClientRect(), pad=8, vh=innerHeight, vw=innerWidth;
+    var top=Math.max(8,r.top-pad), left=Math.max(8,r.left-pad), h=Math.min(r.height+2*pad, vh-16-top), w=Math.min(r.width+2*pad, vw-16-left);
+    hole.style.cssText='top:'+top+'px;left:'+left+'px;width:'+w+'px;height:'+h+'px';
+    var tw=tip.offsetWidth, th=tip.offsetHeight, below=top+h+12, above=top-th-12;
+    var ty=below+th<vh-8?below:(above>8?above:Math.max(8,vh-th-8));
+    tip.style.top=ty+'px'; tip.style.left=Math.min(Math.max(8,left),vw-tw-8)+'px'; }
+  function go(n){ if(n<0) return; if(n>=steps.length){ end(); return; } i=n; var s=steps[i], el=document.querySelector(s.sel);
+    el.scrollIntoView({block:'center',behavior:'smooth'});
+    tip.innerHTML='<h4>'+s.t+'</h4><p>'+s.b+'</p><div class="t-row"><div class="t-dots">'+steps.map(function(_,k){return '<i'+(k===i?' class="on"':'')+'></i>';}).join('')+
+      '</div><div><button class="t-skip" data-a="skip">Skip</button>'+(i?'<button data-a="back">Back</button> ':'')+
+      '<button class="p" data-a="next">'+(i===steps.length-1?'Done':'Next')+'</button></div></div>';
+    setTimeout(place,350); place(); }
+  window.smiTour=function(){ if(root) return; steps=STEPS.filter(function(s){ return visible(document.querySelector(s.sel)); });
+    if(!steps.length) return; root=document.createElement('div'); root.id='smi-tour';
+    root.innerHTML='<div class="t-hole"></div><div class="t-tip" role="dialog" aria-live="polite"></div>';
+    document.body.appendChild(root); hole=root.querySelector('.t-hole'); tip=root.querySelector('.t-tip');
+    tip.addEventListener('click',function(e){ var a=e.target.closest('button[data-a]'); if(!a) return;
+      if(a.dataset.a==='skip') end(); else if(a.dataset.a==='back') go(i-1); else go(i+1); });
+    document.addEventListener('keydown',key); addEventListener('resize',place); addEventListener('scroll',place,true); go(0); };
+  if(window.ME_CFG && ME_CFG.tour && window.top===window.self) addEventListener('load',function(){ setTimeout(window.smiTour,900); });
+})();
+</script>"""
 
 
 _TODAY_INJECT = r"""<style>
